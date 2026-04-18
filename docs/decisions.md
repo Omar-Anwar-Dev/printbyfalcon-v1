@@ -461,3 +461,37 @@ The B2C payment options return to: **Paymob card + Paymob-Fawry pay-at-outlet + 
 - **Architecture §8.1 amended** to reflect dual integration via single Paymob account; §8.2 (already a "descoped from MVP" note) amended to point at this ADR.
 - **Runbook §4 Done-when** updated: now requires both `PAYMOB_INTEGRATION_ID_CARD` and `PAYMOB_INTEGRATION_ID_FAWRY` in `.env.staging`.
 - **No new Fawry-specific risk introduced** — Paymob is the single point of failure for both card and outlet payments. If Paymob outage, card AND Fawry options both unavailable; COD remains as fallback. Acceptable concentration risk at MVP scale.
+
+---
+
+## ADR-026: Add Valkey container scoped to GlitchTip — does NOT violate ADR-010
+Date: 2026-04-19 (Sprint 1, Day 1, during runbook §7 execution)
+Status: Accepted
+
+**Context:** During GlitchTip first-boot we hit `ConnectionError: failed to lookup address information: Temporary failure in name resolution` from `django_vcache` calling out to a Redis-compatible cache. GlitchTip v6.1.5 (current latest) made Valkey/Redis a hard requirement for caching + rate-limiting + session storage — older docs we wrote against (v4.x patterns) didn't reflect this. Web-only deployment without a cache backend simply doesn't boot.
+
+**Decision:** Add a Valkey container (`valkey/valkey:7-alpine`, `--save "" --appendonly no` for memory-only mode) to `docker-compose.prod.yml`, scoped exclusively to the GlitchTip service via the docker-compose internal network. The Print By Falcon application (Next.js + worker) **does not get a Redis URL and cannot reach Valkey** — pg-boss + DB-backed sessions remain in place per ADR-010.
+
+**Why this does NOT violate ADR-010:**
+- ADR-010's intent was avoiding Redis as **a service that our app stack depends on** (one less thing to monitor, one less point of failure for the customer-facing flow).
+- Valkey here is a transitive dependency of a third-party self-hosted service (GlitchTip). It's similar to how Postgres is a dependency of GlitchTip (and we already share Postgres) — we're not building Redis-dependent code.
+- If Valkey crashes, GlitchTip degrades or stops accepting events; the Print By Falcon app stack is **completely unaffected** (it doesn't even know Valkey exists).
+- If we ever swap GlitchTip for a different error tracker, Valkey goes with it.
+
+**Resource cost:** Valkey-7 alpine in memory-only mode uses ~50 MB RAM. Within the 1.3 GB headroom budget per architecture §10.
+
+**Alternatives considered:**
+- **Pin to GlitchTip v4** (which pre-dates the Valkey requirement) — rejected. v4 is unmaintained; security patches go to v6+.
+- **Switch to a different self-hosted error tracker** (Sentry self-hosted, BugSink, errsole) — rejected. Sentry self-hosted requires ~6 GB RAM (per ADR-013 we already evaluated); GlitchTip + Valkey at ~550 MB total is still the minimum-resource Sentry-compatible option.
+- **Use SaaS (Sentry.io free)** — rejected per ADR-013 (no SaaS dependency preference).
+
+**Consequences:**
+- New Valkey container added to prod stack only (staging stack unchanged — staging app reports errors to prod GlitchTip via the shared DSN).
+- New volume `pbf_prod_valkey_data` (functionally empty since we use memory-only mode, but defined for forward-compat).
+- `glitchtip` service now depends on `valkey: service_healthy` in addition to `postgres`.
+- `glitchtip` service `command` overridden to `./manage.py migrate --noinput && ./bin/start.sh` so future GlitchTip image upgrades auto-apply schema changes (no more manual `docker exec ... migrate` after bumps).
+- `LOG_LEVEL: INFO` explicitly set in glitchtip service's `environment:` (Python logging requires uppercase; Pino doesn't care).
+- Architecture §10 resource budget table updated to add Valkey row (~50 MB).
+- GlitchTip celery-beat worker container intentionally **not** added to MVP — error ingestion + display works without it; email digests + cleanup tasks deferred to M2 if needed.
+
+**Risk:** None new. Concentration risk on the prod stack increases marginally (one more container to monitor), but Valkey is operationally simple (no persistence, single-process) and well-known.

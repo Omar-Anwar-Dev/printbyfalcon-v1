@@ -500,10 +500,11 @@ The original architecture included Fawry as a second payment method (server-to-s
 | Postgres (staging) | ~300 MB | Smaller shared_buffers |
 | Nginx | ~50 MB | |
 | GlitchTip | ~500 MB | Plus its Postgres usage (~200 MB) |
+| Valkey (GlitchTip cache) | ~50 MB | Per ADR-026; memory-only mode, scoped to GlitchTip only |
 | Netdata | ~100 MB | |
 | OS + headroom | ~2 GB | Buffer for spikes, OS cache |
 
-**Total committed:** ~6.7 GB. Headroom: ~1.3 GB. Tight but workable. Memory pressure is the #1 thing to monitor (Netdata alerts at 90% usage).
+**Total committed:** ~6.75 GB (with Valkey for GlitchTip per ADR-026). Headroom: ~1.25 GB. Tight but workable. Memory pressure is the #1 thing to monitor (Netdata alerts at 90% usage).
 
 ---
 

@@ -57,6 +57,22 @@ services:
       - pbf_prod_storage:/storage
     networks: [pbf-prod-net]
 
+  # Valkey (Redis-compatible) — required by GlitchTip v6+ for caching & rate limiting.
+  # Per ADR-026: scoped to GlitchTip only; the Print By Falcon app stack still uses
+  # pg-boss + DB sessions (ADR-010 unchanged).
+  valkey:
+    image: valkey/valkey:7-alpine
+    restart: unless-stopped
+    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    volumes:
+      - pbf_prod_valkey_data:/data
+    networks: [pbf-prod-net]
+    healthcheck:
+      test: ["CMD", "valkey-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
   glitchtip:
     image: glitchtip/glitchtip:latest
     restart: unless-stopped
@@ -68,16 +84,31 @@ services:
       EMAIL_URL: ${GLITCHTIP_EMAIL_URL:-consolemail://}
       GLITCHTIP_DOMAIN: https://errors.printbyfalcon.com
       DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:-errors@printbyfalcon.com}
+      # Valkey-backed cache + queue (GlitchTip v6+ hard requirement)
+      REDIS_URL: redis://valkey:6379/0
+      VALKEY_URL: redis://valkey:6379/0
+      # Override LOG_LEVEL because Python logging requires uppercase (Pino is case-insensitive)
+      LOG_LEVEL: INFO
     depends_on:
       postgres:
+        condition: service_healthy
+      valkey:
         condition: service_healthy
     ports:
       - "127.0.0.1:8080:8080"
     networks: [pbf-prod-net]
+    # Run migrations on every boot — GlitchTip image doesn't auto-migrate web-only.
+    command: >
+      sh -c "./manage.py migrate --noinput && exec ./bin/start.sh"
+
+  # Note: GlitchTip's celery-beat worker is intentionally not deployed in MVP —
+  # error ingestion + display works web-only. Email digests + cleanup tasks are
+  # nice-to-have; revisit at M2 if needed (would add ~200MB RAM).
 
 volumes:
   pbf_prod_pg_data:
   pbf_prod_storage:
+  pbf_prod_valkey_data:
 
 networks:
   pbf-prod-net:
