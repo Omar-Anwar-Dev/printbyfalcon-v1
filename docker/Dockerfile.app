@@ -23,21 +23,16 @@ RUN apk add --no-cache libc6-compat openssl curl tini \
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000
+# Standalone server (Next.js minimal output) + static assets
 COPY --from=builder --chown=pbf:pbf /app/public ./public
 COPY --from=builder --chown=pbf:pbf /app/.next/standalone ./
 COPY --from=builder --chown=pbf:pbf /app/.next/static ./.next/static
 COPY --from=builder --chown=pbf:pbf /app/prisma ./prisma
 COPY --from=builder --chown=pbf:pbf /app/package.json ./package.json
-COPY --from=builder --chown=pbf:pbf /app/node_modules/.prisma ./node_modules/.prisma
-COPY --from=builder --chown=pbf:pbf /app/node_modules/@prisma/client ./node_modules/@prisma/client
-# Pin Prisma CLI in runtime so `prisma migrate deploy` (and tsx for seed) use
-# the exact same version as the schema. Without this, `npx prisma` falls back
-# to the npm registry's latest (currently v7) which rejects our v5 schema.
-COPY --from=builder --chown=pbf:pbf /app/node_modules/prisma ./node_modules/prisma
-COPY --from=builder --chown=pbf:pbf /app/node_modules/@prisma/engines ./node_modules/@prisma/engines
-COPY --from=builder --chown=pbf:pbf /app/node_modules/tsx ./node_modules/tsx
-COPY --from=builder --chown=pbf:pbf /app/node_modules/.bin/prisma ./node_modules/.bin/prisma
-COPY --from=builder --chown=pbf:pbf /app/node_modules/.bin/tsx ./node_modules/.bin/tsx
+# Full node_modules — needed because the runtime command runs `prisma migrate deploy`
+# (CLI) and `tsx` for the seed, both of which pull in many transitive deps that
+# aren't in Next.js's standalone slim node_modules. Adds ~120MB but unblocks boot.
+COPY --from=builder --chown=pbf:pbf /app/node_modules ./node_modules
 USER pbf
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \

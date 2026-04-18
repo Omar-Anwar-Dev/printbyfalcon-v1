@@ -1,4 +1,6 @@
-# Worker image — same codebase, different entry point.
+# Worker image — runs TypeScript directly via tsx, so path aliases (@/lib/*)
+# resolve at runtime via tsconfig.json. Avoids the tsc-alias compile step that
+# would otherwise be needed to rewrite paths to relative.
 FROM node:22-alpine AS deps
 WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
@@ -7,23 +9,16 @@ COPY prisma ./prisma
 RUN npm ci
 RUN npx prisma generate
 
-FROM node:22-alpine AS builder
-WORKDIR /app
-RUN apk add --no-cache libc6-compat openssl
-COPY --from=deps /app/node_modules ./node_modules
-COPY . .
-# Compile worker to plain JS.
-RUN npx tsc -p worker/tsconfig.json
-
 FROM node:22-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl tini \
   && addgroup -S pbf && adduser -S pbf -G pbf
 ENV NODE_ENV=production
-COPY --from=builder --chown=pbf:pbf /app/node_modules ./node_modules
-COPY --from=builder --chown=pbf:pbf /app/package.json ./package.json
-COPY --from=builder --chown=pbf:pbf /app/prisma ./prisma
-COPY --from=builder --chown=pbf:pbf /app/worker/dist ./worker/dist
+COPY --from=deps --chown=pbf:pbf /app/node_modules ./node_modules
+COPY --chown=pbf:pbf package.json package-lock.json* tsconfig.json ./
+COPY --chown=pbf:pbf prisma ./prisma
+COPY --chown=pbf:pbf lib ./lib
+COPY --chown=pbf:pbf worker ./worker
 USER pbf
 ENTRYPOINT ["/sbin/tini", "--"]
-CMD ["node", "worker/dist/worker/index.js"]
+CMD ["node_modules/.bin/tsx", "worker/index.ts"]
