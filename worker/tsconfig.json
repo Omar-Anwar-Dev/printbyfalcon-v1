@@ -7,9 +7,12 @@
     "outDir": "dist",
     "rootDir": "..",
     "jsx": "preserve",
+    "noUnusedLocals": false,
+    "noUnusedParameters": false,
+    "baseUrl": "..",
     "paths": {
-      "@/*": ["../*"],
-      "@/lib/*": ["../lib/*"]
+      "@/*": ["./*"],
+      "@/lib/*": ["./lib/*"]
     }
   },
   "include": ["../worker/**/*.ts", "../lib/**/*.ts"],

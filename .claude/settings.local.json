@@ -8,7 +8,10 @@
       "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5432/pbf_dev?schema=public\" npx prisma generate)",
       "Bash(npx tsc *)",
       "Bash(npx next *)",
-      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5432/pbf_dev?schema=public\" AUTH_SECRET=\"test-only-not-a-real-secret-test-only-32ch\" npx next build)"
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5432/pbf_dev?schema=public\" AUTH_SECRET=\"test-only-not-a-real-secret-test-only-32ch\" npx next build)",
+      "Bash(npm ls *)",
+      "Bash(DATABASE_URL=\"postgres://x:y@localhost:5432/x?schema=public\" AUTH_SECRET=\"x\" npx tsc --noEmit)",
+      "Bash(DATABASE_URL=\"postgres://x:y@localhost:5432/x?schema=public\" AUTH_SECRET=\"test-only-not-a-real-secret-test-only-32ch\" npx next build)"
     ]
   }
 }

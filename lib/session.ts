@@ -100,7 +100,9 @@ export async function destroySession(): Promise<void> {
     const tokenHash = sha256Hex(rawToken);
     await prisma.session
       .deleteMany({ where: { token: tokenHash } })
-      .catch((err) => logger.warn({ err }, 'session.destroy.db_error'));
+      .catch((err: unknown) =>
+        logger.warn({ err }, 'session.destroy.db_error'),
+      );
   }
   cookieStore.delete(SESSION_COOKIE);
 }
