@@ -1,0 +1,167 @@
+// Print By Falcon — Prisma schema.
+// Sprint 1 scope: identity, access, rate limiting, audit log, settings, OTP/password-reset,
+// admin invites, and minimum orderflow stubs (no catalog, no cart — those arrive in S2+).
+// Full data model per docs/architecture.md §5 will be added sprint-by-sprint.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["fullTextSearch"]
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// -------------------------------------------------------------------------
+// Identity & Access
+// -------------------------------------------------------------------------
+
+enum UserType {
+  B2C
+  B2B
+  ADMIN
+}
+
+enum AdminRole {
+  OWNER
+  OPS
+  SALES_REP
+}
+
+enum UserStatus {
+  ACTIVE
+  SUSPENDED
+  DEACTIVATED
+}
+
+enum Locale {
+  AR
+  EN
+}
+
+model User {
+  id                   String     @id @default(cuid())
+  type                 UserType
+  name                 String
+  phone                String?    @unique
+  email                String?    @unique
+  passwordHash         String?    // null for B2C (OTP-only)
+  adminRole            AdminRole? // only for type=ADMIN
+  status               UserStatus @default(ACTIVE)
+  languagePref         Locale     @default(AR)
+  mustChangePassword   Boolean    @default(false)
+  lastLoginAt          DateTime?
+  createdAt            DateTime   @default(now())
+  updatedAt            DateTime   @updatedAt
+
+  sessions       Session[]
+  passwordResets PasswordReset[]
+  auditLogs      AuditLog[]      @relation("ActorAuditLogs")
+
+  @@index([type, status])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  token        String   @unique // hashed; the raw token lives only in the cookie
+  userId       String
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceLabel  String?
+  ipAddress    String?
+  userAgent    String?
+  expiresAt    DateTime
+  lastSeenAt   DateTime @default(now())
+  createdAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model WhatsAppOtp {
+  id         String   @id @default(cuid())
+  phone      String
+  codeHash   String   // SHA-256 of the 6-digit code
+  attempts   Int      @default(0)
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([phone, createdAt])
+}
+
+model PasswordReset {
+  id         String   @id @default(cuid())
+  userId     String
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash  String   @unique
+  expiresAt  DateTime
+  usedAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([userId])
+}
+
+model AdminInvite {
+  id          String    @id @default(cuid())
+  email       String    @unique
+  role        AdminRole
+  invitedById String
+  tokenHash   String    @unique
+  expiresAt   DateTime
+  acceptedAt  DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([invitedById])
+}
+
+// -------------------------------------------------------------------------
+// Rate limiting — DB-backed sliding window (Sprint 1)
+// -------------------------------------------------------------------------
+
+model RateLimit {
+  id          String   @id @default(cuid())
+  // composite key, e.g. "otp-request:+201116527773" or "b2b-login:user@x.com"
+  key         String
+  windowStart DateTime
+  count       Int      @default(1)
+  createdAt   DateTime @default(now())
+
+  @@unique([key, windowStart])
+  @@index([key, windowStart])
+}
+
+// -------------------------------------------------------------------------
+// Settings — flexible KV, JSON-valued
+// -------------------------------------------------------------------------
+
+model Setting {
+  key         String   @id
+  value       Json
+  updatedBy   String?
+  updatedAt   DateTime @updatedAt
+  createdAt   DateTime @default(now())
+}
+
+// -------------------------------------------------------------------------
+// Audit log — append-only
+// -------------------------------------------------------------------------
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  actorId    String?
+  actor      User?    @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
+  action     String   // e.g., "auth.login", "user.create", "order.status_change"
+  entityType String?  // e.g., "User", "Order"
+  entityId   String?
+  before     Json?
+  after      Json?
+  note       String?
+  ipAddress  String?
+  userAgent  String?
+  createdAt  DateTime @default(now())
+
+  @@index([action, createdAt])
+  @@index([entityType, entityId])
+  @@index([actorId, createdAt])
+}

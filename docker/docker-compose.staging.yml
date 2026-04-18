@@ -1,0 +1,66 @@
+# Staging stack — co-tenant on the same VPS as prod (ADR-015).
+# Separate DB, separate ports, smaller resource allocation.
+# Start with: docker compose -f docker/docker-compose.staging.yml --env-file .env.staging up -d
+
+name: pbf-staging
+
+services:
+  postgres-staging:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pbf_staging}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-pbf_staging}
+    volumes:
+      - pbf_staging_pg_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.staging.conf:/etc/postgresql/postgresql.conf:ro
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+    networks: [pbf-staging-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pbf_staging} -d ${POSTGRES_DB:-pbf_staging}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app-staging:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app
+    restart: unless-stopped
+    env_file: ../.env.staging
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+    volumes:
+      - pbf_staging_storage:/storage
+    ports:
+      - "127.0.0.1:3001:3000"
+    networks: [pbf-staging-net]
+    command: >
+      sh -c "npx prisma migrate deploy
+             && npx tsx prisma/seed.ts
+             && node server.js"
+
+  worker-staging:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    restart: unless-stopped
+    env_file: ../.env.staging
+    depends_on:
+      postgres-staging:
+        condition: service_healthy
+    volumes:
+      - pbf_staging_storage:/storage
+    networks: [pbf-staging-net]
+
+volumes:
+  pbf_staging_pg_data:
+  pbf_staging_storage:
+
+networks:
+  pbf-staging-net:
+    driver: bridge

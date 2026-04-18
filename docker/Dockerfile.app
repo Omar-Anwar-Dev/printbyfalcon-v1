@@ -1,0 +1,37 @@
+# Multi-stage build for the Next.js app.
+# deps → build → runtime; final image runs as non-root on node:22-alpine.
+FROM node:22-alpine AS deps
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl
+COPY package.json package-lock.json* ./
+COPY prisma ./prisma
+RUN npm ci
+RUN npx prisma generate
+
+FROM node:22-alpine AS builder
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
+ENV NEXT_TELEMETRY_DISABLED=1
+RUN npm run build
+
+FROM node:22-alpine AS runner
+WORKDIR /app
+RUN apk add --no-cache libc6-compat openssl curl tini \
+  && addgroup -S pbf && adduser -S pbf -G pbf
+ENV NODE_ENV=production
+ENV NEXT_TELEMETRY_DISABLED=1
+ENV PORT=3000
+COPY --from=builder --chown=pbf:pbf /app/public ./public
+COPY --from=builder --chown=pbf:pbf /app/.next/standalone ./
+COPY --from=builder --chown=pbf:pbf /app/.next/static ./.next/static
+COPY --from=builder --chown=pbf:pbf /app/prisma ./prisma
+COPY --from=builder --chown=pbf:pbf /app/node_modules/.prisma ./node_modules/.prisma
+COPY --from=builder --chown=pbf:pbf /app/node_modules/@prisma/client ./node_modules/@prisma/client
+USER pbf
+EXPOSE 3000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s \
+  CMD curl -fsS http://localhost:3000/api/health || exit 1
+ENTRYPOINT ["/sbin/tini", "--"]
+CMD ["node", "server.js"]

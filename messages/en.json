@@ -1,0 +1,86 @@
+{
+  "brand": {
+    "name": "Print By Falcon",
+    "tagline": "Your specialist store for printers and supplies"
+  },
+  "nav": {
+    "home": "Home",
+    "catalog": "Catalog",
+    "printers": "Printers",
+    "supplies": "Supplies",
+    "business": "For Business",
+    "support": "Support",
+    "cart": "Cart",
+    "account": "Account",
+    "login": "Sign In",
+    "signOut": "Sign Out"
+  },
+  "home": {
+    "hello": "Welcome to Print By Falcon",
+    "comingSoon": "Coming soon — store under construction"
+  },
+  "auth": {
+    "signIn": "Sign In",
+    "b2cTitle": "Individual customer sign-in",
+    "b2bTitle": "Business account sign-in",
+    "phoneLabel": "Phone number",
+    "phonePlaceholder": "01XXXXXXXXX",
+    "emailLabel": "Email",
+    "passwordLabel": "Password",
+    "otpLabel": "Verification code",
+    "otpSent": "We sent a verification code via WhatsApp",
+    "sendOtp": "Send code",
+    "verifyOtp": "Verify",
+    "submit": "Sign in",
+    "forgotPassword": "Forgot password?",
+    "devOtpHint": "Dev mode: the code is printed in the server log",
+    "mustResetPassword": "This is a temporary password. Please set a new one before continuing.",
+    "signedInAs": "Signed in as"
+  },
+  "admin": {
+    "loginTitle": "Admin Panel",
+    "loginPrompt": "Enter your credentials to access the admin panel",
+    "unauthorized": "You do not have permission to access this area"
+  },
+  "validation": {
+    "required": "This field is required",
+    "invalid": "Invalid value",
+    "invalid_format": "Invalid format",
+    "too_short": "Must be at least {min} characters",
+    "too_long": "Must be at most {max} characters",
+    "phone": {
+      "invalid_eg": "Invalid Egyptian mobile number"
+    },
+    "email": {
+      "invalid": "Invalid email address"
+    },
+    "password": {
+      "too_short": "Password too short (min 10 characters)",
+      "too_long": "Password too long",
+      "needs_uppercase": "Must contain an uppercase letter",
+      "needs_lowercase": "Must contain a lowercase letter",
+      "needs_digit": "Must contain a digit",
+      "mismatch": "Passwords do not match",
+      "required": "Password is required"
+    },
+    "otp": {
+      "invalid_format": "Code must be 6 digits",
+      "expired": "Code has expired",
+      "incorrect": "Incorrect code",
+      "too_many_attempts": "Too many attempts"
+    },
+    "name": {
+      "too_short": "Name too short",
+      "too_long": "Name too long"
+    },
+    "rate_limit": {
+      "exceeded": "Too many requests — please try again later"
+    }
+  },
+  "common": {
+    "languageSwitcher": "Language",
+    "or": "or",
+    "error": "Something went wrong, please try again",
+    "loading": "Loading..."
+  }
+}

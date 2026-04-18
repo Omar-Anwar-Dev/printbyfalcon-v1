@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm install *)",
+      "Bash(npx prisma *)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5432/pbf_dev?schema=public\" npx prisma validate)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5432/pbf_dev?schema=public\" npx prisma generate)",
+      "Bash(npx tsc *)",
+      "Bash(npx next *)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5432/pbf_dev?schema=public\" AUTH_SECRET=\"test-only-not-a-real-secret-test-only-32ch\" npx next build)"
+    ]
+  }
+}

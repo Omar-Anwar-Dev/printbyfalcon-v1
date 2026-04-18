@@ -1,0 +1,84 @@
+# Production stack — runs on the Hostinger KVM2 VPS alongside the staging stack.
+# Start with: docker compose -f docker/docker-compose.prod.yml --env-file .env.production up -d
+
+name: pbf-prod
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pbf_prod}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-pbf_prod}
+    volumes:
+      - pbf_prod_pg_data:/var/lib/postgresql/data
+      - ./postgres/postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    command: >
+      postgres
+      -c config_file=/etc/postgresql/postgresql.conf
+    networks: [pbf-prod-net]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pbf_prod} -d ${POSTGRES_DB:-pbf_prod}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app
+    restart: unless-stopped
+    env_file: ../.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pbf_prod_storage:/storage
+    ports:
+      - "127.0.0.1:3000:3000"
+    networks: [pbf-prod-net]
+    # run migrations + seed before serving
+    command: >
+      sh -c "npx prisma migrate deploy
+             && npx tsx prisma/seed.ts
+             && node server.js"
+
+  worker:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.worker
+    restart: unless-stopped
+    env_file: ../.env.production
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - pbf_prod_storage:/storage
+    networks: [pbf-prod-net]
+
+  glitchtip:
+    image: glitchtip/glitchtip:latest
+    restart: unless-stopped
+    env_file: ../.env.production
+    environment:
+      DATABASE_URL: ${GLITCHTIP_DATABASE_URL}
+      SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
+      PORT: 8080
+      EMAIL_URL: ${GLITCHTIP_EMAIL_URL:-consolemail://}
+      GLITCHTIP_DOMAIN: https://errors.printbyfalcon.com
+      DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:-errors@printbyfalcon.com}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [pbf-prod-net]
+
+volumes:
+  pbf_prod_pg_data:
+  pbf_prod_storage:
+
+networks:
+  pbf-prod-net:
+    driver: bridge

@@ -1,0 +1,26 @@
+name: Deploy to Staging
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy-staging
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH + rebuild staging stack
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - name: Trigger staging rebuild over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            bash -lc '/var/pbf/repo/scripts/deploy-staging.sh'

@@ -1,0 +1,54 @@
+# deps
+node_modules
+.pnp
+.pnp.js
+
+# next
+.next/
+out/
+
+# build artifacts
+dist/
+worker/dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# env
+.env
+.env*.local
+.env.production
+.env.staging
+
+# keep examples
+!.env.example
+!.env.production.example
+!.env.staging.example
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+.vscode/
+.idea/
+
+# Prisma
+prisma/*.db
+prisma/migrations/**/*.sql.bak
+
+# runtime storage (product images, invoices)
+storage/
+!storage/.gitkeep
+
+# backups
+backups/
+!backups/.gitkeep
+
+# test output
+coverage/
+.nyc_output/

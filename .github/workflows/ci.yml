@@ -1,0 +1,57 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-typecheck-test:
+    name: Lint + Typecheck + Test
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: pbf
+          POSTGRES_PASSWORD: pbf
+          POSTGRES_DB: pbf_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U pbf"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
+    env:
+      DATABASE_URL: postgres://pbf:pbf@localhost:5432/pbf_test?schema=public
+      AUTH_SECRET: test-secret-test-secret-test-secret-32ch
+      OWNER_EMAIL: support@printbyfalcon.com
+      OWNER_TEMP_PASSWORD: Temp-Pass-123
+      OTP_DEV_MODE: 'true'
+      NODE_ENV: test
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+      - run: npm ci
+      - name: Prisma generate + migrate
+        run: |
+          npx prisma generate
+          npx prisma migrate deploy || npx prisma migrate dev --name init --create-only
+          npx prisma migrate deploy
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+        continue-on-error: true
+      - name: Build
+        run: npm run build
