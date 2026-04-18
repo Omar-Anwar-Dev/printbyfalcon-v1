@@ -79,15 +79,25 @@ export async function getSessionUser(): Promise<User | null> {
       where: { id: session.id },
       data: { lastSeenAt: new Date(), expiresAt: newExpires },
     });
-    cookieStore.set({
-      name: SESSION_COOKIE,
-      value: rawToken,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      path: '/',
-      expires: newExpires,
-    });
+    // Next.js 15 forbids cookie writes from Server Components (only Server
+    // Actions / Route Handlers / middleware may write). The DB expiry is
+    // already rolled forward above, so the session stays valid either way —
+    // the cookie's `expires` attribute catches up on the next writeable
+    // context (e.g. the next form submit / Server Action). We swallow the
+    // read-only error here instead of failing the whole page render.
+    try {
+      cookieStore.set({
+        name: SESSION_COOKIE,
+        value: rawToken,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+        expires: newExpires,
+      });
+    } catch {
+      // expected when invoked from a Server Component — DB refresh already ran
+    }
   }
 
   return session.user;
