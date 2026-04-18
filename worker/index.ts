@@ -38,24 +38,49 @@ async function main() {
   await registerEmailJob(boss, concurrency);
   await registerWhatsAppJob(boss, concurrency);
 
-  // Cleanup crons
-  await boss.schedule('cleanup-expired-otps', '0 * * * *', {}, { tz: 'Africa/Cairo' });
+  // Cleanup crons. pg-boss v10 requires explicit queue creation before
+  // schedule/work; otherwise schedule fails with FK violation.
+  await boss.createQueue('cleanup-expired-otps');
+  await boss.schedule(
+    'cleanup-expired-otps',
+    '0 * * * *',
+    {},
+    { tz: 'Africa/Cairo' },
+  );
   await boss.work<Record<string, never>>('cleanup-expired-otps', async () => {
     const n = await cleanupExpiredOtps();
     logger.info({ removed: n }, 'cleanup.otps.done');
   });
 
-  await boss.schedule('cleanup-expired-sessions', '*/30 * * * *', {}, { tz: 'Africa/Cairo' });
-  await boss.work<Record<string, never>>('cleanup-expired-sessions', async () => {
-    const n = await cleanupExpiredSessions();
-    logger.info({ removed: n }, 'cleanup.sessions.done');
-  });
+  await boss.createQueue('cleanup-expired-sessions');
+  await boss.schedule(
+    'cleanup-expired-sessions',
+    '*/30 * * * *',
+    {},
+    { tz: 'Africa/Cairo' },
+  );
+  await boss.work<Record<string, never>>(
+    'cleanup-expired-sessions',
+    async () => {
+      const n = await cleanupExpiredSessions();
+      logger.info({ removed: n }, 'cleanup.sessions.done');
+    },
+  );
 
-  await boss.schedule('cleanup-expired-rate-limits', '15 * * * *', {}, { tz: 'Africa/Cairo' });
-  await boss.work<Record<string, never>>('cleanup-expired-rate-limits', async () => {
-    const n = await cleanupExpiredRateLimits();
-    logger.info({ removed: n }, 'cleanup.rate_limits.done');
-  });
+  await boss.createQueue('cleanup-expired-rate-limits');
+  await boss.schedule(
+    'cleanup-expired-rate-limits',
+    '15 * * * *',
+    {},
+    { tz: 'Africa/Cairo' },
+  );
+  await boss.work<Record<string, never>>(
+    'cleanup-expired-rate-limits',
+    async () => {
+      const n = await cleanupExpiredRateLimits();
+      logger.info({ removed: n }, 'cleanup.rate_limits.done');
+    },
+  );
 
   // Shutdown hooks
   const shutdown = async (signal: string) => {

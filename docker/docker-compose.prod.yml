@@ -47,7 +47,10 @@ services:
     command:
       - 'sh'
       - '-c'
-      - 'node node_modules/prisma/build/index.js migrate deploy && node node_modules/tsx/dist/cli.mjs prisma/seed.ts && exec node server.js'
+      - 'node node_modules/prisma/build/index.js db push --skip-generate --accept-data-loss && node node_modules/tsx/dist/cli.mjs prisma/seed.ts && exec node server.js'
+    # NOTE: using `db push` (schema sync) instead of `migrate deploy` for Sprint 1 —
+    # we have no migration files yet. Switch to `migrate deploy` once we generate
+    # an initial migration in Sprint 2 when the catalog tables stabilize.
 
   worker:
     build:

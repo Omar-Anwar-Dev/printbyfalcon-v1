@@ -12,6 +12,7 @@ export type SendEmailJobPayload = {
 
 export async function registerEmailJob(boss: PgBoss, concurrency: number) {
   const queue = 'send-email';
+  await boss.createQueue(queue);
   await boss.work<SendEmailJobPayload>(
     queue,
     { batchSize: concurrency },
@@ -28,10 +29,7 @@ export async function registerEmailJob(boss: PgBoss, concurrency: number) {
   );
 }
 
-export async function enqueueEmail(
-  boss: PgBoss,
-  payload: SendEmailJobPayload,
-) {
+export async function enqueueEmail(boss: PgBoss, payload: SendEmailJobPayload) {
   return boss.send('send-email', payload, {
     retryLimit: 3,
     retryDelay: 60,

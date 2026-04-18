@@ -1,9 +1,13 @@
 import type PgBoss from 'pg-boss';
-import { sendWhatsAppTemplate, type WhatsAppTemplateSend } from '@/lib/whatsapp';
+import {
+  sendWhatsAppTemplate,
+  type WhatsAppTemplateSend,
+} from '@/lib/whatsapp';
 import { logger } from '@/lib/logger';
 
 export async function registerWhatsAppJob(boss: PgBoss, concurrency: number) {
   const queue = 'send-whatsapp';
+  await boss.createQueue(queue);
   await boss.work<WhatsAppTemplateSend>(
     queue,
     { batchSize: concurrency },
