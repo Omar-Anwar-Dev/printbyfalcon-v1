@@ -20,7 +20,11 @@ services:
       -c config_file=/etc/postgresql/postgresql.conf
     networks: [pbf-staging-net]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pbf_staging} -d ${POSTGRES_DB:-pbf_staging}"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-pbf_staging} -d ${POSTGRES_DB:-pbf_staging}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -37,12 +41,12 @@ services:
     volumes:
       - pbf_staging_storage:/storage
     ports:
-      - "127.0.0.1:3001:3000"
+      - '127.0.0.1:3001:3000'
     networks: [pbf-staging-net]
-    command: >
-      sh -c "npx prisma migrate deploy
-             && npx tsx prisma/seed.ts
-             && node server.js"
+    command:
+      - 'sh'
+      - '-c'
+      - 'node node_modules/prisma/build/index.js migrate deploy && node node_modules/tsx/dist/cli.mjs prisma/seed.ts && exec node server.js'
 
   worker-staging:
     build:

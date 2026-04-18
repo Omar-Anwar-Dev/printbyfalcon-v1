@@ -19,7 +19,11 @@ services:
       -c config_file=/etc/postgresql/postgresql.conf
     networks: [pbf-prod-net]
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pbf_prod} -d ${POSTGRES_DB:-pbf_prod}"]
+      test:
+        [
+          'CMD-SHELL',
+          'pg_isready -U ${POSTGRES_USER:-pbf_prod} -d ${POSTGRES_DB:-pbf_prod}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,13 +40,14 @@ services:
     volumes:
       - pbf_prod_storage:/storage
     ports:
-      - "127.0.0.1:3000:3000"
+      - '127.0.0.1:3000:3000'
     networks: [pbf-prod-net]
-    # run migrations + seed before serving
-    command: >
-      sh -c "npx prisma migrate deploy
-             && npx tsx prisma/seed.ts
-             && node server.js"
+    # Run migrations + seed before serving. Use exec form (array) so the YAML
+    # folded-scalar `>` doesn't strip quotes around the `sh -c "..."` argument.
+    command:
+      - 'sh'
+      - '-c'
+      - 'node node_modules/prisma/build/index.js migrate deploy && node node_modules/tsx/dist/cli.mjs prisma/seed.ts && exec node server.js'
 
   worker:
     build:
@@ -63,12 +68,12 @@ services:
   valkey:
     image: valkey/valkey:7-alpine
     restart: unless-stopped
-    command: ["valkey-server", "--save", "", "--appendonly", "no"]
+    command: ['valkey-server', '--save', '', '--appendonly', 'no']
     volumes:
       - pbf_prod_valkey_data:/data
     networks: [pbf-prod-net]
     healthcheck:
-      test: ["CMD", "valkey-cli", "ping"]
+      test: ['CMD', 'valkey-cli', 'ping']
       interval: 10s
       timeout: 3s
       retries: 5
@@ -100,7 +105,7 @@ services:
       valkey:
         condition: service_healthy
     ports:
-      - "127.0.0.1:8080:8080"
+      - '127.0.0.1:8080:8080'
     networks: [pbf-prod-net]
     # Run migrations on every boot — GlitchTip image doesn't auto-migrate web-only.
     command: >
