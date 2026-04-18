@@ -312,7 +312,7 @@ sudo systemctl status certbot.timer
 
 ## 3. WhatsApp Business number + Cloud API (Day 2 — Mon 2026-04-20) — **critical path for Sprint 5**
 
-Target: the new business WhatsApp number `01116527773` (`+201116527773`) registered with Meta Cloud API.
+Target: a **NEW physical phone number distinct from the sales team number** registered with Meta Cloud API. *(Original plan put `+201116527773` here; that number was reassigned to the sales-team manual WhatsApp on 2026-04-19 — a separate Cloud API number must be procured.)*
 
 ### 3.1 Create / access a Meta Business Account
 
@@ -323,7 +323,7 @@ Target: the new business WhatsApp number `01116527773` (`+201116527773`) registe
 ### 3.2 Add the new number to WhatsApp Cloud API
 
 1. In Meta Business Suite → **WhatsApp Accounts** → **Add WhatsApp Account**.
-2. Add the number `01116527773`.
+2. Add the **new** number you procure for the Cloud API (must be different from `+201116527773` which is the sales manual line). If `+201116527773` was already verified with Meta Cloud API earlier in this runbook, **release it first**: WhatsApp Manager → Phone Numbers → Remove `+201116527773` → confirm.
 3. **IMPORTANT:** the number must NOT be active on a consumer WhatsApp / WhatsApp Business app. Uninstall it from any phone first.
 4. Verify via SMS / voice call OTP sent to the number.
 5. Copy the auto-generated **Phone Number ID** and a test **access token** (temporary — valid 24h). You'll replace with a permanent system-user token once verified.
@@ -359,7 +359,7 @@ Meta approval takes **3–5 business days per template**. If any is rejected, it
 
 ### **Done when**
 - [ ] Meta Business Account created + verification *submitted*
-- [ ] Number `+201116527773` owns WhatsApp Cloud API
+- [ ] **New** Cloud API number procured + verified (NOT `+201116527773` — that is the sales manual line)
 - [ ] `curl .../me` smoke test passes
 - [ ] All 5 templates submitted and in "Pending review" (or approved)
 

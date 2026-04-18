@@ -20,9 +20,10 @@
   - WhatsApp Business #: 01116527773 (Cloud API)
   - Hostinger SMTP: available
   - Owner admin: `support@printbyfalcon.com` + temp password (force-reset enforced by code on first login; treated as compromised from chat exposure)
-- **Parked:**
-  - Arabic store name: transliteration `برينت باي فالكون` as placeholder in `messages/ar.json` (`brand.name`); replace when decided
-  - Sales-team WhatsApp # for the support bridge: pending
+- **Resolved during Sprint 1:**
+  - Arabic store name → kept as **"Print By Falcon"** in both AR and EN (user preference, 2026-04-19); `messages/ar.json` `brand.name` updated.
+  - Sales-team WhatsApp number for support bridge → **`+201116527773`** confirmed (2026-04-19).
+- **NEW blocker for Sprint 5:** Cloud API number must be a separate fresh number (not `+201116527773`). User to procure + verify with Meta before Sprint 5 OTP/notifications work.
 
 ## Completed Sprints
 *(none yet — Sprint 1 dev scope done but sprint is not officially closed until external tasks § in the runbook are complete on the VPS)*
@@ -83,7 +84,7 @@ External items are blockers for sprint-end closure; see `docs/sprint1-external-t
 - [ ] §10 Nightly backups scheduled + restore drill performed
 - [ ] §11 Both Docker stacks bring-up green on VPS
 - [ ] §12 CI → deploy-staging path exercised end-to-end
-- [ ] §13 `OWNER_TEMP_PASSWORD` rotated; sales-team WA# confirmed; Arabic store name confirmed
+- ✅ §13 — OWNER_TEMP_PASSWORD rotated · sales-team WA# confirmed (`+201116527773`) · Arabic store name kept "Print By Falcon"
 
 ## Decisions logged this sprint
 - **ADR-021** [2026-04-19] Sprint 1 uses plain Server Actions + custom session table instead of Auth.js — rationale, alternatives, and consequences captured in `docs/decisions.md`.
@@ -123,7 +124,6 @@ Mapped to the 9 criteria in `docs/implementation-plan.md` line 85–94:
   - All three fixes applied to `docs/sprint1-external-tasks.md` for future reference.
 - Plan dev workload was spec'd for 3 devs over 9 working days (~216 dev-hours). Single-session collapse produced ~23 consolidated tasks; external owner-side work is ~10–14 hours across the sprint window (now ~8–12h after Fawry removal). Actual throughput depends on external approval turnarounds (Meta, Paymob), not dev time.
 - Post-Sprint-1 parking lot for Sprint 2 intake:
-  - Sales-team support-bridge WhatsApp number (PRD OQ#2) → gate on before WhatsApp bridge lands (Sprint 10).
-  - Arabic store name decision (PRD OQ#9) → one-line change in `messages/ar.json` when decided.
+  - **Cloud API number procurement (Meta)** → blocks Sprint 5 OTP + status notifications (`+201116527773` reserved for sales manual).
   - Logo + store info for invoice header (PRD OQ#8) → needed before Sprint 6 invoicing.
   - First 50–100 SKUs for catalog seeding (PRD OQ#11) → data-lead activity starts Sprint 2 day 1.
