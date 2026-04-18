@@ -17,7 +17,9 @@ export const egyptianPhoneSchema = z
       .string()
       .regex(/^(?:\+?20)?01[0-25]\d{8}$/, { message: 'phone.invalid_eg' })
       .transform((v) => {
-        const digits = v.replace(/^\+?20/, '');
+        // Strip optional international prefix, then drop the leading 0 from the
+        // local form (01XXXXXXXXX), then re-prefix with +20 to land on E.164.
+        const digits = v.replace(/^\+?20/, '').replace(/^0/, '');
         return `+20${digits}`;
       }),
   );
