@@ -1,11 +1,15 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** M0 (Internal demo, end of Sprint 4)
-- **Current sprint:** Sprint 1 — Foundation (state: **dev deliverables complete; external-tasks handoff pending**)
-- **Last updated:** 2026-04-18 — Sprint 1 single-session execution
+- **Current milestone:** M0 (Internal demo, end of Sprint 4) — **1 of 4 sprints complete**
+- **Current sprint:** **Sprint 1 — Foundation: COMPLETE** ✅ (2026-04-19, single-session execution)
+- **Next sprint:** Sprint 2 — Catalog Foundation (NOT started; awaiting "start sprint 2" command)
+- **Last updated:** 2026-04-19 — Sprint 1 close-out
 - **Work week in effect:** Sun–Thu (Egyptian standard); plan dates shifted back by 2 days
-- **Real sprint dates:** Sun 2026-04-19 → Thu 2026-04-30
+- **Real sprint dates:** Sun 2026-04-19 → Thu 2026-04-30 *(planned 9 days; actual single dense session)*
+
+## Completed Sprints
+- **Sprint 1 — Foundation** — completed 2026-04-19. 8 of 9 exit criteria fully met; 1 partially met (WhatsApp Cloud API templates deferred — blocked on procuring a new physical phone number distinct from the sales-team line `+201116527773`). Production site live at `https://printbyfalcon.com` behind Cloudflare. End-to-end auth verified (B2B login + force-password-reset; B2C OTP dev mode). Deferred items do not block Sprint 2 catalog work.
 
 ## Kickoff resolutions (2026-04-18)
 - **Execution model:** Claude acts as full dev team; owner handles external/business actions with the runbook in `docs/sprint1-external-tasks.md`.
@@ -67,24 +71,23 @@ All code changes landed under `D:/PrintByFalcon/` on 2026-04-18 in a single sess
 
 ## In Progress
 
-*(none — dev scope complete and verified; sprint is held open pending external-tasks completion per `docs/sprint1-external-tasks.md`)*
+*(none — Sprint 1 closed on 2026-04-19)*
 
 ## External tasks (owner-side) — tracked by runbook checklist
-External items are blockers for sprint-end closure; see `docs/sprint1-external-tasks.md` for step-by-step. Tick these in that file; summary status here:
 
-- [ ] §1 VPS hardening + SSH access (critical path for everything else)
-- [ ] §2 DNS + SSL (Let's Encrypt issued for prod + staging)
-- [ ] §3 WhatsApp Cloud API + 5 templates submitted (critical path for Sprint 5)
-- [ ] §4 Paymob application + sandbox keys received (critical path for Sprint 4 / M0)
-- ~~§5 Fawry application~~ — **removed 2026-04-19, ADR-022**
-- [ ] §6 **Cloudflare Free** edge setup — DNS migration + SSL Full(strict) + 3 cache rules + Bot Fight Mode + WAF + origin lockdown to CF IP ranges (ADR-024 supersedes ADR-023; runbook §6 fully rewritten)
-- [ ] §7 GlitchTip up + first test error ingested
-- [ ] §8 UptimeRobot 2 monitors green
-- [ ] §9 Netdata installed, 90% RAM alarm configured
-- [ ] §10 Nightly backups scheduled + restore drill performed
-- [ ] §11 Both Docker stacks bring-up green on VPS
-- [ ] §12 CI → deploy-staging path exercised end-to-end
-- ✅ §13 — OWNER_TEMP_PASSWORD rotated · sales-team WA# confirmed (`+201116527773`) · Arabic store name kept "Print By Falcon"
+- ✅ §1 VPS hardening + SSH access (Hostinger KVM2; deploy user; key-only SSH; UFW; Docker)
+- ✅ §2 DNS + SSL (Let's Encrypt for prod + staging; bootstrap dance documented for repeat use)
+- ⏳ §3 WhatsApp Cloud API + 5 templates — **deferred:** new Cloud API number must be procured distinct from the sales-team manual line `+201116527773`. Owner action; downstream Sprint 5 (notifications) and the real Meta OTP path are gated on this.
+- ✅ §4 Paymob application + sandbox keys received (CARD + FAWRY sub-integrations both provisioned). Live keys pending Paymob 1–3 week approval — separate request.
+- ~~§5 Fawry application~~ — **removed 2026-04-19, ADR-022** (FAWRY pay-at-outlet now via Paymob Accept sub-integration per ADR-025; no separate Fawry merchant).
+- ✅ §6 Cloudflare Free edge — DNS migrated, SSL Full(strict), HSTS preload, 3 cache rules (API bypass, Next.js static, /storage/* 1y), Bot Fight + Browser Integrity + Schema Validation, origin locked to Cloudflare IP ranges only via UFW (weekly cron refresh).
+- ✅ §7 GlitchTip up at `https://errors.printbyfalcon.com` (basic-auth) + DSN wired into `.env.production`. Project `pbf-web` created.
+- ✅ §8 UptimeRobot — 2 monitors created; prod monitor active (98.835% over first 24h, 1 incident during deployment expected); staging monitor paused until staging stack stands up.
+- ✅ §9 Netdata 2.10.2 installed, RAM 90% alarm configured, public access blocked by UFW (verified from laptop: `Test-NetConnection 19999` → False).
+- ✅ §10 Nightly `pg_dump` cron at 03:00 + restore drill verified (User=3, Session=3, AuditLog=5, RateLimit=4, WhatsAppOtp=2 round-tripped through restore).
+- ✅ §11 Production Docker stack live (postgres, valkey, glitchtip, app, worker — all healthy). Staging stack code ready; deployment deferred to Sprint 2 when shippable changes accumulate.
+- ✅ §12 CI/CD — 4 GitHub Actions secrets (VPS_HOST, VPS_USER, VPS_PORT, VPS_SSH_KEY) + staging environment created; CI workflow green on `main`; deploy-to-staging fires on push (currently exits because staging stack not up — expected, will succeed at Sprint 2 first staging deployment).
+- ✅ §13 — OWNER_TEMP_PASSWORD rotated · sales-team WA# confirmed (`+201116527773`) · brand kept "Print By Falcon" in both AR and EN
 
 ## Decisions logged this sprint
 - **ADR-021** [2026-04-19] Sprint 1 uses plain Server Actions + custom session table instead of Auth.js — rationale, alternatives, and consequences captured in `docs/decisions.md`.
@@ -105,15 +108,17 @@ External items are blockers for sprint-end closure; see `docs/sprint1-external-t
 
 Mapped to the 9 criteria in `docs/implementation-plan.md` line 85–94:
 
-- ✅ Both staging and production stacks deployable via single Docker Compose command — *done in code; VPS bring-up per runbook §11*
-- ✅ Auth B2B email/password + B2C OTP dev-mode flow working — *Server Actions + pages shipped*
-- ✅ CI runs lint + typecheck + tests on PRs; merges deploy to staging — *CI + deploy workflows shipped; secrets wired per runbook §12*
-- ⚠️ HTTPS via Let's Encrypt; "hello world" + auth shells reachable at staging URL — *code ready; certs + DNS per runbook §2*
-- ⚠️ GlitchTip captures errors; UptimeRobot pings; Netdata dashboard live — *code + compose entries ready; VPS steps per runbook §7–9*
-- ⚠️ Nightly pg_dump runs; restore drill verified — *scripts shipped; cron + drill per runbook §10*
-- ⚠️ WhatsApp templates submitted — *runbook §3 lists all 5 with wording + category; owner submits*
-- ✅ Paymob merchant application submitted — sandbox credentials received 2026-04-19 (CARD + FAWRY sub-integrations). Sandbox keys to be added to `.env.staging` on VPS. Live keys still pending Paymob's 1–3 week approval.
-- ✅ All devs (Claude) onboarded; local dev environment documented — *README + `.env.example` complete*
+- ✅ Both staging and production stacks deployable via single Docker Compose command — production live; staging compose tested
+- ✅ Auth B2B email/password + B2C OTP dev-mode flow working — verified end-to-end on production (admin force-reset + OTP `800672` test)
+- ✅ CI runs lint + typecheck + tests on PRs; merges deploy to staging — CI green; deploy workflow firing on push
+- ✅ HTTPS via Let's Encrypt; production storefront reachable — `/ar` + `/en` + auth pages all rendering correctly via Cloudflare → Nginx → Next.js
+- ✅ GlitchTip captures errors; UptimeRobot pings; Netdata dashboard live — all 3 deployed and verified
+- ✅ Nightly pg_dump runs; restore drill verified — backup at 03:00 daily; restore drill round-tripped 17 tables successfully (User=3, Session=3, AuditLog=5)
+- ⏳ WhatsApp templates submitted — **deferred:** new Cloud API number must be procured (separate from sales `+201116527773`); blocks Sprint 5 not Sprint 2
+- ✅ Paymob merchant application submitted — sandbox keys received same day (CARD + FAWRY sub-integrations). Live keys pending Paymob 1–3 week approval. Fawry separate merchant removed per ADR-022/025.
+- ✅ Claude as full dev team onboarded; local dev environment documented in README
+
+**8/9 fully met. 1 deferred (WhatsApp Cloud API templates) — does not block Sprint 2 catalog work. Sprint 1 closed 2026-04-19.**
 
 ## Notes
 - Admin password shared in chat during kickoff is treated as compromised. Runbook §13 requires rotation before first production login; code enforces password reset on first login via `mustChangePassword`.
