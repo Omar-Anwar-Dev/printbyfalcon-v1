@@ -46,8 +46,12 @@ const redactPaths = [
   'req.headers.authorization',
 ];
 
+// Normalize to lowercase: pino's edge-runtime build is strict about case
+// (rejects 'INFO'); the rest of the codebase + Python tools (GlitchTip)
+// happily accept either case, so lowercase is the safe internal canon.
+const rawLevel = process.env.LOG_LEVEL ?? (isDev ? 'debug' : 'info');
 const options: LoggerOptions = {
-  level: process.env.LOG_LEVEL ?? (isDev ? 'debug' : 'info'),
+  level: rawLevel.toLowerCase(),
   redact: {
     paths: redactPaths,
     remove: true,
