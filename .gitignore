@@ -41,14 +41,18 @@ Thumbs.db
 prisma/*.db
 prisma/migrations/**/*.sql.bak
 
-# runtime storage (product images, invoices)
-storage/
-!storage/.gitkeep
+# runtime storage (product images, invoices) — anchor to repo root so app/storage/ (route) isn't ignored
+/storage/
+!/storage/.gitkeep
 
-# backups
-backups/
-!backups/.gitkeep
+# backups (anchored to repo root)
+/backups/
+!/backups/.gitkeep
+
+# Claude Code worktrees (local agent state, not for version control)
+.claude/worktrees/
 
 # test output
 coverage/
 .nyc_output/
+tmp/

@@ -38,7 +38,10 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - pbf_prod_storage:/storage
+      # Bind mount onto host /var/pbf/storage so Nginx (outside Docker) serves
+      # the same bytes the app writes. `location /storage/ { alias /var/pbf/storage/; ... }`
+      # in docker/nginx/printbyfalcon.com.conf reads straight from the host path.
+      - /var/pbf/storage:/storage
     ports:
       - '127.0.0.1:3000:3000'
     networks: [pbf-prod-net]
@@ -62,7 +65,7 @@ services:
       postgres:
         condition: service_healthy
     volumes:
-      - pbf_prod_storage:/storage
+      - /var/pbf/storage:/storage
     networks: [pbf-prod-net]
 
   # Valkey (Redis-compatible) — required by GlitchTip v6+ for caching & rate limiting.
@@ -120,8 +123,10 @@ services:
 
 volumes:
   pbf_prod_pg_data:
-  pbf_prod_storage:
   pbf_prod_valkey_data:
+  # Note: pbf_prod_storage was a named volume in Sprint 1; Sprint 2 switched to
+  # a /var/pbf/storage bind mount so Nginx on the host serves the same bytes
+  # (see `app`/`worker` volumes block above).
 
 networks:
   pbf-prod-net:

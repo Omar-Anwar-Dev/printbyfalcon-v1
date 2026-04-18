@@ -464,6 +464,54 @@ The B2C payment options return to: **Paymob card + Paymob-Fawry pay-at-outlet + 
 
 ---
 
+## ADR-027: Categories support unlimited nesting (supersedes architecture §5.2 "max 2 levels for MVP")
+Date: 2026-04-18 (Sprint 2, Day 1)
+Status: Accepted
+
+**Context:** Sprint 2 kickoff exchange — the owner asked that categories be editable, addable, deletable, AND that categories be nestable inside other categories. The architecture doc (§5.2) originally capped the MVP tree at 2 levels to keep the admin UI simple. The schema's `parentId` self-relation already supports arbitrary depth; the cap was a UX convention, not a schema constraint.
+
+**Decision:** Remove the 2-level cap from the Category model. Unlimited nesting is supported end-to-end:
+- **DB:** `Category.parentId` nullable self-FK; `buildTree`/`flattenTree` helpers in `lib/catalog/category-tree.ts` assemble depth-aware trees for rendering.
+- **Admin:** category list renders as indented tree; edit form's "parent" picker is the flattened tree with self+descendants greyed out (anti-cycle guard at the UI layer, reinforced server-side in `updateCategoryAction` with an explicit ancestor-walk).
+- **Storefront:** the header's category menu shows top-level categories with first-level children in the dropdown; deeper levels are reachable via each category's own page (subcategories rendered as chips at the top of the product list). Breadcrumbs on the product detail show category + parent only for MVP screen simplicity.
+
+**Deletion policy (same kickoff exchange):** for every catalog entity that references others (Brand, Category, Product, PrinterModel), delete is only allowed when no dependent rows exist. The UI surfaces an Archive button as the always-safe soft-delete — `status=ARCHIVED` hides from the storefront but preserves references, is reversible, and keeps order-history/audit-log integrity.
+
+**Alternatives considered:**
+- **Keep 2-level cap** — rejected; the owner's ask makes tree depth a real requirement, and the schema cost was zero (self-relation already in place).
+- **Fixed 3-level cap** (Department / Category / Subcategory) — rejected; arbitrary caps invite "just one more level" escape hatches later. Schema allows any depth; UI caps *display* indentation at 3 levels for legibility but doesn't block data.
+
+**Consequences:**
+- One new file (`lib/catalog/category-tree.ts`) + depth-aware admin UIs.
+- Every dependent-check (brand/category/printer-model delete) now routes through a "has_dependents" branch that surfaces a clear message in both locales.
+- Architecture §5.2 line "Tree structure (max 2 levels for MVP)" is superseded by this ADR.
+
+---
+
+## ADR-028: Storage bind-mount to /var/pbf/storage on host (replaces Sprint 1 named volume)
+Date: 2026-04-18 (Sprint 2, Day 1)
+Status: Accepted
+
+**Context:** Sprint 1 defined `pbf_prod_storage`/`pbf_staging_storage` as named Docker volumes mounted at `/storage` inside the app+worker containers. The Nginx config shipped in Sprint 1 already uses `alias /var/pbf/storage/` for the `/storage/` location block, which targets the host filesystem — not the Docker-managed volume at `/var/lib/docker/volumes/pbf-prod_pbf_prod_storage/_data/`. These pointed at different bytes; Sprint 1 didn't exercise this because no images existed yet. Sprint 2 starts writing product images, so the misalignment would have caused 404s at Nginx the moment the first image went live.
+
+**Decision:** Switch both stacks to a bind mount:
+- prod: `/var/pbf/storage:/storage`
+- staging: `/var/pbf/staging/storage:/storage`
+
+The host directories already exist (runbook §1.7 Sprint 1 housekeeping creates `/var/pbf/storage` + `/var/pbf/staging/storage` at VPS setup). Named volumes `pbf_prod_storage`/`pbf_staging_storage` are removed from the compose files' `volumes:` blocks (left as comments for history).
+
+**Alternatives considered:**
+- **Change Nginx config to point at `/var/lib/docker/volumes/...`** — rejected; that path is Docker-version-specific and not a documented public interface.
+- **Run Nginx inside Docker and share the named volume** — rejected; Sprint 1 already chose host Nginx for certbot/Cloudflare-IP-lockdown reasons (runbook §2 + §6), and moving Nginx into Docker would unpick more than it fixes.
+- **Serve /storage/ via Next.js route in prod** — rejected; duplicates the logic, adds latency, loses Cache-Control simplicity.
+
+**Consequences:**
+- One-time VPS action when deploying Sprint 2: `docker compose -f docker/docker-compose.prod.yml down` then `up -d` (named-volume data is empty so nothing to migrate). Runbook §11 note added.
+- Dev works unchanged — `./storage` relative path + `app/storage/[...path]/route.ts` fallback.
+- Architecture §2 bullet "File storage" now clearly states "VPS host filesystem `/var/pbf/storage/` — bind-mounted into app/worker containers; served directly by Nginx." (Previously ambiguous.)
+
+---
+
 ## ADR-026: Add Valkey container scoped to GlitchTip — does NOT violate ADR-010
 Date: 2026-04-19 (Sprint 1, Day 1, during runbook §7 execution)
 Status: Accepted

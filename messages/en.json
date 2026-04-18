@@ -35,12 +35,126 @@
     "forgotPassword": "Forgot password?",
     "devOtpHint": "Dev mode: the code is printed in the server log",
     "mustResetPassword": "This is a temporary password. Please set a new one before continuing.",
-    "signedInAs": "Signed in as"
+    "signedInAs": "Signed in as",
+    "not_signed_in": "Not signed in",
+    "invalid_credentials": "Invalid credentials",
+    "account_disabled": "Account disabled"
   },
   "admin": {
     "loginTitle": "Admin Panel",
     "loginPrompt": "Enter your credentials to access the admin panel",
-    "unauthorized": "You do not have permission to access this area"
+    "unauthorized": "You do not have permission to access this area",
+    "nav": {
+      "dashboard": "Dashboard",
+      "products": "Products",
+      "brands": "Brands",
+      "categories": "Categories",
+      "printerModels": "Printer Models"
+    },
+    "common": {
+      "create": "Create",
+      "new": "New",
+      "edit": "Edit",
+      "save": "Save",
+      "cancel": "Cancel",
+      "back": "Back",
+      "delete": "Delete",
+      "archive": "Archive",
+      "unarchive": "Unarchive",
+      "status": "Status",
+      "active": "Active",
+      "archived": "Archived",
+      "search": "Search",
+      "actions": "Actions",
+      "saved": "Saved",
+      "noRows": "No records yet",
+      "requiredField": "Required",
+      "confirmDelete": "Delete permanently? This cannot be undone.",
+      "confirmArchive": "Hide from the storefront? You can unarchive later.",
+      "hasDependentsHelp": "Can't delete — dependent records exist. Archive instead."
+    },
+    "catalog": {
+      "products": {
+        "title": "Products",
+        "newTitle": "New product",
+        "editTitle": "Edit product",
+        "sku": "SKU",
+        "brand": "Brand",
+        "category": "Category",
+        "authenticity": "Authenticity",
+        "genuine": "Genuine",
+        "compatible": "Compatible",
+        "nameAr": "Name (Arabic)",
+        "nameEn": "Name (English)",
+        "descriptionAr": "Description (Arabic)",
+        "descriptionEn": "Description (English)",
+        "specs": "Specifications",
+        "specsHelp": "Key/value pair — leave blank to remove",
+        "addSpec": "Add spec",
+        "basePrice": "Base price (EGP)",
+        "vatExempt": "VAT exempt",
+        "images": "Images",
+        "noImages": "No images yet",
+        "uploadImage": "Upload image",
+        "uploadHint": "JPG / PNG / WebP — up to 5 MB",
+        "altAr": "Alt text (Arabic)",
+        "altEn": "Alt text (English)",
+        "moveUp": "Up",
+        "moveDown": "Down"
+      },
+      "brands": {
+        "title": "Brands",
+        "newTitle": "New brand",
+        "editTitle": "Edit brand",
+        "nameAr": "Name (Arabic)",
+        "nameEn": "Name (English)",
+        "slug": "Slug",
+        "slugHelp": "Auto-generated from English name if left blank"
+      },
+      "categories": {
+        "title": "Categories",
+        "newTitle": "New category",
+        "editTitle": "Edit category",
+        "nameAr": "Name (Arabic)",
+        "nameEn": "Name (English)",
+        "parent": "Parent category",
+        "noParent": "— Top level —",
+        "position": "Position",
+        "slug": "Slug",
+        "children": "Subcategories"
+      }
+    }
+  },
+  "catalog": {
+    "brand": {
+      "not_found": "Brand not found",
+      "has_dependents": "Cannot delete — products or printer models reference this brand"
+    },
+    "category": {
+      "not_found": "Category not found",
+      "parent_not_found": "Parent category not found",
+      "has_dependents": "Cannot delete — products or subcategories exist",
+      "cycle": "A category cannot be its own ancestor"
+    },
+    "product": {
+      "not_found": "Product not found",
+      "sku_taken": "SKU is already in use"
+    },
+    "printer": {
+      "not_found": "Printer model not found",
+      "has_dependents": "Cannot delete — products reference this printer model",
+      "duplicate_model": "A model with this name already exists for the same brand"
+    },
+    "image": {
+      "missing": "No file selected",
+      "not_found": "Image not found",
+      "limit": "Maximum images reached (10)",
+      "empty": "File is empty",
+      "too_large": "File exceeds 5 MB",
+      "unsupported_format": "Unsupported image format",
+      "unreadable": "File is not a readable image",
+      "unknown": "Something went wrong processing the image"
+    }
   },
   "validation": {
     "required": "This field is required",
@@ -75,6 +189,12 @@
     },
     "rate_limit": {
       "exceeded": "Too many requests — please try again later"
+    },
+    "sku": {
+      "format": "SKU may only contain letters, numbers, dots, dashes, and underscores"
+    },
+    "slug": {
+      "format": "Slug may only contain lowercase letters, numbers, and dashes"
     }
   },
   "common": {

@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 import { getOptionalUser } from '@/lib/auth';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { AdminNav } from '@/components/admin/admin-nav';
 
 export default async function AdminLayout({
   children,
@@ -10,6 +11,7 @@ export default async function AdminLayout({
 }) {
   const t = await getTranslations();
   const user = await getOptionalUser();
+  const showNav = user?.type === 'ADMIN';
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -28,7 +30,14 @@ export default async function AdminLayout({
           </div>
         </div>
       </header>
-      <main className="flex-1 bg-muted/30">{children}</main>
+      <div className="flex flex-1 bg-muted/30">
+        {showNav ? (
+          <aside className="hidden w-56 border-e bg-background md:block">
+            <AdminNav />
+          </aside>
+        ) : null}
+        <main className="flex-1">{children}</main>
+      </div>
     </div>
   );
 }

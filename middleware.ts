@@ -39,6 +39,7 @@ export default function middleware(request: NextRequest): NextResponse {
 }
 
 export const config = {
-  // Match everything except Next internals and static files.
-  matcher: ['/((?!api|_next|.*\\..*).*)'],
+  // Match everything except Next internals, API, static files, and /storage/*
+  // (served by Nginx in prod, by app/storage/[...path]/route.ts in dev).
+  matcher: ['/((?!api|_next|storage|.*\\..*).*)'],
 };

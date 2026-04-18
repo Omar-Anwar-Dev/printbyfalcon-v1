@@ -1,0 +1,19 @@
+import { defineConfig } from 'vitest/config';
+import path from 'node:path';
+
+export default defineConfig({
+  test: {
+    environment: 'node',
+    include: ['lib/**/*.test.ts', 'tests/**/*.test.ts'],
+    exclude: ['node_modules/**', '.next/**', 'tests/e2e/**'],
+    testTimeout: 15000,
+    env: {
+      STORAGE_ROOT: path.resolve(__dirname, 'tmp', 'test-storage'),
+    },
+  },
+  resolve: {
+    alias: {
+      '@': path.resolve(__dirname, '.'),
+    },
+  },
+});

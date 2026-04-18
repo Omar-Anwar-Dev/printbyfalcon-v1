@@ -39,7 +39,7 @@ services:
       postgres-staging:
         condition: service_healthy
     volumes:
-      - pbf_staging_storage:/storage
+      - /var/pbf/staging/storage:/storage
     ports:
       - '127.0.0.1:3001:3000'
     networks: [pbf-staging-net]
@@ -58,12 +58,14 @@ services:
       postgres-staging:
         condition: service_healthy
     volumes:
-      - pbf_staging_storage:/storage
+      - /var/pbf/staging/storage:/storage
     networks: [pbf-staging-net]
 
 volumes:
   pbf_staging_pg_data:
-  pbf_staging_storage:
+  # pbf_staging_storage was a named volume in Sprint 1; Sprint 2 switched to
+  # a /var/pbf/staging/storage bind mount so Nginx on the host serves the same
+  # bytes (see `app-staging`/`worker-staging` volumes block above).
 
 networks:
   pbf-staging-net:

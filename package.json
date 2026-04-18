@@ -19,11 +19,14 @@
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "prisma:seed": "tsx prisma/seed.ts",
+    "seed:catalog": "tsx scripts/seed-catalog.ts",
     "worker": "tsx worker/index.ts",
     "worker:build": "tsc -p worker/tsconfig.json",
     "worker:start": "node worker/dist/index.js",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:e2e": "playwright test",
+    "test:e2e:install": "playwright install --with-deps",
     "prepare": "husky"
   },
   "dependencies": {
@@ -46,11 +49,13 @@
     "react": "^19.0.0-rc-02c0e824-20241028",
     "react-dom": "^19.0.0-rc-02c0e824-20241028",
     "react-hook-form": "^7.53.2",
+    "sharp": "^0.33.5",
     "tailwind-merge": "^2.5.4",
     "tailwindcss-animate": "^1.0.7",
     "zod": "^3.23.8"
   },
   "devDependencies": {
+    "@playwright/test": "^1.59.1",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^22.9.0",
     "@types/nodemailer": "^6.4.16",

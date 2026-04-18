@@ -51,7 +51,7 @@ export default async function LocaleLayout({ children, params }: Props) {
         {`document.documentElement.lang='${locale}';document.documentElement.dir='${dir}';`}
       </Script>
       <div className="flex min-h-screen flex-col" dir={dir} lang={locale}>
-        <SiteHeader />
+        <SiteHeader locale={locale} />
         <main className="flex-1">{children}</main>
         <SiteFooter />
       </div>
