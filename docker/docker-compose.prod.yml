@@ -76,18 +76,23 @@ services:
   glitchtip:
     image: glitchtip/glitchtip:latest
     restart: unless-stopped
-    env_file: ../.env.production
+    # NOTE: deliberately NO env_file here. The PBF app's .env.production contains
+    # APP_URL=https://printbyfalcon.com which would hijack GlitchTip's DSN domain
+    # (events would route to the Next.js app instead of GlitchTip). All required
+    # vars are set explicitly below.
     environment:
       DATABASE_URL: ${GLITCHTIP_DATABASE_URL}
       SECRET_KEY: ${GLITCHTIP_SECRET_KEY}
       PORT: 8080
       EMAIL_URL: ${GLITCHTIP_EMAIL_URL:-consolemail://}
-      GLITCHTIP_DOMAIN: https://errors.printbyfalcon.com
       DEFAULT_FROM_EMAIL: ${GLITCHTIP_FROM_EMAIL:-errors@printbyfalcon.com}
+      # GlitchTip uses GLITCHTIP_DOMAIN to compute the DSN domain shown in the UI
+      # AND for ALLOWED_HOSTS/CSRF settings.
+      GLITCHTIP_DOMAIN: https://errors.printbyfalcon.com
       # Valkey-backed cache + queue (GlitchTip v6+ hard requirement)
       REDIS_URL: redis://valkey:6379/0
       VALKEY_URL: redis://valkey:6379/0
-      # Override LOG_LEVEL because Python logging requires uppercase (Pino is case-insensitive)
+      # Python logging requires uppercase
       LOG_LEVEL: INFO
     depends_on:
       postgres:
