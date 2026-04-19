@@ -34,7 +34,9 @@ type Labels = {
   cart: string;
   language: string;
   business: string;
-  allOf: (label: string) => string;
+  // Plain string ("All" / "كل"). Interpolated with category label inline.
+  // Must NOT be a function — server→client props must be serializable.
+  allLabel: string;
 };
 
 export function MobileNav({
@@ -197,7 +199,7 @@ export function MobileNav({
                                   onClick={close}
                                   className="block px-4 py-2 text-sm text-muted-foreground hover:bg-paper-hover hover:text-foreground"
                                 >
-                                  {labels.allOf(cat.label)}
+                                  {labels.allLabel} {cat.label}
                                 </Link>
                               </li>
                               {cat.children.map((child) => (

@@ -77,7 +77,7 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
     })),
   }));
 
-  const allOf = (label: string) => (isAr ? `كل ${label}` : `All ${label}`);
+  const allLabel = isAr ? 'كل' : 'All';
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-canvas/90 backdrop-blur supports-[backdrop-filter]:bg-canvas/75">
@@ -101,7 +101,7 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
             cart: t('nav.cart'),
             language: t('common.languageSwitcher'),
             business: isAr ? 'للشركات' : 'For Business',
-            allOf,
+            allLabel,
           }}
         />
 
