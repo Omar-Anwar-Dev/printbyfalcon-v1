@@ -33,6 +33,12 @@ COPY --from=builder --chown=pbf:pbf /app/package.json ./package.json
 # (CLI) and `tsx` for the seed, both of which pull in many transitive deps that
 # aren't in Next.js's standalone slim node_modules. Adds ~120MB but unblocks boot.
 COPY --from=builder --chown=pbf:pbf /app/node_modules ./node_modules
+# Raw TS sources needed by tsx-driven scripts (catalog seeder, prisma seed).
+# Without these, `tsx scripts/seed-catalog.ts` errors with ERR_MODULE_NOT_FOUND
+# and @/ path aliases (from tsconfig.json) don't resolve.
+COPY --from=builder --chown=pbf:pbf /app/scripts ./scripts
+COPY --from=builder --chown=pbf:pbf /app/lib ./lib
+COPY --from=builder --chown=pbf:pbf /app/tsconfig.json ./tsconfig.json
 USER pbf
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
