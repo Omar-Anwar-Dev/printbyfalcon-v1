@@ -1,6 +1,7 @@
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 import { LanguageSwitcher } from '@/components/language-switcher';
+import { CategoryMenu } from '@/components/category-menu';
 import { getOptionalUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { buildTree, type FlatCategory } from '@/lib/catalog/category-tree';
@@ -49,31 +50,19 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
           <Link href="/products" className="hover:text-primary">
             {t('nav.catalog')}
           </Link>
-          {topCategories.map((cat) => (
-            <details key={cat.id} className="group relative">
-              <summary className="cursor-pointer list-none hover:text-primary">
-                {isAr ? cat.nameAr : cat.nameEn}
-              </summary>
-              <div className="absolute start-0 top-full z-50 mt-2 hidden min-w-[200px] rounded-md border bg-background p-2 shadow-md group-open:block">
-                <Link
-                  href={`/categories/${cat.slug}`}
-                  className="block rounded px-3 py-2 text-sm hover:bg-muted"
-                >
-                  {isAr ? 'كل ' : 'All '}
-                  {isAr ? cat.nameAr : cat.nameEn}
-                </Link>
-                {cat.children.map((child) => (
-                  <Link
-                    key={child.id}
-                    href={`/categories/${child.slug}`}
-                    className="block rounded px-3 py-2 text-sm hover:bg-muted"
-                  >
-                    {isAr ? child.nameAr : child.nameEn}
-                  </Link>
-                ))}
-              </div>
-            </details>
-          ))}
+          <CategoryMenu
+            allLabel={isAr ? 'كل' : 'All'}
+            categories={topCategories.map((cat) => ({
+              id: cat.id,
+              slug: cat.slug,
+              label: isAr ? cat.nameAr : cat.nameEn,
+              children: cat.children.map((child) => ({
+                id: child.id,
+                slug: child.slug,
+                label: isAr ? child.nameAr : child.nameEn,
+              })),
+            }))}
+          />
         </nav>
 
         <div className="flex items-center gap-4">
