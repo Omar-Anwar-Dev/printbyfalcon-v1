@@ -12,31 +12,77 @@ export const runtime = 'nodejs';
  *   POST /api/webhooks/paymob?hmac=<hex>
  *   body: { type: "TRANSACTION", obj: { id, success, order: { id, merchant_order_id }, ... } }
  *
+ * Defensive on the HMAC location — Paymob has been observed emitting it as a
+ * URL query param, an `hmac` field inside the JSON body, and occasionally a
+ * header. We accept all three.
+ *
+ * Every incoming request is logged at `paymob.webhook.received` BEFORE any
+ * decision branch, so the absence of logs in prod = the POST genuinely did
+ * not arrive (Cloudflare/DNS/firewall), not a silent short-circuit.
+ *
  * Rules:
- *   - HMAC is verified before any DB work. Bad signature → 401.
+ *   - HMAC verified before any DB work. Bad signature → 401.
  *   - Idempotency by `paymob_transaction_id` (unique column on Order).
  *   - Always return 200 on logical errors (bad state, already processed)
  *     so Paymob doesn't retry-storm us; we log instead.
  */
 export async function POST(request: Request) {
   const url = new URL(request.url);
-  const hmac = url.searchParams.get('hmac') ?? '';
+  const bodyText = await request.text();
+
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = JSON.parse(bodyText) as Record<string, unknown>;
+  } catch {
+    // leave payload null
+  }
+
+  const hmacFromQuery = url.searchParams.get('hmac') ?? '';
+  const hmacFromHeader =
+    request.headers.get('x-paymob-hmac') ?? request.headers.get('hmac') ?? '';
+  const hmacFromBody =
+    (payload && typeof payload.hmac === 'string' ? payload.hmac : '') || '';
+  const hmac = hmacFromQuery || hmacFromHeader || hmacFromBody;
+
+  logger.warn(
+    {
+      method: 'POST',
+      path: url.pathname,
+      hmacSource: hmacFromQuery
+        ? 'query'
+        : hmacFromHeader
+          ? 'header'
+          : hmacFromBody
+            ? 'body'
+            : 'none',
+      hmacLen: hmac.length,
+      bodyLen: bodyText.length,
+      payloadType: payload?.type ?? null,
+      hasObj: Boolean(payload?.obj),
+      userAgent: request.headers.get('user-agent') ?? null,
+      cfRay: request.headers.get('cf-ray') ?? null,
+    },
+    'paymob.webhook.received',
+  );
+
   if (!hmac) {
+    logger.warn({}, 'paymob.webhook.missing_hmac');
     return NextResponse.json(
       { ok: false, error: 'missing-hmac' },
       { status: 401 },
     );
   }
 
-  let payload: Record<string, unknown>;
-  try {
-    payload = (await request.json()) as Record<string, unknown>;
-  } catch {
+  if (!payload) {
+    logger.warn({ bodyLen: bodyText.length }, 'paymob.webhook.bad_json');
     return NextResponse.json({ ok: false, error: 'bad-json' }, { status: 400 });
   }
 
   if (!verifyPaymobHmac(payload, hmac)) {
-    logger.warn({}, 'paymob.webhook.hmac_mismatch');
+    logger.warn(
+      { hmacPrefix: hmac.slice(0, 12) },
+      'paymob.webhook.hmac_mismatch',
+    );
     return NextResponse.json({ ok: false, error: 'bad-hmac' }, { status: 401 });
   }
 
@@ -50,12 +96,10 @@ export async function POST(request: Request) {
   const paymobOrderId = paymobOrder.id != null ? String(paymobOrder.id) : null;
 
   if (type !== 'TRANSACTION' || !txnId) {
-    // Unknown event type → ignore, acknowledge.
+    logger.warn({ type, txnId }, 'paymob.webhook.ignored_event_type');
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  // Look up the order. Prefer merchant_order_id (our Order.id) for speed,
-  // fall back to paymob_order_id for robustness.
   const order = merchantOrderId
     ? await prisma.order.findUnique({ where: { id: merchantOrderId } })
     : paymobOrderId
@@ -69,8 +113,8 @@ export async function POST(request: Request) {
     return NextResponse.json({ ok: true, ignored: true });
   }
 
-  // Idempotency: if the same transaction id has already been recorded, no-op.
   if (order.paymobTransactionId === txnId) {
+    logger.info({ orderId: order.id, txnId }, 'paymob.webhook.duplicate');
     return NextResponse.json({ ok: true, duplicate: true });
   }
 
@@ -100,8 +144,7 @@ export async function POST(request: Request) {
         },
       });
     });
-    // TODO (S4-D5-T3): enqueue `send-order-confirmation` email job here once
-    // worker/jobs registry lands; current sprint wires this up in the worker.
+    logger.info({ orderId: order.id, txnId }, 'paymob.webhook.order_paid');
   } else {
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
@@ -128,7 +171,17 @@ export async function POST(request: Request) {
         },
       });
     });
+    logger.info({ orderId: order.id, txnId }, 'paymob.webhook.order_failed');
   }
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * GET handler — only exists so ops can curl the URL to confirm the route is
+ * mounted and reachable. Returns a tiny JSON so a 200 proves our infra
+ * (DNS/Cloudflare/Nginx/Next) routes to this handler correctly.
+ */
+export async function GET() {
+  return NextResponse.json({ ok: true, route: 'paymob-webhook' });
 }
