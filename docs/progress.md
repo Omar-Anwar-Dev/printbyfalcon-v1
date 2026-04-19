@@ -375,3 +375,29 @@ GitHub → repo Settings → Environments → **New environment** → name `prod
 
 **Decisions logged this pass:**
 - **ADR-032** [2026-04-19] Formalize release pipeline — runbook + manual prod workflow + CI test hard-fail.
+
+---
+
+## Incidents
+
+### 2026-04-19 — First prod-deploy attempt of `b3c42a3` crashed; rolled back cleanly
+**Summary.** First prod deploy of the UI foundation pass (commit `b3c42a3`) booted containers successfully — Prisma `db push`, `post-push.ts` FTS bootstrap, and seed all completed; `/api/health` returned 200 — but the first HTTP request to `/ar` and `/en` rendered the branded 500 error page (digest 2617824920 / 1579566200). Owner executed [runbook §6.1 fast rollback](runbook.md) within ~5 minutes; prod restored on `30eb5dd` (pre-UI-pass). Zero customer-facing downtime of the storefront core — health endpoint stayed green throughout; rollback recovery took ~3 minutes of image rebuild.
+
+**Root cause.** Unknown at time of incident — the broken container's logs were destroyed by the rollback's `docker compose up -d --build` (which recreated the container on a new image) before stack traces could be pulled. Local dev reproduction against a worktree without `.env` surfaced `PrismaClientInitializationError: DATABASE_URL not found`, but that's a local-only artifact — prod definitely had `DATABASE_URL` present (pre-boot Prisma operations succeeded and `/api/health` — which also hits Prisma — was green).
+
+**Aggravating factors exposed during the incident:**
+1. **Staging never worked.** `.env.staging` was missing `POSTGRES_PASSWORD` as a top-level key. Sprint 1 §11 setup step was incomplete and had been masked by every prior sprint going direct to prod via manual SSH. Staging would have caught this crash cheaply; instead, prod caught it expensively.
+2. **`.env.production.example` and `.env.staging.example` both missed `POSTGRES_PASSWORD` as a separate line** — docker-compose's `POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}` substitution silently defaulted to blank, creating a latent permissions footgun (prod escaped via its stale, already-initialized volume; staging hit the full failure).
+3. **No log retention across container recreation.** `docker compose up -d --build` destroys the old container's logs. No out-of-band log shipping (stderr-to-disk, Sentry breadcrumbs, etc.) meant the stack trace was lost.
+
+**Defensive fix shipped** (new commit on `claude/tender-vaughan-7d2763`, not yet re-deployed):
+- **[app/[locale]/page.tsx](../app/[locale]/page.tsx)** — each DB call wrapped in `safely()` helper: `console.error` on failure + fall through to empty array. Added `export const dynamic = 'force-dynamic'` alongside `revalidate = 300` to opt out of any build-time SSG path.
+- **[components/site-header.tsx](../components/site-header.tsx)** — `prisma.category.findMany` wrapped in try/catch; empty category menu on failure instead of whole-page crash.
+- **[lib/db.ts](../lib/db.ts)** — one-line boot diagnostic logged on Prisma client init: `[PBF] Prisma client init — NODE_ENV=... DATABASE_URL_present=true/false`. Next deploy's `docker compose logs app | grep PBF` will immediately show if the env is missing.
+- **[.env.production.example](../.env.production.example) + [.env.staging.example](../.env.staging.example)** — `POSTGRES_PASSWORD=` added as top-level key with comment explaining the sync requirement. Also added `GLITCHTIP_DATABASE_URL` + `GLITCHTIP_SECRET_KEY` to the prod example (eliminates the cosmetic compose warnings).
+
+**Still open:**
+- Actual root cause of the `b3c42a3` render crash unidentified. Defensive fix prevents it from taking down the page but doesn't explain it. Next deploy will log the specifics.
+- Staging setup needs the `POSTGRES_PASSWORD=<hex>` added to `/var/pbf/repo/.env.staging` on the VPS + `docker compose -f docker/docker-compose.staging.yml down -v` to wipe the blank-password volume + re-up. ~3 min owner task.
+- Pre-existing prod container reports `unhealthy` in `docker ps` while `/api/health` returns 200. Healthcheck mismatch — investigate after main incident closes.
+- Rollback from `b3c42a3` used the fast-path (no schema changes), which is why recovery was clean. Had this deploy touched Prisma schema, rollback would have been lossier per [runbook §6.2](runbook.md).

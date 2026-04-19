@@ -34,18 +34,30 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
         .then((r) => r._sum.qty ?? 0)
     : 0;
 
-  const rows = await prisma.category.findMany({
-    where: { status: 'ACTIVE' },
-    orderBy: [{ position: 'asc' }, { nameEn: 'asc' }],
-    select: {
-      id: true,
-      parentId: true,
-      position: true,
-      slug: true,
-      nameAr: true,
-      nameEn: true,
-    },
-  });
+  // Defensive: category fetch failure must not take down the whole page
+  // (header renders on every route). Empty category list is an acceptable
+  // degraded state — navigation still works via direct links.
+  let rows: TopCategory[] = [];
+  try {
+    rows = await prisma.category.findMany({
+      where: { status: 'ACTIVE' },
+      orderBy: [{ position: 'asc' }, { nameEn: 'asc' }],
+      select: {
+        id: true,
+        parentId: true,
+        position: true,
+        slug: true,
+        nameAr: true,
+        nameEn: true,
+      },
+    });
+  } catch (err) {
+    console.error(
+      '[site-header] category.findMany failed:',
+      err instanceof Error ? err.message : err,
+      err instanceof Error && err.stack ? `\n${err.stack}` : '',
+    );
+  }
   const flat: FlatCategory<TopCategory>[] = rows.map((r) => ({ ...r }));
   const tree = buildTree(flat);
   const topCategories = tree.slice(0, 6);

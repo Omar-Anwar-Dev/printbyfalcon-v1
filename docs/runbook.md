@@ -346,8 +346,7 @@ curl -sS https://printbyfalcon.com/api/health | jq
 | 2026-04-19 | prod | *(tbd)* | Sprint 2 prod. |
 | 2026-04-19 | staging | *(tbd)* | Sprint 3 — Smart search + filters + 200-SKU fixture. |
 | 2026-04-19 | prod | *(tbd)* | Sprint 3 prod. FTS bootstrap + perf:search ready. |
-| *(next row)* | staging | *(this deploy)* | **Sprint 4 (B2C + cart + checkout + Paymob, M0) + UI foundation pass (ADR-031).** |
-| *(next row)* | prod | *(this deploy)* | Same bundle, prod. |
+| 2026-04-19 | prod | `b3c42a3` → rolled back to `30eb5dd` | **Sprint 4 + UI foundation pass.** First-request crash on `/ar` & `/en` (digests 2617824920, 1579566200); branded error boundary rendered correctly. Rolled back via §6.1 in ~3 min — prod currently on `30eb5dd`. Root cause TBD; defensive fix prepared on branch `claude/tender-vaughan-7d2763` (boot-time DB env logging + per-call try/catch + `POSTGRES_PASSWORD` in env examples). See progress.md → Incidents for full writeup. |
 
 > Owner: append each new deploy to this table as it happens. A one-line note is enough.
 

@@ -11,7 +11,10 @@ import { Link } from '@/lib/i18n/routing';
 import { Button } from '@/components/ui/button';
 import { ProductCard } from '@/components/catalog/product-card';
 import { prisma } from '@/lib/db';
-import { listActiveProducts } from '@/lib/catalog/queries';
+import {
+  listActiveProducts,
+  type ProductListItem,
+} from '@/lib/catalog/queries';
 import { buildTree, type FlatCategory } from '@/lib/catalog/category-tree';
 
 type TopCategory = {
@@ -23,7 +26,38 @@ type TopCategory = {
   nameEn: string;
 };
 
+type BrandRow = {
+  id: string;
+  slug: string;
+  nameAr: string;
+  nameEn: string;
+};
+
+// Force dynamic rendering. Avoids any build-time SSG weirdness where the
+// homepage might get pre-rendered against an empty build-context DB and
+// bake a broken state into the bundle. ISR (`revalidate`) is kept so the
+// runtime cache window is still 5 minutes.
+export const dynamic = 'force-dynamic';
 export const revalidate = 300;
+
+// Defensive wrapper — log and swallow errors so an individual DB failure
+// degrades gracefully (empty section) instead of crashing the whole page.
+async function safely<T>(
+  label: string,
+  fn: () => Promise<T>,
+  fallback: T,
+): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    console.error(
+      `[homepage] ${label} failed:`,
+      err instanceof Error ? err.message : err,
+      err instanceof Error && err.stack ? `\n${err.stack}` : '',
+    );
+    return fallback;
+  }
+}
 
 export default async function HomePage({
   params,
@@ -35,27 +69,42 @@ export default async function HomePage({
   const typedLocale: 'ar' | 'en' = isAr ? 'ar' : 'en';
 
   const [featured, categoryRows, brandRows] = await Promise.all([
-    listActiveProducts({ page: 1, sort: 'newest' }).then((r) =>
-      r.items.slice(0, 8),
+    safely<ProductListItem[]>(
+      'listActiveProducts',
+      () =>
+        listActiveProducts({ page: 1, sort: 'newest' }).then((r) =>
+          r.items.slice(0, 8),
+        ),
+      [],
     ),
-    prisma.category.findMany({
-      where: { status: 'ACTIVE' },
-      orderBy: [{ position: 'asc' }, { nameEn: 'asc' }],
-      select: {
-        id: true,
-        parentId: true,
-        position: true,
-        slug: true,
-        nameAr: true,
-        nameEn: true,
-      },
-    }),
-    prisma.brand.findMany({
-      where: { status: 'ACTIVE' },
-      orderBy: { nameEn: 'asc' },
-      select: { id: true, slug: true, nameAr: true, nameEn: true },
-      take: 10,
-    }),
+    safely<TopCategory[]>(
+      'categories.findMany',
+      () =>
+        prisma.category.findMany({
+          where: { status: 'ACTIVE' },
+          orderBy: [{ position: 'asc' }, { nameEn: 'asc' }],
+          select: {
+            id: true,
+            parentId: true,
+            position: true,
+            slug: true,
+            nameAr: true,
+            nameEn: true,
+          },
+        }),
+      [],
+    ),
+    safely<BrandRow[]>(
+      'brands.findMany',
+      () =>
+        prisma.brand.findMany({
+          where: { status: 'ACTIVE' },
+          orderBy: { nameEn: 'asc' },
+          select: { id: true, slug: true, nameAr: true, nameEn: true },
+          take: 10,
+        }),
+      [],
+    ),
   ]);
 
   const flat: FlatCategory<TopCategory>[] = categoryRows.map((r) => ({ ...r }));
