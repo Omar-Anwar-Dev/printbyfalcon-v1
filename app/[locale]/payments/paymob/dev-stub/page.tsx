@@ -33,7 +33,8 @@ async function devSuccess(formData: FormData) {
       },
     }),
   ]);
-  redirect(`/order/confirmed/${order.id}`);
+  const locale = formData.get('locale')?.toString() || 'ar';
+  redirect(`/${locale}/order/confirmed/${order.id}`);
 }
 
 async function devFailure(formData: FormData) {
@@ -59,15 +60,19 @@ async function devFailure(formData: FormData) {
       },
     }),
   ]);
-  redirect(`/order/confirmed/${order.id}`);
+  const locale = formData.get('locale')?.toString() || 'ar';
+  redirect(`/${locale}/order/confirmed/${order.id}`);
 }
 
 export default async function PaymobDevStubPage({
+  params,
   searchParams,
 }: {
+  params: Promise<{ locale: string }>;
   searchParams: Promise<{ key?: string; order?: string }>;
 }) {
   if (isPaymobConfigured('card')) notFound();
+  const { locale } = await params;
   const sp = await searchParams;
   if (!sp.order) notFound();
 
@@ -81,6 +86,7 @@ export default async function PaymobDevStubPage({
       <div className="space-y-3">
         <form action={devSuccess}>
           <input type="hidden" name="order" value={sp.order} />
+          <input type="hidden" name="locale" value={locale} />
           <button
             type="submit"
             className="w-full rounded-md bg-emerald-600 px-4 py-2 font-medium text-white hover:opacity-90"
@@ -90,6 +96,7 @@ export default async function PaymobDevStubPage({
         </form>
         <form action={devFailure}>
           <input type="hidden" name="order" value={sp.order} />
+          <input type="hidden" name="locale" value={locale} />
           <button
             type="submit"
             className="w-full rounded-md bg-red-600 px-4 py-2 font-medium text-white hover:opacity-90"

@@ -101,6 +101,9 @@ export async function createPaymentKey(
   if (!apiKey || !integrationId || !iframeId) {
     // Dev-mode stub — points at our own confirmation page with a fake
     // transaction id so the rest of the flow can be developed/tested.
+    // `/ar/` locale prefix is required because next-intl's middleware rewrites
+    // all non-prefixed URLs. Arabic is the default locale; on the stub page
+    // itself the language switcher still works.
     logger.warn(
       { merchantOrderId: input.merchantOrderId, kind },
       'paymob.dev_mode.stub',
@@ -109,7 +112,7 @@ export async function createPaymentKey(
     return {
       paymentKey: fakeKey,
       paymobOrderId: `dev-${input.merchantOrderId}`,
-      iframeUrl: `/payments/paymob/dev-stub?key=${fakeKey}&order=${encodeURIComponent(input.merchantOrderId)}`,
+      iframeUrl: `/ar/payments/paymob/dev-stub?key=${fakeKey}&order=${encodeURIComponent(input.merchantOrderId)}`,
     };
   }
 
