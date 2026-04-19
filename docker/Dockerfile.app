@@ -19,7 +19,9 @@ RUN npm run build
 FROM node:22-alpine AS runner
 WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl curl tini \
-  && addgroup -S pbf && adduser -S pbf -G pbf
+  # Pin UID/GID so host-side bind mounts (e.g. /var/pbf/storage) can be chown'd
+  # to a stable owner — see runbook §1.8 "Storage permissions".
+  && addgroup -g 1001 -S pbf && adduser -u 1001 -S pbf -G pbf
 ENV NODE_ENV=production
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3000

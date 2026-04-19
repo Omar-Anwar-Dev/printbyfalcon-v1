@@ -153,6 +153,8 @@
       "too_large": "File exceeds 5 MB",
       "unsupported_format": "Unsupported image format",
       "unreadable": "File is not a readable image",
+      "EACCES": "Storage directory not writable — contact dev team",
+      "ENOSPC": "No disk space left",
       "unknown": "Something went wrong processing the image"
     }
   },
