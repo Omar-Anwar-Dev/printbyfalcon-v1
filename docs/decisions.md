@@ -512,6 +512,34 @@ The host directories already exist (runbook §1.7 Sprint 1 housekeeping creates 
 
 ---
 
+## ADR-029: Bilingual FTS uses `simple` config + app-side searchVector maintenance (no DB triggers)
+Date: 2026-04-19 (Sprint 3, Day 1)
+Status: Accepted
+
+**Context:** Sprint 3 requires full-text search across bilingual product content (`name_ar`, `name_en`, `description_ar`, `description_en`, `sku`) plus brand names (joined through `Brand`). Postgres ships with language-specific text-search configs (`english`, `french`, ...) but **no `arabic` config**. Using `english` on Arabic text would run through the English stemmer and produce garbage. The architecture doc (§5.2) assumed a plain tsvector column without specifying how to maintain it; the implementation plan (S3-D1-T1) mentions a "trigger to auto-update on insert/update" which would make the FTS setup re-apply on every `prisma db push` (ADR-021 pattern).
+
+**Decision:**
+- **Text-search config: `'simple'`** for all columns, in both languages. It tokenizes on whitespace + punctuation and lowercases but does NOT stem — the safest default when you need to handle AR and EN in the same vector and can't run two configs. English loses stemming quality (searching "toners" won't match "toner") — accepted trade-off at MVP scope; the 200-SKU-class catalog is too small for stemming to move the needle.
+- **Maintenance: app-side, not DB-side.** `lib/catalog/search-vector.ts::updateProductSearchVector(productId)` runs a single `UPDATE "Product" p SET "searchVector" = ... FROM "Brand" b WHERE ...` after every `createProductAction`, `updateProductAction`, and CSV seed write. Brand renames trigger `updateSearchVectorsForBrand(brandId)` which bulk-updates every product in that brand. **No Postgres triggers** — they'd need to be re-applied after each `db push` and we'd have to store them in a raw-SQL init script anyway.
+- **Weights:** A for sku + name_ar + name_en (exact/near-exact match wins); B for brand.name_ar + brand.name_en; C for description_ar + description_en. Queries use `ts_rank_cd` with the default weights `{0.1, 0.2, 0.4, 1.0}`.
+- **Index:** `CREATE INDEX ... USING GIN ("searchVector")` — created by `scripts/post-push.ts` which runs after `prisma db push` and before `prisma/seed.ts` in the container startup command. That same script also creates `pg_trgm` GIN indexes on `Product.nameAr`, `Product.nameEn`, `Product.sku`, and `PrinterModel.modelName` for short-query + fuzzy fallback (used when `plainto_tsquery` returns 0 hits and the term is <3 chars, or when the user is typing a partial printer model).
+- **Backfill:** `post-push.ts` rewrites every product's `searchVector` on boot. Idempotent — same input produces same bytes. Cost at MVP scale is sub-second.
+
+**Alternatives considered:**
+- **Postgres trigger that updates searchVector on INSERT/UPDATE of Product or Brand.** Rejected — `db push` drops and recreates tables in some scenarios, and the trigger would need to be re-declared every boot via raw SQL anyway (same maintenance surface, worse locality — developers reading the action code can't see what populates the vector).
+- **Generated column (`GENERATED ALWAYS AS ... STORED`).** Rejected — can't reference other tables (Brand) in a generated column, and we want brand names to be searchable. Self-column-only generated column would leave brand out of FTS ranking.
+- **`english` config for English columns + `simple` for Arabic, combined via `||`.** Considered; rejected for MVP simplicity. Stemming gain on a 500-SKU-class catalog is marginal; revisit if search quality metrics show clear miss patterns on pluralized English queries.
+- **External search engine (Meilisearch, Typesense, Elasticsearch).** Rejected per ADR-009 — Postgres FTS is adequate for 500–2k SKUs; adding a second search service violates the minimum-vendor principle.
+
+**Consequences:**
+- **No `arabic_stem` is available** — users searching "حبرات" (toners, plural) won't match "حبر" (toner, singular). Acceptable at MVP; can add custom dictionary or swap to pg_trgm-only for AR if post-launch metrics say so.
+- **Brand rename is O(n_products_in_brand)** — usually <50 rows, single SQL statement. Measured in tests at <20ms for 50 products.
+- **`post-push.ts` is now part of the container startup critical path** — if it fails, the container exits and Docker restart loops. Same failure mode as `db push` and `seed.ts`, which already had this property.
+- **Trigram indexes add disk overhead** (~2x the indexed column bytes per index; ~200 KB at 2k SKUs). Negligible at MVP scale.
+- **Future-proofing:** when we later want per-language FTS (or switch to BM25-via-pgroonga), the `PRODUCT_SEARCH_VECTOR_EXPR` is a single place to change — every writer goes through `lib/catalog/search-vector.ts`.
+
+---
+
 ## ADR-026: Add Valkey container scoped to GlitchTip — does NOT violate ADR-010
 Date: 2026-04-19 (Sprint 1, Day 1, during runbook §7 execution)
 Status: Accepted

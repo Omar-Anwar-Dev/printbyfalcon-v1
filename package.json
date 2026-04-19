@@ -27,7 +27,8 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps",
-    "prepare": "husky"
+    "prepare": "husky",
+    "perf:search": "tsx scripts/search-perf-audit.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.9.1",

@@ -217,6 +217,10 @@ model Product {
   vatExempt     Boolean       @default(false)
   authenticity  Authenticity  @default(GENUINE)
   status        CatalogStatus @default(ACTIVE)
+  // Full-text search vector — populated by `lib/catalog/search-vector.ts` on
+  // product create/update + brand rename. GIN index added by scripts/post-push.ts
+  // (db push doesn't emit indexes on Unsupported types).
+  searchVector  Unsupported("tsvector")?
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 

@@ -31,6 +31,7 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { processProductImage } from '@/lib/storage/images';
 import { slugify, uniqueSlug } from '@/lib/catalog/slug';
+import { updateProductSearchVector } from '@/lib/catalog/search-vector';
 
 const prisma = new PrismaClient();
 
@@ -228,6 +229,8 @@ async function importRow(row: CsvRow, csvDir: string, dry: boolean) {
     });
     productId = created.id;
   }
+
+  await updateProductSearchVector(productId);
 
   // Images: {csvDir}/images/{sku}/*
   const imageDir = path.join(csvDir, 'images', sku);

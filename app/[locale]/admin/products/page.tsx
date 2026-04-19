@@ -4,6 +4,7 @@ import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { ProductRowActions } from '@/components/admin/product-row-actions';
+import { BulkArchiveBar } from '@/components/admin/bulk-archive-bar';
 import type { Prisma } from '@prisma/client';
 
 export default async function AdminProductsPage({
@@ -129,10 +130,23 @@ export default async function AdminProductsPage({
           </Button>
         </div>
       </form>
+      <BulkArchiveBar
+        confirmLabel={
+          isAr ? 'أرشفة المنتجات المحددة؟' : 'Archive the selected products?'
+        }
+        bulkArchiveLabel={isAr ? 'أرشفة المحدد' : 'Archive selected'}
+        noneSelectedLabel={
+          isAr ? 'لم يتم تحديد منتجات' : 'No products selected'
+        }
+      />
+
       <div className="overflow-x-auto rounded-md border bg-background">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
+              <th className="w-10 p-3">
+                <span className="sr-only">{isAr ? 'تحديد' : 'Select'}</span>
+              </th>
               <th className="p-3 text-start">
                 {t('admin.catalog.products.sku')}
               </th>
@@ -154,7 +168,7 @@ export default async function AdminProductsPage({
             {products.length === 0 ? (
               <tr>
                 <td
-                  colSpan={7}
+                  colSpan={8}
                   className="p-6 text-center text-muted-foreground"
                 >
                   {t('admin.common.noRows')}
@@ -163,6 +177,17 @@ export default async function AdminProductsPage({
             ) : null}
             {products.map((p) => (
               <tr key={p.id} className="border-t">
+                <td className="p-3">
+                  <input
+                    type="checkbox"
+                    name="ids"
+                    value={p.id}
+                    form="admin-bulk-archive-form"
+                    aria-label={isAr ? `تحديد ${p.sku}` : `Select ${p.sku}`}
+                    disabled={p.status !== 'ACTIVE'}
+                    className="h-4 w-4 accent-primary disabled:opacity-40"
+                  />
+                </td>
                 <td className="p-3 font-mono text-xs">{p.sku}</td>
                 <td className="p-3">
                   <Link

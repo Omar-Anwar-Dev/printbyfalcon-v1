@@ -2,6 +2,7 @@ import Image from 'next/image';
 import { Link } from '@/lib/i18n/routing';
 import { formatEgp } from '@/lib/catalog/price';
 import type { ProductListItem } from '@/lib/catalog/queries';
+import { StockBadge } from '@/components/catalog/stock-badge';
 
 export function ProductCard({
   product,
@@ -45,9 +46,15 @@ export function ProductCard({
         <h3 className="line-clamp-2 text-sm font-medium leading-snug">
           {name}
         </h3>
-        <p className="mt-auto text-base font-semibold">
-          {formatEgp(product.basePriceEgp, locale)}
-        </p>
+        <div className="mt-auto flex items-center justify-between gap-2">
+          <p className="text-base font-semibold">
+            {formatEgp(product.basePriceEgp, locale)}
+          </p>
+          {/* Placeholder: real stock wiring arrives in Sprint 6 (Inventory
+              model + reservations). Every ACTIVE listing product shows IN_STOCK
+              until then. */}
+          <StockBadge status="IN_STOCK" locale={locale} />
+        </div>
       </div>
     </Link>
   );

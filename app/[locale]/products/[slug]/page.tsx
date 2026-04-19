@@ -9,6 +9,8 @@ import {
 import { formatEgp } from '@/lib/catalog/price';
 import { ProductGallery } from '@/components/catalog/product-gallery';
 import { ProductCard } from '@/components/catalog/product-card';
+import { StockBadge } from '@/components/catalog/stock-badge';
+import { getStockStatus } from '@/lib/catalog/stock';
 
 export const revalidate = 300;
 
@@ -86,6 +88,9 @@ export default async function ProductDetailPage({
       ? (product.specs as Record<string, string>)
       : {};
 
+  const stockStatus = getStockStatus({ status: product.status });
+  const isOutOfStock = stockStatus === 'OUT_OF_STOCK';
+
   const jsonLd = {
     '@context': 'https://schema.org',
     '@type': 'Product',
@@ -102,7 +107,9 @@ export default async function ProductDetailPage({
       '@type': 'Offer',
       priceCurrency: 'EGP',
       price: Number(product.basePriceEgp).toFixed(2),
-      availability: 'https://schema.org/InStock',
+      availability: isOutOfStock
+        ? 'https://schema.org/OutOfStock'
+        : 'https://schema.org/InStock',
       url: `${BASE_URL}/${locale}/products/${product.slug}`,
     },
   };
@@ -161,21 +168,31 @@ export default async function ProductDetailPage({
             )}
           </div>
 
-          {/* Stock status: placeholder until Sprint 6 inventory lands. */}
-          <p className="text-sm text-green-700">
-            {isAr ? 'متوفر حاليًا' : 'In stock'}
-          </p>
+          {/* Stock status badge — driven by getStockStatus placeholder until
+              Sprint 6 wires real inventory. Swap the helper body then; the
+              rendering here stays unchanged. */}
+          <div>
+            <StockBadge status={stockStatus} locale={isAr ? 'ar' : 'en'} />
+          </div>
 
-          {/* Add-to-cart: placeholder until Sprint 4 cart lands. */}
-          <button
-            type="button"
-            disabled
-            className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-6 text-primary-foreground opacity-60"
-            aria-disabled
-            title={isAr ? 'قريبًا' : 'Coming soon'}
-          >
-            {isAr ? 'أضف إلى السلة' : 'Add to cart'}
-          </button>
+          {isOutOfStock ? (
+            <p className="rounded-md border border-neutral-300 bg-neutral-50 p-3 text-sm text-neutral-700">
+              {isAr
+                ? 'هذا المنتج غير متاح حاليًا. تواصل معنا للاستفسار عن موعد التوفر.'
+                : 'This product is currently unavailable. Contact us for restock timing.'}
+            </p>
+          ) : (
+            /* Add-to-cart: placeholder until Sprint 4 cart lands. */
+            <button
+              type="button"
+              disabled
+              className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-6 text-primary-foreground opacity-60"
+              aria-disabled
+              title={isAr ? 'قريبًا' : 'Coming soon'}
+            >
+              {isAr ? 'أضف إلى السلة' : 'Add to cart'}
+            </button>
+          )}
 
           {description ? (
             <div className="prose prose-sm mt-6 max-w-none">
@@ -214,14 +231,24 @@ export default async function ProductDetailPage({
               </h2>
               <ul className="flex flex-wrap gap-2 text-sm">
                 {product.compatiblePrinters.map((pm) => (
-                  <li
-                    key={pm.id}
-                    className="rounded-md border bg-background px-3 py-1"
-                  >
-                    <span className="text-muted-foreground">
-                      {isAr ? pm.brandAr : pm.brandEn}
-                    </span>{' '}
-                    <span className="font-medium">{pm.modelName}</span>
+                  <li key={pm.id}>
+                    <Link
+                      href={{
+                        pathname: '/search',
+                        query: { printer: pm.slug },
+                      }}
+                      className="inline-block rounded-md border bg-background px-3 py-1 hover:border-primary hover:bg-muted"
+                      title={
+                        isAr
+                          ? `كل المستلزمات المتوافقة مع ${isAr ? pm.brandAr : pm.brandEn} ${pm.modelName}`
+                          : `All consumables compatible with ${pm.brandEn} ${pm.modelName}`
+                      }
+                    >
+                      <span className="text-muted-foreground">
+                        {isAr ? pm.brandAr : pm.brandEn}
+                      </span>{' '}
+                      <span className="font-medium">{pm.modelName}</span>
+                    </Link>
                   </li>
                 ))}
               </ul>

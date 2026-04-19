@@ -14,6 +14,10 @@ import { revalidatePath } from 'next/cache';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { uniqueSlug } from '@/lib/catalog/slug';
+import {
+  updateProductSearchVector,
+  updateSearchVectorsForBrand,
+} from '@/lib/catalog/search-vector';
 import { logger } from '@/lib/logger';
 import {
   deleteProductImageDir,
@@ -145,6 +149,14 @@ export async function updateBrandAction(
     },
   });
   await audit(admin.id, 'catalog.brand.update', 'Brand', id, before, after);
+  // Brand names are indexed in each product's searchVector (weight B) — if
+  // either name changed, every product in this brand needs its vector rebuilt.
+  if (
+    before.nameAr !== parsed.data.nameAr ||
+    before.nameEn !== parsed.data.nameEn
+  ) {
+    await updateSearchVectorsForBrand(id);
+  }
   revalidateStorefront();
   return { ok: true, data: null };
 }
@@ -440,6 +452,7 @@ export async function createProductAction(
     null,
     product,
   );
+  await updateProductSearchVector(product.id);
   revalidateStorefront();
   return { ok: true, data: { id: product.id } };
 }
@@ -497,6 +510,7 @@ export async function updateProductAction(
     },
   });
   await audit(admin.id, 'catalog.product.update', 'Product', id, before, after);
+  await updateProductSearchVector(id);
   revalidateStorefront();
   return { ok: true, data: null };
 }
@@ -946,4 +960,57 @@ export async function deleteProductImageAction(
   );
   revalidateStorefront();
   return { ok: true, data: null };
+}
+
+/**
+ * Bulk-archive many products in one click (admin list page "Archive selected"
+ * button). Only ACTIVE rows are flipped to ARCHIVED — already-ARCHIVED ones
+ * are silently skipped so re-submitting the same form is idempotent. Each
+ * successful archive gets its own AuditLog row for full traceability.
+ *
+ * Takes the full `FormData` so it can be wired directly to a native
+ * `<form action={bulkArchiveProductsAction}>` with checkbox rows bearing
+ * `name="ids"`.
+ */
+export async function bulkArchiveProductsAction(
+  formData: FormData,
+): Promise<ActionResult<{ archived: number }>> {
+  const admin = await requireCatalogAdmin();
+  const rawIds = formData.getAll('ids');
+  const ids = rawIds
+    .filter((x): x is string => typeof x === 'string' && x.length > 0)
+    .slice(0, 500); // sanity cap
+
+  if (ids.length === 0) {
+    return { ok: false, errorKey: 'catalog.product.bulk.empty_selection' };
+  }
+
+  const targets = await prisma.product.findMany({
+    where: { id: { in: ids }, status: 'ACTIVE' },
+    select: { id: true, status: true, sku: true, nameAr: true, nameEn: true },
+  });
+
+  if (targets.length === 0) {
+    return { ok: true, data: { archived: 0 } };
+  }
+
+  await prisma.$transaction([
+    prisma.product.updateMany({
+      where: { id: { in: targets.map((t) => t.id) } },
+      data: { status: 'ARCHIVED' },
+    }),
+    prisma.auditLog.createMany({
+      data: targets.map((t) => ({
+        actorId: admin.id,
+        action: 'catalog.product.bulk_archive',
+        entityType: 'Product',
+        entityId: t.id,
+        before: { status: 'ACTIVE', sku: t.sku } as never,
+        after: { status: 'ARCHIVED', sku: t.sku } as never,
+        note: `Bulk archive (${targets.length} selected)`,
+      })),
+    }),
+  ]);
+  revalidateStorefront();
+  return { ok: true, data: { archived: targets.length } };
 }
