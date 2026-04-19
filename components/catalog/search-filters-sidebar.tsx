@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from '@/lib/i18n/routing';
 
 type BrandOpt = { id: string; nameAr: string; nameEn: string };
@@ -32,7 +32,6 @@ type Props = {
 const LABELS = {
   ar: {
     filters: 'الفلاتر',
-    apply: 'تطبيق',
     clear: 'مسح الفلاتر',
     brand: 'الماركة',
     category: 'التصنيف',
@@ -47,7 +46,6 @@ const LABELS = {
   },
   en: {
     filters: 'Filters',
-    apply: 'Apply',
     clear: 'Clear filters',
     brand: 'Brand',
     category: 'Category',
@@ -62,6 +60,16 @@ const LABELS = {
   },
 };
 
+/**
+ * Desktop filters sidebar. Every control applies instantly — no "Apply" button:
+ *  - Checkboxes / radios / in-stock toggle: push the URL on `onChange`.
+ *  - Price min / max: push on `onBlur` OR Enter key (not per-keystroke).
+ * The "Clear" button resets everything and pushes at the same time.
+ *
+ * Local state mirrors the URL-resolved `selected` prop and re-syncs whenever
+ * the parent re-renders with a different `selected` (e.g., after a sort-tab
+ * click or the user hits Back in the browser).
+ */
 export function SearchFiltersSidebar(props: Props) {
   const { locale, baseQuery, sort, brands, categories, selected } = props;
   const labels = LABELS[locale];
@@ -82,7 +90,31 @@ export function SearchFiltersSidebar(props: Props) {
   );
   const [inStockOnly, setInStockOnly] = useState<boolean>(selected.inStockOnly);
 
+  // Re-sync from URL-derived `selected` on parent re-render (sort click, back
+  // button). We compare by JSON to avoid an infinite re-sync when our own
+  // router.push round-trips through the parent.
+  const selectedKey = JSON.stringify({
+    b: selected.brandIds,
+    c: selected.categoryIds,
+    a: selected.authenticity ?? '',
+    pMin: selected.priceMin ?? '',
+    pMax: selected.priceMax ?? '',
+    s: selected.inStockOnly,
+  });
+  const lastAppliedKey = useRef(selectedKey);
+  useEffect(() => {
+    if (selectedKey === lastAppliedKey.current) return;
+    lastAppliedKey.current = selectedKey;
+    setBrandIds(selected.brandIds);
+    setCategoryIds(selected.categoryIds);
+    setAuthenticity(selected.authenticity);
+    setPriceMin(selected.priceMin != null ? String(selected.priceMin) : '');
+    setPriceMax(selected.priceMax != null ? String(selected.priceMax) : '');
+    setInStockOnly(selected.inStockOnly);
+  }, [selectedKey, selected]);
+
   const q = baseQuery.q ?? '';
+  const printer = baseQuery.printer ?? '';
 
   const hasAnyFilter = useMemo(
     () =>
@@ -99,17 +131,81 @@ export function SearchFiltersSidebar(props: Props) {
     return arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id];
   }
 
-  function apply() {
+  /**
+   * Build a query object from the current state, with explicit overrides for
+   * freshly-changed values (React batches state updates, so reading from
+   * state right after `setState` returns stale data).
+   */
+  function buildQuery(
+    overrides: Partial<Selected> = {},
+  ): Record<string, string> {
+    const nextBrandIds = overrides.brandIds ?? brandIds;
+    const nextCategoryIds = overrides.categoryIds ?? categoryIds;
+    const nextAuthenticity =
+      'authenticity' in overrides ? overrides.authenticity : authenticity;
+    const nextPriceMin =
+      'priceMin' in overrides
+        ? overrides.priceMin != null
+          ? String(overrides.priceMin)
+          : ''
+        : priceMin;
+    const nextPriceMax =
+      'priceMax' in overrides
+        ? overrides.priceMax != null
+          ? String(overrides.priceMax)
+          : ''
+        : priceMax;
+    const nextInStockOnly =
+      overrides.inStockOnly != null ? overrides.inStockOnly : inStockOnly;
+
     const query: Record<string, string> = {};
     if (q) query.q = q;
+    if (printer) query.printer = printer;
     if (sort) query.sort = sort;
-    if (brandIds.length) query.brand = brandIds.join(',');
-    if (categoryIds.length) query.category = categoryIds.join(',');
-    if (authenticity) query.auth = authenticity;
-    if (priceMin.trim()) query.priceMin = priceMin.trim();
-    if (priceMax.trim()) query.priceMax = priceMax.trim();
-    if (inStockOnly) query.inStock = '1';
-    router.push({ pathname: '/search', query });
+    if (nextBrandIds.length) query.brand = nextBrandIds.join(',');
+    if (nextCategoryIds.length) query.category = nextCategoryIds.join(',');
+    if (nextAuthenticity) query.auth = nextAuthenticity;
+    if (nextPriceMin.trim()) query.priceMin = nextPriceMin.trim();
+    if (nextPriceMax.trim()) query.priceMax = nextPriceMax.trim();
+    if (nextInStockOnly) query.inStock = '1';
+    return query;
+  }
+
+  function applyInstant(overrides: Partial<Selected> = {}) {
+    router.push({ pathname: '/search', query: buildQuery(overrides) });
+  }
+
+  function handleBrandToggle(id: string) {
+    const next = toggleInArray(brandIds, id);
+    setBrandIds(next);
+    applyInstant({ brandIds: next });
+  }
+
+  function handleCategoryToggle(id: string) {
+    const next = toggleInArray(categoryIds, id);
+    setCategoryIds(next);
+    applyInstant({ categoryIds: next });
+  }
+
+  function handleAuthChange(next: Selected['authenticity']) {
+    setAuthenticity(next);
+    applyInstant({ authenticity: next });
+  }
+
+  function handleInStockChange(next: boolean) {
+    setInStockOnly(next);
+    applyInstant({ inStockOnly: next });
+  }
+
+  function handlePriceCommit() {
+    // Only push if the committed value differs from what's in the URL —
+    // prevents stray re-navigations when the user tabs away without editing.
+    const currentMin =
+      selected.priceMin != null ? String(selected.priceMin) : '';
+    const currentMax =
+      selected.priceMax != null ? String(selected.priceMax) : '';
+    if (priceMin === currentMin && priceMax === currentMax) return;
+    applyInstant();
   }
 
   function clear() {
@@ -121,20 +217,28 @@ export function SearchFiltersSidebar(props: Props) {
     setInStockOnly(false);
     const query: Record<string, string> = {};
     if (q) query.q = q;
+    if (printer) query.printer = printer;
     if (sort) query.sort = sort;
     router.push({ pathname: '/search', query });
   }
 
   return (
-    <form
-      onSubmit={(e) => {
-        e.preventDefault();
-        apply();
-      }}
+    <section
       className="space-y-6 rounded-md border bg-background p-4 text-sm"
       aria-label={labels.filters}
     >
-      <h2 className="text-base font-semibold">{labels.filters}</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-base font-semibold">{labels.filters}</h2>
+        {hasAnyFilter ? (
+          <button
+            type="button"
+            onClick={clear}
+            className="text-xs text-muted-foreground hover:text-foreground hover:underline"
+          >
+            {labels.clear}
+          </button>
+        ) : null}
+      </div>
 
       <fieldset>
         <legend className="mb-2 font-medium">{labels.brand}</legend>
@@ -145,7 +249,7 @@ export function SearchFiltersSidebar(props: Props) {
                 <input
                   type="checkbox"
                   checked={brandIds.includes(b.id)}
-                  onChange={() => setBrandIds((p) => toggleInArray(p, b.id))}
+                  onChange={() => handleBrandToggle(b.id)}
                 />
                 <span>{locale === 'ar' ? b.nameAr : b.nameEn}</span>
               </label>
@@ -163,7 +267,7 @@ export function SearchFiltersSidebar(props: Props) {
                 <input
                   type="checkbox"
                   checked={categoryIds.includes(c.id)}
-                  onChange={() => setCategoryIds((p) => toggleInArray(p, c.id))}
+                  onChange={() => handleCategoryToggle(c.id)}
                 />
                 <span className="font-medium">
                   {locale === 'ar' ? c.nameAr : c.nameEn}
@@ -177,9 +281,7 @@ export function SearchFiltersSidebar(props: Props) {
                         <input
                           type="checkbox"
                           checked={categoryIds.includes(child.id)}
-                          onChange={() =>
-                            setCategoryIds((p) => toggleInArray(p, child.id))
-                          }
+                          onChange={() => handleCategoryToggle(child.id)}
                         />
                         <span>
                           {locale === 'ar' ? child.nameAr : child.nameEn}
@@ -209,7 +311,7 @@ export function SearchFiltersSidebar(props: Props) {
                 type="radio"
                 name="authenticity"
                 checked={authenticity === opt.v}
-                onChange={() => setAuthenticity(opt.v)}
+                onChange={() => handleAuthChange(opt.v)}
               />
               <span>{opt.label}</span>
             </label>
@@ -228,6 +330,13 @@ export function SearchFiltersSidebar(props: Props) {
             placeholder={labels.min}
             value={priceMin}
             onChange={(e) => setPriceMin(e.target.value)}
+            onBlur={handlePriceCommit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
             className="w-full rounded border bg-background px-2 py-1"
           />
           <span className="text-muted-foreground">–</span>
@@ -239,6 +348,13 @@ export function SearchFiltersSidebar(props: Props) {
             placeholder={labels.max}
             value={priceMax}
             onChange={(e) => setPriceMax(e.target.value)}
+            onBlur={handlePriceCommit}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                (e.target as HTMLInputElement).blur();
+              }
+            }}
             className="w-full rounded border bg-background px-2 py-1"
           />
         </div>
@@ -248,28 +364,10 @@ export function SearchFiltersSidebar(props: Props) {
         <input
           type="checkbox"
           checked={inStockOnly}
-          onChange={(e) => setInStockOnly(e.target.checked)}
+          onChange={(e) => handleInStockChange(e.target.checked)}
         />
         <span>{labels.inStock}</span>
       </label>
-
-      <div className="flex gap-2">
-        <button
-          type="submit"
-          className="flex-1 rounded-md bg-primary px-3 py-1.5 font-medium text-primary-foreground hover:opacity-90"
-        >
-          {labels.apply}
-        </button>
-        {hasAnyFilter ? (
-          <button
-            type="button"
-            onClick={clear}
-            className="rounded-md border bg-background px-3 py-1.5 hover:bg-muted"
-          >
-            {labels.clear}
-          </button>
-        ) : null}
-      </div>
-    </form>
+    </section>
   );
 }
