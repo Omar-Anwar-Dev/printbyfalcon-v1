@@ -1,7 +1,7 @@
 'use client';
 
 import Image from 'next/image';
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   deleteProductImageAction,
@@ -48,6 +48,16 @@ export function ProductImageManager({
   const [pending, start] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
+
+  // After upload/reorder/delete we call router.refresh() which re-renders the
+  // Server Component and passes new `initial`. `useState` only honours its
+  // first argument once, so without this effect the UI would stay on the old
+  // list until a full browser reload. Syncing here keeps optimistic edits
+  // (move/delete mutate `items` first) while still picking up server truth
+  // on the next tick.
+  useEffect(() => {
+    setItems(initial);
+  }, [initial]);
 
   const refresh = () => router.refresh();
 
