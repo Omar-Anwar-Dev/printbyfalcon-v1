@@ -37,6 +37,17 @@ async function main() {
     `CREATE INDEX IF NOT EXISTS "PrinterModel_modelName_trgm_idx" ON "PrinterModel" USING GIN ("modelName" gin_trgm_ops)`,
   );
 
+  // Sprint 4 bootstrap: every ACTIVE product needs an Inventory row so cart
+  // soft reservations and order-placement inventory decrement have something
+  // to work against. Seed missing rows with qty=100. Sprint 6 replaces the
+  // default with real receive/adjust flow.
+  await prisma.$executeRawUnsafe(`
+    INSERT INTO "Inventory" ("productId", "currentQty", "updatedAt")
+    SELECT p.id, 100, NOW()
+    FROM "Product" p
+    WHERE NOT EXISTS (SELECT 1 FROM "Inventory" i WHERE i."productId" = p.id)
+  `);
+
   // Backfill searchVector for every product. Safe to run every boot — it's a
   // single UPDATE that rewrites identical bytes when nothing changed.
   const rewritten = await prisma.$executeRawUnsafe(`

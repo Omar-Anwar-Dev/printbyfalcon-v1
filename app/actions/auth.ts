@@ -11,14 +11,8 @@ import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 import { issueOtp, verifyOtp } from '@/lib/otp';
 import { getClientIp } from '@/lib/request-ip';
-import {
-  checkAndIncrement,
-  RATE_LIMIT_RULES,
-} from '@/lib/rate-limit';
-import {
-  createSession,
-  destroySession,
-} from '@/lib/session';
+import { checkAndIncrement, RATE_LIMIT_RULES } from '@/lib/rate-limit';
+import { createSession, destroySession } from '@/lib/session';
 import {
   b2bLoginSchema,
   requestOtpSchema,
@@ -90,13 +84,31 @@ export async function verifyB2COtpAction(
     return { ok: false, errorKey: `validation.${verifyResult.errorKey}` };
   }
 
+  // On first OTP verify the form may carry optional `name` + `email` to set on
+  // the newly-created User (Sprint 4 B2C registration flow, per PRD Feature 2).
+  const rawName = formData.get('name');
+  const rawEmail = formData.get('email');
+  const name =
+    typeof rawName === 'string' && rawName.trim().length >= 2
+      ? rawName.trim().slice(0, 80)
+      : null;
+  const email =
+    typeof rawEmail === 'string' && /^\S+@\S+\.\S+$/.test(rawEmail.trim())
+      ? rawEmail.trim().toLowerCase()
+      : null;
+
   const user = await prisma.user.upsert({
     where: { phone: parsed.data.phone },
-    update: { lastLoginAt: new Date() },
+    update: {
+      lastLoginAt: new Date(),
+      ...(name ? { name } : {}),
+      ...(email ? { email } : {}),
+    },
     create: {
       type: 'B2C',
       phone: parsed.data.phone,
-      name: `Customer ${parsed.data.phone.slice(-4)}`,
+      name: name ?? `Customer ${parsed.data.phone.slice(-4)}`,
+      email,
       lastLoginAt: new Date(),
     },
   });
@@ -106,6 +118,11 @@ export async function verifyB2COtpAction(
     ipAddress: meta.ip ?? undefined,
     userAgent: meta.userAgent ?? undefined,
   });
+
+  // Migrate any guest cart items into the now-signed-in user's cart so the
+  // items the visitor added pre-sign-in survive the session transition.
+  const { migrateGuestCart } = await import('@/lib/cart/cart');
+  await migrateGuestCart(user.id);
 
   await prisma.auditLog.create({
     data: {

@@ -38,7 +38,11 @@
     "signedInAs": "مسجّل الدخول باسم",
     "not_signed_in": "لم يتم تسجيل الدخول",
     "invalid_credentials": "بيانات الدخول غير صحيحة",
-    "account_disabled": "تم تعطيل الحساب"
+    "account_disabled": "تم تعطيل الحساب",
+    "registrationNameLabel": "اسمك (للحسابات الجديدة)",
+    "registrationNamePlaceholder": "مثال: محمود علي",
+    "registrationNameHelp": "اتركه فارغًا لو عندك حساب بالفعل — هنستخدم بياناتك المحفوظة.",
+    "registrationEmailLabel": "البريد الإلكتروني (اختياري)"
   },
   "admin": {
     "loginTitle": "لوحة التحكم",

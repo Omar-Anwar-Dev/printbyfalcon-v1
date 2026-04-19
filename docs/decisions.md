@@ -512,6 +512,28 @@ The host directories already exist (runbook §1.7 Sprint 1 housekeeping creates 
 
 ---
 
+## ADR-030: Cash-on-Delivery pulled into Sprint 4 (originally Sprint 9)
+Date: 2026-04-19 (Sprint 4 kickoff)
+Status: Accepted
+
+**Context:** The original plan (Sprint 9 — "COD + Shipping Zones + Admin Settings") defers COD wiring until the shipping-zone admin UX lands. On Sprint 4 kickoff the owner asked to have COD available at the M0 demo alongside Paymob card — so the demo checkout screen shows two real payment methods instead of a card-only view, and the Sprint 4 exit criterion "end-to-end order placement" covers both the Paymob redirect path and the all-internal COD path.
+
+**Decision:** Implement COD as a real payment method in Sprint 4. Orders placed with `paymentMethod=COD` land in `paymentStatus=PENDING_ON_DELIVERY`, bypass the Paymob API call, and go straight to the internal confirmation page. Shipping fee is hard-coded to **0 EGP** in Sprint 4 (no zone config yet) — Sprint 9 wires `ShippingZone` + governorate-mapping + admin rates AND the COD per-zone availability toggle on top of the existing COD path.
+
+**What's NOT pulled in:** COD fee, COD max order value, per-zone availability toggle (all still Sprint 9 per PRD Feature 3). Those are admin-config surfaces that don't block M0.
+
+**Alternatives considered:**
+- **Keep COD for Sprint 9 as originally planned** — rejected; a card-only M0 demo misrepresents what the real MVP store offers (COD is the dominant payment method in the Egyptian B2C segment per the personas in PRD §3).
+- **Add COD and all shipping-zone plumbing at once** — rejected; doubles Sprint 4 scope and pushes M0 out.
+
+**Consequences:**
+- `Order.paymentMethod` enum and `createOrderAction` branch on COD vs Paymob — clean split that Sprint 9 extends without touching again.
+- `PaymentStatus.PENDING_ON_DELIVERY` added so ops can distinguish "COD, not yet paid" from "Paymob, awaiting webhook". Admin orders list + detail page show both transparently.
+- Sprint 9 scope shrinks — no new COD schema work, only the admin config surfaces + zone-based rate calc. Keeps Sprint 9 focused on shipping fee calculation.
+- COD fee + max-value are not enforced in Sprint 4 (anyone can place a 1 million EGP COD order). Acceptable at MVP / closed-beta; Sprint 9 adds the guardrails.
+
+---
+
 ## ADR-029: Bilingual FTS uses `simple` config + app-side searchVector maintenance (no DB triggers)
 Date: 2026-04-19 (Sprint 3, Day 1)
 Status: Accepted

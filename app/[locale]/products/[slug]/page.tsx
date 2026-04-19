@@ -11,6 +11,7 @@ import { ProductGallery } from '@/components/catalog/product-gallery';
 import { ProductCard } from '@/components/catalog/product-card';
 import { StockBadge } from '@/components/catalog/stock-badge';
 import { getStockStatus } from '@/lib/catalog/stock';
+import { AddToCartButton } from '@/components/catalog/add-to-cart-button';
 
 export const revalidate = 300;
 
@@ -182,16 +183,10 @@ export default async function ProductDetailPage({
                 : 'This product is currently unavailable. Contact us for restock timing.'}
             </p>
           ) : (
-            /* Add-to-cart: placeholder until Sprint 4 cart lands. */
-            <button
-              type="button"
-              disabled
-              className="inline-flex h-11 items-center justify-center rounded-md bg-primary px-6 text-primary-foreground opacity-60"
-              aria-disabled
-              title={isAr ? 'قريبًا' : 'Coming soon'}
-            >
-              {isAr ? 'أضف إلى السلة' : 'Add to cart'}
-            </button>
+            <AddToCartButton
+              productId={product.id}
+              locale={isAr ? 'ar' : 'en'}
+            />
           )}
 
           {description ? (

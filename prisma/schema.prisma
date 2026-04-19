@@ -3,7 +3,10 @@
 // admin invites.
 // Sprint 2: catalog (brands, categories with unlimited nesting per ADR-027, products,
 // product images, printer models, product↔printer compatibility).
-// Later sprints will add cart, orders, inventory, invoicing, notifications.
+// Sprint 3: FTS searchVector on Product (see lib/catalog/search-vector.ts, ADR-029).
+// Sprint 4: address, cart, minimal inventory + reservations + movements, order
+// + order items + status events, payment plumbing (Paymob card + COD per ADR-030;
+// Fawry via Paymob sub-integration deferred to Sprint 9 per ADR-025).
 
 generator client {
   provider        = "prisma-client-js"
@@ -60,6 +63,9 @@ model User {
   sessions       Session[]
   passwordResets PasswordReset[]
   auditLogs      AuditLog[]      @relation("ActorAuditLogs")
+  addresses      Address[]       @relation("UserAddresses")
+  cart           Cart?           @relation("UserCart")
+  orders         Order[]         @relation("UserOrders")
 
   @@index([type, status])
 }
@@ -224,8 +230,13 @@ model Product {
   createdAt     DateTime      @default(now())
   updatedAt     DateTime      @updatedAt
 
-  images          ProductImage[]
-  compatibilities ProductCompatibility[]
+  images                ProductImage[]
+  compatibilities       ProductCompatibility[]
+  inventory             Inventory?
+  inventoryReservations InventoryReservation[]
+  inventoryMovements    InventoryMovement[]
+  cartItems             CartItem[]
+  orderItems            OrderItem[]
 
   @@index([brandId])
   @@index([categoryId])
@@ -275,6 +286,271 @@ model ProductCompatibility {
 
   @@id([productId, printerModelId])
   @@index([printerModelId])
+}
+
+// -------------------------------------------------------------------------
+// Geography & shipping (Sprint 4 — Address; ShippingZone / Courier in S5–S9)
+// -------------------------------------------------------------------------
+
+/// Egyptian governorates (27). Used on Address.governorate and later on
+/// GovernorateZone mapping (Sprint 9). Stored as enum so typos at the UI layer
+/// can't leak into the DB.
+enum Governorate {
+  CAIRO
+  GIZA
+  QALYUBIA
+  ALEXANDRIA
+  BEHEIRA
+  DAKAHLIA
+  DAMIETTA
+  GHARBIA
+  KAFR_EL_SHEIKH
+  MENOUFIA
+  SHARQIA
+  ISMAILIA
+  PORT_SAID
+  SUEZ
+  NORTH_SINAI
+  SOUTH_SINAI
+  RED_SEA
+  MATRUH
+  NEW_VALLEY
+  BENI_SUEF
+  FAYOUM
+  MINYA
+  ASYUT
+  SOHAG
+  QENA
+  LUXOR
+  ASWAN
+}
+
+model Address {
+  id             String   @id @default(cuid())
+  userId         String?
+  user           User?    @relation("UserAddresses", fields: [userId], references: [id], onDelete: Cascade)
+  // Recipient info — snapshot to allow guest checkout without a User row.
+  recipientName  String
+  phone          String
+  governorate    Governorate
+  city           String
+  area           String?
+  street         String
+  building       String?
+  apartment      String?
+  notes          String?
+  isDefault      Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([userId, isDefault])
+}
+
+// -------------------------------------------------------------------------
+// Cart (Sprint 4 — session-based for guests, user-based for logged-in B2C)
+// -------------------------------------------------------------------------
+
+model Cart {
+  id         String     @id @default(cuid())
+  userId     String?    @unique
+  user       User?      @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
+  sessionKey String?    @unique // for guest carts; migrated to userId on sign-in
+  expiresAt  DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  items CartItem[]
+}
+
+model CartItem {
+  id                   String   @id @default(cuid())
+  cartId               String
+  cart                 Cart     @relation(fields: [cartId], references: [id], onDelete: Cascade)
+  productId            String
+  product              Product  @relation(fields: [productId], references: [id], onDelete: Restrict)
+  qty                  Int
+  unitPriceEgpSnapshot Decimal  @db.Decimal(10, 2)
+  addedAt              DateTime @default(now())
+
+  @@unique([cartId, productId])
+  @@index([cartId])
+}
+
+// -------------------------------------------------------------------------
+// Inventory (Sprint 4 — minimal placeholder; S6 extends with full features)
+// -------------------------------------------------------------------------
+
+enum InventoryReservationType {
+  CART  // 15-min TTL soft hold
+  ORDER // firm hold until order terminal state
+}
+
+enum InventoryMovementType {
+  RECEIVE
+  SALE
+  ADJUST
+  RETURN
+  RESERVATION_RELEASE
+}
+
+model Inventory {
+  productId          String   @id
+  product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  currentQty         Int      @default(0)
+  lowStockThreshold  Int?
+  updatedAt          DateTime @updatedAt
+}
+
+model InventoryReservation {
+  id         String                   @id @default(cuid())
+  type       InventoryReservationType
+  productId  String
+  product    Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  // CART reservations: refId = CartItem.id. ORDER reservations: refId = OrderItem.id.
+  refId      String
+  qty        Int
+  expiresAt  DateTime?                // null for ORDER-type (until terminal state)
+  createdAt  DateTime                 @default(now())
+
+  @@index([productId, expiresAt])
+  @@index([refId])
+  @@index([type, expiresAt])
+}
+
+model InventoryMovement {
+  id         String                @id @default(cuid())
+  productId  String
+  product    Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type       InventoryMovementType
+  qtyDelta   Int                   // positive for RECEIVE/RETURN, negative for SALE/ADJUST-down
+  reason     String?
+  refId      String?               // order_id, adjustment_id, etc.
+  actorId    String?
+  createdAt  DateTime              @default(now())
+
+  @@index([productId, createdAt])
+}
+
+// -------------------------------------------------------------------------
+// Orders (Sprint 4 — B2C happy path; B2B extensions + Company relation in S6+)
+// -------------------------------------------------------------------------
+
+enum OrderType {
+  B2C
+  B2B
+}
+
+enum OrderStatus {
+  PENDING_CONFIRMATION   // B2B Submit-for-Review only
+  CONFIRMED
+  HANDED_TO_COURIER
+  OUT_FOR_DELIVERY
+  DELIVERED
+  CANCELLED
+  RETURNED
+  DELAYED_OR_ISSUE
+}
+
+enum PaymentMethod {
+  PAYMOB_CARD
+  PAYMOB_FAWRY        // Sprint 9 via Paymob sub-integration
+  COD
+  SUBMIT_FOR_REVIEW   // B2B path (S6+)
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+  PENDING_ON_DELIVERY // COD: payment taken at delivery
+}
+
+model Order {
+  id              String         @id @default(cuid())
+  /// Human-readable ID: `ORD-YY-DDMM-NNNNN` — daily-reset serial per ADR-019.
+  orderNumber     String         @unique
+  userId          String?
+  user            User?          @relation("UserOrders", fields: [userId], references: [id], onDelete: SetNull)
+  type            OrderType      @default(B2C)
+
+  // Guest-checkout snapshot fields (also populated for logged-in users for stability).
+  contactName     String
+  contactPhone    String
+  contactEmail    String?
+
+  // Address snapshot — JSON so the order stays legible even if the Address row later changes.
+  addressSnapshot Json
+
+  status          OrderStatus    @default(CONFIRMED)
+  paymentMethod   PaymentMethod
+  paymentStatus   PaymentStatus  @default(PENDING)
+
+  subtotalEgp     Decimal        @db.Decimal(10, 2)
+  shippingEgp     Decimal        @db.Decimal(10, 2) @default(0)
+  discountEgp     Decimal        @db.Decimal(10, 2) @default(0)
+  vatEgp          Decimal        @db.Decimal(10, 2) @default(0)
+  totalEgp        Decimal        @db.Decimal(10, 2)
+
+  // Paymob correlation — populated when paymentMethod is a Paymob flow.
+  paymobOrderId        String?
+  paymobTransactionId  String?   @unique
+
+  internalNotes   String?
+  customerNotes   String?
+
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+  confirmedAt     DateTime?
+  deliveredAt     DateTime?
+
+  items         OrderItem[]
+  statusEvents  OrderStatusEvent[]
+
+  @@index([userId, createdAt])
+  @@index([status, createdAt])
+  @@index([paymentMethod, paymentStatus])
+  @@index([createdAt])
+}
+
+model OrderItem {
+  id                String   @id @default(cuid())
+  orderId           String
+  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId         String?
+  product           Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  // Snapshots — preserve line-item details even if the product is later edited/archived.
+  skuSnapshot       String
+  nameArSnapshot    String
+  nameEnSnapshot    String
+  qty               Int
+  unitPriceEgp      Decimal  @db.Decimal(10, 2)
+  lineTotalEgp      Decimal  @db.Decimal(10, 2)
+  vatEgp            Decimal  @db.Decimal(10, 2) @default(0)
+  createdAt         DateTime @default(now())
+
+  @@index([orderId])
+  @@index([productId])
+}
+
+model OrderStatusEvent {
+  id         String       @id @default(cuid())
+  orderId    String
+  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status     OrderStatus
+  note       String?
+  actorId    String?
+  createdAt  DateTime     @default(now())
+
+  @@index([orderId, createdAt])
+}
+
+/// Per-day order-serial counter — `ORD-YY-DDMM-NNNNN` daily reset (ADR-019).
+/// Row keyed by `YYYYMMDD` int; SERIALIZABLE increment in generateOrderNumber().
+model OrderDailySequence {
+  id          Int      @id   // YYYYMMDD
+  lastSerial  Int      @default(0)
+  updatedAt   DateTime @updatedAt
 }
 
 // -------------------------------------------------------------------------

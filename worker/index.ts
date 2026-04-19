@@ -9,6 +9,8 @@ import { logger } from '@/lib/logger';
 import { cleanupExpiredRateLimits } from '@/lib/rate-limit';
 import { cleanupExpiredSessions } from '@/lib/session';
 import { cleanupExpiredOtps } from '@/lib/otp';
+import { releaseExpiredCartReservations } from '@/lib/cart/stock';
+import { reconcileStalePaymobOrders } from '@/lib/order/reconciliation';
 import { registerEmailJob } from './jobs/send-email';
 import { registerWhatsAppJob } from './jobs/send-whatsapp';
 import { registerHeartbeatJob } from './jobs/heartbeat';
@@ -81,6 +83,37 @@ async function main() {
       logger.info({ removed: n }, 'cleanup.rate_limits.done');
     },
   );
+
+  // Sprint 4: release cart soft-holds whose 15-min TTL elapsed.
+  await boss.createQueue('cleanup-expired-cart-reservations');
+  await boss.schedule(
+    'cleanup-expired-cart-reservations',
+    '*/5 * * * *',
+    {},
+    { tz: 'Africa/Cairo' },
+  );
+  await boss.work<Record<string, never>>(
+    'cleanup-expired-cart-reservations',
+    async () => {
+      const n = await releaseExpiredCartReservations();
+      if (n > 0) logger.info({ removed: n }, 'cleanup.cart_reservations.done');
+    },
+  );
+
+  // Sprint 4: Paymob reconciliation for orders whose webhook never arrived.
+  await boss.createQueue('paymob-reconciliation');
+  await boss.schedule(
+    'paymob-reconciliation',
+    '25 * * * *',
+    {},
+    { tz: 'Africa/Cairo' },
+  );
+  await boss.work<Record<string, never>>('paymob-reconciliation', async () => {
+    const { checked, updated } = await reconcileStalePaymobOrders();
+    if (checked > 0) {
+      logger.warn({ checked, updated }, 'reconcile.paymob.done');
+    }
+  });
 
   // Shutdown hooks
   const shutdown = async (signal: string) => {

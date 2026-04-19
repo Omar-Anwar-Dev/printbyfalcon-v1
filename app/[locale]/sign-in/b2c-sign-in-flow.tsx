@@ -6,10 +6,7 @@ import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import {
-  requestB2COtpAction,
-  verifyB2COtpAction,
-} from '@/app/actions/auth';
+import { requestB2COtpAction, verifyB2COtpAction } from '@/app/actions/auth';
 
 type Step = 'phone' | 'otp';
 
@@ -102,9 +99,29 @@ export function B2CSignInFlow() {
           dir="ltr"
         />
       </div>
-      {devHint ? (
-        <p className="text-xs text-amber-600">{devHint}</p>
-      ) : null}
+      {devHint ? <p className="text-xs text-amber-600">{devHint}</p> : null}
+      <div className="space-y-2">
+        <Label htmlFor="name">{t('auth.registrationNameLabel')}</Label>
+        <Input
+          id="name"
+          name="name"
+          autoComplete="name"
+          placeholder={t('auth.registrationNamePlaceholder')}
+        />
+        <p className="text-xs text-muted-foreground">
+          {t('auth.registrationNameHelp')}
+        </p>
+      </div>
+      <div className="space-y-2">
+        <Label htmlFor="email">{t('auth.registrationEmailLabel')}</Label>
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          autoComplete="email"
+          dir="ltr"
+        />
+      </div>
       {error ? (
         <p className="text-sm text-destructive" role="alert">
           {error}

@@ -38,7 +38,11 @@
     "signedInAs": "Signed in as",
     "not_signed_in": "Not signed in",
     "invalid_credentials": "Invalid credentials",
-    "account_disabled": "Account disabled"
+    "account_disabled": "Account disabled",
+    "registrationNameLabel": "Your name (for new accounts)",
+    "registrationNamePlaceholder": "e.g. Mahmoud Ali",
+    "registrationNameHelp": "Leave blank if you already have an account — we'll use your saved profile.",
+    "registrationEmailLabel": "Email (optional)"
   },
   "admin": {
     "loginTitle": "Admin Panel",
