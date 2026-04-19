@@ -41,6 +41,9 @@ COPY --from=builder --chown=pbf:pbf /app/node_modules ./node_modules
 COPY --from=builder --chown=pbf:pbf /app/scripts ./scripts
 COPY --from=builder --chown=pbf:pbf /app/lib ./lib
 COPY --from=builder --chown=pbf:pbf /app/tsconfig.json ./tsconfig.json
+# Catalog fixtures — referenced by `tsx scripts/seed-catalog.ts fixtures/...`
+# from the admin on-demand. Small (few hundred KB) and useful for seeding.
+COPY --from=builder --chown=pbf:pbf /app/fixtures ./fixtures
 USER pbf
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=60s --retries=5 \
