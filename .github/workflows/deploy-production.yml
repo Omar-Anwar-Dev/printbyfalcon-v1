@@ -1,0 +1,64 @@
+name: Deploy to Production
+
+# MANUAL ONLY. Prod does not auto-deploy on push.
+# Trigger: Actions tab → "Deploy to Production" → Run workflow.
+# Protected by the `production` GitHub Environment (required reviewer).
+#
+# See docs/runbook.md §4.2 for the full deploy procedure.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_smoke_tested_on_staging:
+        description: 'I verified the same commit is green on staging (§5 smoke checklist)'
+        required: true
+        type: boolean
+        default: false
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: SSH + rebuild prod stack
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://printbyfalcon.com
+
+    steps:
+      - name: Guardrail — staging must be confirmed
+        if: ${{ inputs.confirm_smoke_tested_on_staging != true }}
+        run: |
+          echo "::error::You must tick the staging-verified checkbox before prod deploy."
+          echo "::error::See docs/runbook.md §4.2 — staging smoke test is a prerequisite."
+          exit 1
+
+      - name: Trigger production rebuild over SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            bash -lc '/var/pbf/repo/scripts/deploy-production.sh'
+
+      - name: Post-deploy health probe
+        run: |
+          sleep 15  # allow containers to finish boot
+          echo "Probing production health endpoint…"
+          for i in 1 2 3 4 5; do
+            response=$(curl -sS -o /tmp/health.json -w "%{http_code}" https://printbyfalcon.com/api/health || true)
+            echo "Attempt $i — HTTP $response"
+            cat /tmp/health.json || true
+            echo
+            if [ "$response" = "200" ]; then
+              echo "::notice::Production health OK on attempt $i"
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "::error::Production health check FAILED after 5 attempts. See docs/runbook.md §6 for rollback."
+          exit 1

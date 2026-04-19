@@ -2,42 +2,136 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────────────
+   Design tokens — Print By Falcon
+   All colors in HSL so shadcn utilities work. Hex in comments for reference.
+   See docs/design-system.md for the full token catalog + rationale.
+   ───────────────────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
-    --card: 0 0% 100%;
-    --card-foreground: 222 47% 11%;
-    --primary: 220 75% 40%;
-    --primary-foreground: 210 40% 98%;
-    --secondary: 210 40% 96%;
-    --secondary-foreground: 222 47% 11%;
-    --muted: 210 40% 96%;
-    --muted-foreground: 215 16% 47%;
-    --accent: 210 40% 96%;
-    --accent-foreground: 222 47% 11%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 40% 98%;
-    --border: 214 32% 91%;
-    --input: 214 32% 91%;
-    --ring: 220 75% 40%;
+    /* Surfaces */
+    --canvas: 60 23% 97%; /* #FAFAF7  page background  */
+    --paper: 43 23% 94%; /* #F3F1EC  card surface     */
+    --paper-hover: 44 22% 90%; /* #EBE8E0  card hover       */
+
+    /* Text */
+    --ink: 222 47% 11%; /* #0F172A  primary          */
+    --ink-2: 215 28% 17%; /* #1F2937  secondary/hover  */
+    --muted-bg: 43 23% 94%; /* matches paper             */
+    --muted-fg: 0 0% 42%; /* #6B6B6B  secondary text   */
+
+    /* Borders */
+    --border: 44 17% 88%; /* #E5E2DA  dividers         */
+    --border-strong: 43 7% 53%; /* #8F8A7D  inputs, UI-AA    */
+
+    /* Accent — ink-cyan */
+    --accent: 185 81% 29%; /* #0E7C86  CTAs, active     */
+    --accent-strong: 185 84% 25%; /* #0A6B74  links, hover     */
+    --accent-soft: 184 39% 93%; /* #E6F3F4  tinted bg        */
+
+    /* Semantic — all body-text-safe on canvas (AA ≥ 4.5:1) */
+    --success: 142 44% 33%; /* #2F7A4B  */
+    --success-soft: 138 32% 92%; /* #E4F1E8  */
+    --warning: 36 63% 34%; /* #8F6320  */
+    --warning-soft: 41 58% 91%; /* #F5ECD9  */
+    --error: 0 44% 49%; /* #B54747  */
+    --error-soft: 0 48% 92%; /* #F4E0E0  */
+
+    /* Radii mirrored in tailwind.config.ts */
     --radius: 0.5rem;
+    --radius-sm: 6px;
+    --radius-md: 10px;
+    --radius-xl: 16px;
+
+    /* Motion */
+    --ease-out-smooth: cubic-bezier(0.2, 0.7, 0.3, 1);
+    --duration-fast: 120ms;
+    --duration-base: 180ms;
+    --duration-slow: 280ms;
+  }
+
+  * {
+    @apply border-border;
   }
 
   html {
-    -webkit-font-smoothing: antialiased;
+    -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
   }
 
   body {
-    @apply bg-background text-foreground;
-  }
-
-  html[dir='rtl'] body {
-    font-family: var(--font-arabic), system-ui, sans-serif;
+    @apply bg-background text-foreground antialiased;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
   html[dir='ltr'] body {
-    font-family: var(--font-sans), system-ui, sans-serif;
+    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  }
+  html[dir='rtl'] body {
+    font-family:
+      var(--font-arabic), var(--font-sans), ui-sans-serif, sans-serif;
+  }
+
+  :focus-visible {
+    outline: 2px solid hsl(var(--accent));
+    outline-offset: 2px;
+    border-radius: var(--radius-sm);
+  }
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  /* Keep numerals LTR inside RTL text (prices, SKUs, order IDs) */
+  [dir='rtl'] .num,
+  [dir='rtl'] [data-num] {
+    direction: ltr;
+    unicode-bidi: isolate;
+  }
+
+  ::selection {
+    background-color: hsl(var(--accent-soft));
+    color: hsl(var(--ink));
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+      animation-duration: 1ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 1ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .container-page {
+    @apply mx-auto w-full max-w-7xl px-4 sm:px-6 lg:px-8;
+  }
+
+  .hairline {
+    box-shadow: inset 0 -1px 0 hsl(var(--border));
+  }
+
+  .shimmer {
+    background: linear-gradient(
+      90deg,
+      hsl(var(--paper)) 0%,
+      hsl(var(--paper-hover)) 50%,
+      hsl(var(--paper)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.4s linear infinite;
+  }
+  @keyframes shimmer {
+    0% {
+      background-position: 200% 0;
+    }
+    100% {
+      background-position: -200% 0;
+    }
   }
 }

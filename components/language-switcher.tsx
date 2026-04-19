@@ -11,28 +11,31 @@ export function LanguageSwitcher({ className }: { className?: string }) {
   const router = useRouter();
 
   return (
-    <div className={cn('flex items-center gap-1 text-sm', className)}>
-      {locales.map((loc, idx) => {
+    <div
+      className={cn(
+        'inline-flex items-center rounded-md border border-border p-0.5 text-sm',
+        className,
+      )}
+      role="group"
+      aria-label="Language"
+    >
+      {locales.map((loc) => {
         const active = loc === locale;
         return (
-          <span key={loc} className="flex items-center gap-1">
-            <button
-              type="button"
-              className={cn(
-                'rounded px-2 py-1 transition-colors',
-                active
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-muted-foreground hover:text-foreground',
-              )}
-              aria-pressed={active}
-              onClick={() => router.replace(pathname, { locale: loc })}
-            >
-              {localeLabel[loc]}
-            </button>
-            {idx < locales.length - 1 ? (
-              <span className="text-muted-foreground">·</span>
-            ) : null}
-          </span>
+          <button
+            key={loc}
+            type="button"
+            className={cn(
+              'rounded-sm px-2.5 py-1 font-medium transition-colors',
+              active
+                ? 'bg-ink text-canvas'
+                : 'text-muted-foreground hover:text-foreground',
+            )}
+            aria-pressed={active}
+            onClick={() => router.replace(pathname, { locale: loc })}
+          >
+            {localeLabel[loc]}
+          </button>
         );
       })}
     </div>

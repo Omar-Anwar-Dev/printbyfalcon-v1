@@ -48,7 +48,7 @@ export function CategoryMenu({
   }, [openId]);
 
   return (
-    <div ref={ref} className="flex items-center gap-5">
+    <div ref={ref} className="flex items-center gap-4">
       {categories.map((cat) => {
         const isOpen = openId === cat.id;
         return (
@@ -58,18 +58,18 @@ export function CategoryMenu({
               aria-haspopup="menu"
               aria-expanded={isOpen}
               onClick={() => setOpenId(isOpen ? null : cat.id)}
-              className="cursor-pointer hover:text-primary"
+              className="cursor-pointer text-sm font-medium text-foreground transition-colors hover:text-accent-strong"
             >
               {cat.label}
             </button>
             {isOpen ? (
               <div
                 role="menu"
-                className="absolute start-0 top-full z-50 mt-2 min-w-[200px] rounded-md border bg-background p-2 shadow-md"
+                className="absolute start-0 top-full z-50 mt-2 min-w-[220px] animate-scale-in rounded-lg border border-border bg-canvas p-1.5 shadow-popover"
               >
                 <Link
                   href={`/categories/${cat.slug}`}
-                  className="block rounded px-3 py-2 text-sm hover:bg-muted"
+                  className="block rounded-md px-3 py-2 text-sm font-medium text-accent-strong hover:bg-accent-soft"
                   onClick={() => setOpenId(null)}
                 >
                   {allLabel} {cat.label}
@@ -78,7 +78,7 @@ export function CategoryMenu({
                   <Link
                     key={child.id}
                     href={`/categories/${child.slug}`}
-                    className="block rounded px-3 py-2 text-sm hover:bg-muted"
+                    className="block rounded-md px-3 py-2 text-sm text-foreground hover:bg-paper-hover"
                     onClick={() => setOpenId(null)}
                   >
                     {child.label}

@@ -593,3 +593,84 @@ Status: Accepted
 - GlitchTip celery-beat worker container intentionally **not** added to MVP — error ingestion + display works without it; email digests + cleanup tasks deferred to M2 if needed.
 
 **Risk:** None new. Concentration risk on the prod stack increases marginally (one more container to monitor), but Valkey is operationally simple (no persistence, single-process) and well-known.
+
+---
+
+## ADR-031: Design direction — "Apple-Store restraint for a Cairo printer-supplies shop"
+Date: 2026-04-19 (post-M0 UI/UX polish pass — foundation only)
+Status: Accepted
+
+**Context:** M0 shipped on default shadcn tokens (primary blue `220 75% 40%`, default Inter + Cairo, no custom radii/shadows, no brand identity). Storefront visually indistinguishable from every other shadcn demo. Owner invoked `/ui-ux-refiner` after Sprint 4 close to establish a brand direction before Sprints 5–12 layer on more features. Scope chosen: **foundation only** — tokens, shell (header/footer/mobile nav), homepage, and feedback layer (toasts / 404 / 500 / loading). Screen-level polish deferred to an M1-eve pass so Sprints 5–12 inherit the system rather than fight it.
+
+**Decision:** Commit to a disciplined, restrained identity — **trustworthy + technical + utilitarian-premium**. Verbal shorthand: "Apple-Store restraint applied to a Cairo printer-supplies shop." Differentiated from Raya / Noon / 2B (all warm-accent retail), but borrowing their product-card anatomy, icon+text header actions, and homepage rails pattern for Egyptian-shopper familiarity.
+
+**Concrete choices:**
+- **Palette:** Ink `#0F172A` + Canvas `#FAFAF7` (warm off-white) + Paper `#F3F1EC` (cream cards) + Border `#E5E2DA` / `#8F8A7D`. Single brand accent: **Ink-Cyan `#0E7C86`** (nods to printer-ink/toner without being cartoonish; differentiates from warm-accent Egyptian retailers; reads technical + trustworthy). `--accent-strong #0A6B74` for body-text links, `--accent-soft #E6F3F4` for tinted bg / selection. Semantic: success `#2F7A4B`, warning `#8F6320`, error `#B54747` — all contrast-verified AA body.
+- **Typography:** **Inter** (EN, weights 400/500/600/700/800) + **IBM Plex Sans Arabic** (AR, weights 400/500/600/700) — replaces Cairo (default + over-used). No display font; use weight variation for hierarchy.
+- **Scale:** 12/14/16/18/20/24/32/48/64, line-heights 1.2/1.4/1.5, tight tracking on large headings.
+- **Spacing:** 4px baseline (added tokens 72/88/120/136 px to Tailwind).
+- **Radii:** 6 / 10 / 16 px (inputs / cards & buttons / modals).
+- **Shadows:** two elevations only — `card` + `popover`. No hero-level drama.
+- **Motion:** default 180ms `cubic-bezier(0.2, 0.7, 0.3, 1)`. Card hover = `scale(1.02)` + shadow lift. `prefers-reduced-motion` respected.
+- **Icons:** Lucide, 20px, 1.75 stroke.
+- **Dark mode:** explicitly skipped for MVP.
+- **shadcn `primary` = Ink**, not the cyan accent. Cyan reserved for commerce-critical CTAs (add-to-cart, checkout, sign up) via an added `variant="accent"` on Button. Keeps cyan rare and meaningful.
+
+**Adjustments from initial palette proposal (contrast-driven):**
+- `success` `#3A8F5A` → `#2F7A4B` (was 3.8:1, fails body AA; now 5.0:1)
+- `warning` `#B8822C` → `#8F6320` (was 3.2:1, fails body AA; now 5.0:1)
+- Added `border-strong #8F8A7D` (3.3:1) for input borders where WCAG 1.4.11 applies — base `border #E5E2DA` retained for decorative dividers (1.2:1, decorative-only).
+
+**Alternatives considered:**
+- **Warm accent (red/orange) matching Raya/Noon/2B** — rejected. Three biggest Egyptian electronics retailers already own that visual lane; cyan gives us differentiated shelf appeal in search results and social sharing.
+- **Keep Cairo** — rejected. Default Arabic font, over-used, reads corporate-generic. Plex Arabic has distinct character and pairs mechanically with Inter.
+- **Add a display font (Fraunces / Space Grotesk / Instrument Serif)** — rejected. Keeps font budget small; Inter at weight 800 with tight tracking provides sufficient display presence.
+- **Adopt dark mode** — deferred. Not MVP-critical; doubles the tokens to maintain during Sprints 5–12.
+- **Full polish pass now** — rejected (see Context). Foundation-only discipline means Sprints 5–12 inherit the system without a second re-polish cycle.
+
+**Consequences:**
+- Existing shadcn `<Button>` default renders **Ink** (dark slate), not cyan. Some admin/secondary buttons visually shift darker — reads more considered, less "Linux utility."
+- All `font-family: Cairo` usages (if any) must be removed; `--font-arabic` now binds to IBM Plex Sans Arabic.
+- New Tailwind utilities available: `bg-accent-strong`, `bg-accent-soft`, `shadow-card`, `shadow-popover`, `ease-out-smooth`, `duration-{fast,base,slow}`, `animate-{fade-in,slide-in-end,slide-in-start,scale-in}`, `.container-page`, `.shimmer`.
+- Sprint 5+ work ADRs must note when they intentionally diverge from this direction (expected: very rare).
+- `docs/design-system.md` becomes the living reference; future features are reviewed against it.
+
+**Scope of this pass (foundation-only, deliberate exclusions):**
+- ✅ tokens, shell (header/footer/mobile nav), homepage, feedback layer (toasts, 404, 500, loading)
+- ❌ products list / product detail / search / cart / checkout / account / admin — all deferred to M1-eve polish pass per owner's 2026-04-19 decision.
+
+---
+
+## ADR-032: Formalize release pipeline — operational runbook + manual prod deploy workflow + CI test hard-fail
+Date: 2026-04-19 (release-engineer pass prepping Sprint 4 + UI pass deploy)
+Status: Accepted
+
+**Context:** Sprint 1–3 production deploys were executed successfully but via direct SSH + `docker compose up -d --build`. The auto-staging workflow existed from Sprint 1, but three gaps hurt operational hygiene:
+1. **No runbook.** Knowledge about deploys, rollback, incidents lived in `docs/sprint1-external-tasks.md` (setup-only) and in the owner's head. 3am failure mode: nothing to open.
+2. **No prod-deploy workflow.** Prod was SSH-only. This is fine for one-person operations today, but gives no audit trail and no pre-deploy guardrails (staging-verification checkbox, approval gate, post-deploy health probe).
+3. **CI tests `continue-on-error: true`.** A regression in vitest doesn't block deploys. Was safe during Sprint 1 flux; no longer acceptable now that M0 is stable.
+
+**Decision:** Ship three release-engineering artifacts ahead of the Sprint 4 + UI pass deploy:
+
+1. **`docs/runbook.md`** — single operational source of truth. 11 sections: quick reference, environments, secrets, deploy procedure (staging auto + prod manual + SSH fallback), smoke test checklist, rollback (3 flavors), monitoring, common incidents, backups, deploy history table, cheatsheet.
+2. **`.github/workflows/deploy-production.yml` + `scripts/deploy-production.sh`** — manual `workflow_dispatch` that SSHes to the VPS and runs the prod-stack rebuild. Protected by:
+   - GitHub Environment `production` with required-reviewer approval rule (owner attaches this in Settings → Environments)
+   - Guardrail checkbox: reviewer must tick "I verified staging" before the workflow runs
+   - Post-deploy health probe (5 attempts × 10s backoff) that fails the workflow if health doesn't return 200
+3. **CI test step hardened** — removed `continue-on-error: true` from the vitest step in `.github/workflows/ci.yml`. Regressions now block the staging auto-deploy.
+
+**Alternatives considered:**
+- **Full CD to prod on merge** — rejected. Matches release-engineer skill principle 4 ("automate the boring, manual the scary") and owner's solo pacing. Auto-prod works only when test coverage is strong AND observability catches regressions within a minute. Neither is fully true yet.
+- **Deploy via a third-party CD platform** (Railway, Render, Fly) — rejected. Hostinger KVM2 + docker-compose is already working; switching costs > benefit at MVP scale (ADR-010, ADR-012 minimum-vendor preferences).
+- **Leave prod manual-SSH, skip the workflow** — rejected. The workflow adds audit (Actions log shows every prod deploy) + guardrails (staging checkbox, auto health probe) for ~40 lines of YAML.
+
+**Consequences:**
+- **Owner action required (one-time):** in GitHub → Settings → Environments, create `production` environment → add self as required reviewer → attach `VPS_HOST`, `VPS_USER`, `VPS_PORT`, `VPS_SSH_KEY` secrets to it. Same secrets already exist on the `staging` environment from Sprint 1.
+- Sprint 5+ prod deploys use the workflow button instead of SSH. SSH fallback is documented in runbook §4.3 for when GH Actions is degraded.
+- Test regressions now fail staging CI. If tests get flaky in a sprint, fix them in the same PR rather than merging around.
+- Runbook becomes the living doc — every sprint's deploy appends a row to §10 and each new incident gets a new sub-section in §8.
+
+**Not changed:**
+- Deploy cadence (sprint → staging → verify → prod → next sprint) per owner's 2026-04-19 preference — unchanged.
+- Schema sync via `prisma db push --accept-data-loss` in both envs per Sprint 1 pattern — still open as Sprint 11 parking lot (switch to `migrate deploy`).
+- Backup strategy (nightly `pg_dump` + Hostinger snapshots, 14d retention, no off-site) per ADR-014 — unchanged; now documented in runbook §9 instead of scattered.

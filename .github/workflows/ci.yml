@@ -52,6 +52,5 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
-        continue-on-error: true
       - name: Build
         run: npm run build

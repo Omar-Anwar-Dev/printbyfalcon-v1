@@ -5,6 +5,7 @@ import { notFound } from 'next/navigation';
 import Script from 'next/script';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
+import { ToastProvider } from '@/components/ui/toast';
 import { locales, localeDir } from '@/lib/i18n/config';
 
 type Props = {
@@ -50,11 +51,13 @@ export default async function LocaleLayout({ children, params }: Props) {
       <Script id="set-html-attrs" strategy="beforeInteractive">
         {`document.documentElement.lang='${locale}';document.documentElement.dir='${dir}';`}
       </Script>
-      <div className="flex min-h-screen flex-col" dir={dir} lang={locale}>
-        <SiteHeader locale={locale} />
-        <main className="flex-1">{children}</main>
-        <SiteFooter />
-      </div>
+      <ToastProvider>
+        <div className="flex min-h-screen flex-col" dir={dir} lang={locale}>
+          <SiteHeader locale={locale} />
+          <main className="flex-1">{children}</main>
+          <SiteFooter />
+        </div>
+      </ToastProvider>
     </NextIntlClientProvider>
   );
 }

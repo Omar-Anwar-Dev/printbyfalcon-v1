@@ -1,17 +1,22 @@
 import type { Metadata } from 'next';
-import { Inter, Cairo } from 'next/font/google';
+import { Inter, IBM_Plex_Sans_Arabic } from 'next/font/google';
 import './globals.css';
 
 const inter = Inter({
   subsets: ['latin'],
+  weight: ['400', '500', '600', '700', '800'],
   variable: '--font-sans',
   display: 'swap',
+  fallback: ['ui-sans-serif', 'system-ui', 'sans-serif'],
+  adjustFontFallback: true,
 });
 
-const cairo = Cairo({
-  subsets: ['arabic', 'latin'],
+const plexArabic = IBM_Plex_Sans_Arabic({
+  subsets: ['arabic'],
+  weight: ['400', '500', '600', '700'],
   variable: '--font-arabic',
   display: 'swap',
+  fallback: ['ui-sans-serif', 'system-ui', 'sans-serif'],
 });
 
 export const metadata: Metadata = {
@@ -26,7 +31,10 @@ export default function RootLayout({
 }) {
   // The inner [locale] layout sets `lang` + `dir` on <html>.
   return (
-    <html suppressHydrationWarning className={`${inter.variable} ${cairo.variable}`}>
+    <html
+      suppressHydrationWarning
+      className={`${inter.variable} ${plexArabic.variable}`}
+    >
       <body>{children}</body>
     </html>
   );

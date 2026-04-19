@@ -298,3 +298,80 @@ Mapped to the 7 criteria in `docs/implementation-plan.md` line 156–162:
   - CartItem / Order UX integration with stock badges — replace placeholder `getStockStatus` body with real inventory query once Sprint 6 lands (Sprint 4 cart will use the same helper).
   - Arabic stemming quality — `simple` config works; if post-launch metrics show pluralization miss rate is high, add a custom dictionary or pg_trgm fallback on descriptions.
   - `noindex` on `/search` — currently blocking ALL search pages from Google. Revisit at M2 if we want category-style indexed search hubs.
+
+---
+
+## UI/UX Polish Passes
+
+### 2026-04-19 — Foundation pass (post-M0, pre-Sprint 5)
+Scope locked at kickoff to **tokens + shell + homepage + feedback layer** per owner's decision: "full polish pass now = 2× re-work as Sprints 5–12 land features; foundation pass now = Sprint 5+ inherits the system." Screen-level polish (products, search, cart, checkout, account, auth, admin) deferred to an **M1-eve pass**.
+
+**Direction established** (ADR-031): trustworthy + technical + utilitarian-premium — "Apple-Store restraint applied to a Cairo printer-supplies shop." Differentiated from warm-accent Egyptian retailers (Raya / Noon / 2B); borrowed their product-card anatomy + icon+text header + homepage rails for shopper familiarity. No dark mode for MVP.
+
+**Shipped:**
+- **Design tokens** — new palette (Ink `#0F172A`, Canvas `#FAFAF7`, Paper `#F3F1EC`, Accent Ink-Cyan `#0E7C86`, muted `#6B6B6B`, semantic success/warning/error — all WCAG 2.1 AA body-text compliant; contrast audit in ADR-031). Type scale (12/14/16/18/20/24/32/48/64), spacing additions (72/88/120/136px), 2-level shadow system, motion tokens (120/180/280ms + `ease-out-smooth`).
+- **Fonts swapped** — Cairo → **IBM Plex Sans Arabic** (less generic, pairs mechanically with Inter). Both via `next/font/google` with `adjustFontFallback`.
+- **shadcn mapping** — `primary` now maps to Ink (dark slate), not cyan. New `<Button variant="accent">` for commerce-critical CTAs (add-to-cart, checkout, sign up). Every other variant tightened to the token system.
+- **Shell refactor**:
+  - [components/site-header.tsx](../components/site-header.tsx) — logo mark + icon+text actions (cart, account, login) + language switcher as segmented pill + mobile nav trigger.
+  - [components/mobile-nav.tsx](../components/mobile-nav.tsx) — **new**. Slide-in hamburger panel with category expansion, account links, locale switch.
+  - [components/site-footer.tsx](../components/site-footer.tsx) — 4-column structure (brand/contact · Shop · Account · Support) + legal row. Replaces the previous one-line footer.
+  - [components/language-switcher.tsx](../components/language-switcher.tsx) + [components/category-menu.tsx](../components/category-menu.tsx) — restyled to tokens.
+- **Homepage redesign** — [app/[locale]/page.tsx](../app/[locale]/page.tsx). Hero with subtle radial-gradient, single `variant="accent"` CTA + `variant="outline"` secondary, bilingual type-led hero visual; value-prop strip (4 micro-cards: authentic / COD / nationwide / WhatsApp); category rail (6 tiles); featured products (8 cards from `listActiveProducts`); brand rail (pill list, up to 10 brands); compatibility-lookup CTA (dark `bg-ink` card with accent-blur blob). Replaces the previous 3-line placeholder.
+- **Feedback layer (new)**:
+  - [components/ui/toast.tsx](../components/ui/toast.tsx) — dependency-free `ToastProvider` + `useToast` hook. Variants: default/success/warning/error. Auto-dismiss 4s default. Mounted inside [app/[locale]/layout.tsx](../app/[locale]/layout.tsx).
+  - [app/[locale]/not-found.tsx](../app/[locale]/not-found.tsx) — locale-aware 404 (bilingual AR/EN).
+  - [app/not-found.tsx](../app/not-found.tsx) — root 404 fallback for unknown locale prefixes.
+  - [app/[locale]/error.tsx](../app/[locale]/error.tsx) — locale-scoped error boundary with retry + home + error-digest display.
+  - [app/global-error.tsx](../app/global-error.tsx) — catastrophic fallback, inline-styled (CSS may not be loaded).
+  - [app/[locale]/loading.tsx](../app/[locale]/loading.tsx) — default Suspense skeleton (hero + 8 product-card skeletons via new `shimmer` utility).
+- **Shared component token alignment** — [components/catalog/product-card.tsx](../components/catalog/product-card.tsx) + [components/catalog/stock-badge.tsx](../components/catalog/stock-badge.tsx) updated to new tokens (ink-cyan, no more `bg-amber-500`/`bg-emerald-600`/`bg-neutral-500` literals). ProductCard now uses `bg-paper` + `shadow-card` + `hover:-translate-y-0.5` + `group-hover:scale-[1.02]` on image.
+
+**Design system doc** — [docs/design-system.md](design-system.md) (new). Living catalog: principles, direction, tokens table with contrast ratios, component inventory, iconography canon, patterns, don'ts (10 rules). Future feature work should conform to this.
+
+**Regression:**
+- TypeScript typecheck clean (`tsc --noEmit`)
+- ESLint clean (`next lint`)
+- Production build succeeds (`next build`)
+- Vitest suite green (unchanged; 19/19 existing tests pass)
+
+**Deferred to next polish pass (M1-eve):**
+- Products list / detail polish
+- Search + filters polish
+- Cart / checkout / order-confirmed polish
+- Account / addresses / orders polish
+- Auth surfaces (sign-in, login) polish
+- Admin surfaces polish
+- Lighthouse audit on live staging post-deploy
+- Visual regression tests (Playwright screenshots)
+
+**Decisions logged this pass:**
+- **ADR-031** [2026-04-19] Design direction, token system, and scope-limitation to foundation-only polish now + M1-eve polish later.
+
+---
+
+## Release Engineering
+
+### 2026-04-19 — Release pipeline formalized (pre Sprint 4 + UI pass deploy)
+Between completing the UI foundation pass and actually shipping it, ran a release-engineer pass to close operational gaps that were carried from Sprint 1–3 deploys. See ADR-032.
+
+**Shipped:**
+- **[docs/runbook.md](runbook.md)** — new. 11-section operational playbook: quick reference, environments, secrets, deploy procedure (staging auto + prod manual + SSH fallback), smoke test checklist, 3-flavor rollback, monitoring + alerting, common incidents, backups & recovery, deploy history table, shell cheatsheet.
+- **[.github/workflows/deploy-production.yml](../.github/workflows/deploy-production.yml)** — new. Manual `workflow_dispatch` prod deploy. Gated on `production` GitHub Environment approval + a "staging-verified" checkbox + a post-deploy health probe (5 × 10s attempts). Falls through to [scripts/deploy-production.sh](../scripts/deploy-production.sh).
+- **[scripts/deploy-production.sh](../scripts/deploy-production.sh)** — new. Mirror of [scripts/deploy-staging.sh](../scripts/deploy-staging.sh) pattern; logs prev→new SHA.
+- **[.github/workflows/ci.yml](../.github/workflows/ci.yml)** — hardened. Removed `continue-on-error: true` on the vitest step. Test regressions now block merge-to-main → staging auto-deploy.
+
+**Owner action required (one-time, before using the new prod workflow):**
+GitHub → repo Settings → Environments → **New environment** → name `production`:
+  1. Attach `VPS_HOST`, `VPS_USER`, `VPS_PORT`, `VPS_SSH_KEY` (same values already on `staging`)
+  2. Add self as **Required reviewer** under deployment protection rules
+  3. (Optional) Restrict to `main` branch only
+
+**Deferred to release-engineer v2 / Sprint 11 parking lot:**
+- Visual regression tests (Playwright screenshot diff) — M1-eve
+- Prod rollback rehearsal — planned after this first workflow-driven deploy succeeds
+- Switch from `prisma db push` to `prisma migrate deploy` — Sprint 11 housekeeping per ADR-001
+- Off-site backup (S3/B2) — post-launch revenue budget per ADR-014 risk acceptance
+
+**Decisions logged this pass:**
+- **ADR-032** [2026-04-19] Formalize release pipeline — runbook + manual prod workflow + CI test hard-fail.

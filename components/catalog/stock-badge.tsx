@@ -1,10 +1,10 @@
 import type { StockStatus } from '@/lib/catalog/stock';
 import { STOCK_LABELS } from '@/lib/catalog/stock';
 
-const COLORS: Record<StockStatus, string> = {
-  IN_STOCK: 'bg-emerald-600 text-white',
-  LOW_STOCK: 'bg-amber-500 text-white',
-  OUT_OF_STOCK: 'bg-neutral-500 text-white',
+const STYLES: Record<StockStatus, string> = {
+  IN_STOCK: 'bg-success-soft text-success border border-success/20',
+  LOW_STOCK: 'bg-warning-soft text-warning border border-warning/20',
+  OUT_OF_STOCK: 'bg-paper-hover text-muted-foreground border border-border',
 };
 
 export function StockBadge({
@@ -19,7 +19,7 @@ export function StockBadge({
   const label = STOCK_LABELS[locale][status];
   return (
     <span
-      className={`inline-block rounded px-2 py-0.5 text-[11px] font-medium ${COLORS[status]} ${className}`}
+      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${STYLES[status]} ${className}`}
     >
       {label}
     </span>

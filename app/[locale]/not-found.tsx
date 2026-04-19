@@ -1,0 +1,48 @@
+import { getLocale } from 'next-intl/server';
+import { FileQuestion, Search } from 'lucide-react';
+import { Link } from '@/lib/i18n/routing';
+import { Button } from '@/components/ui/button';
+
+export default async function LocaleNotFound() {
+  const locale = await getLocale();
+  const isAr = locale === 'ar';
+
+  return (
+    <section className="container-page flex min-h-[60vh] flex-col items-center justify-center py-24 text-center">
+      <span className="mb-6 inline-flex h-16 w-16 items-center justify-center rounded-xl bg-accent-soft text-accent-strong">
+        <FileQuestion className="h-7 w-7" strokeWidth={1.75} aria-hidden />
+      </span>
+      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+        {isAr ? 'خطأ 404' : 'Error 404'}
+      </p>
+      <h1 className="mt-3 text-3xl font-bold tracking-tight text-foreground sm:text-4xl">
+        {isAr ? 'الصفحة غير موجودة' : 'Page not found'}
+      </h1>
+      <p className="mt-4 max-w-md text-base text-muted-foreground">
+        {isAr
+          ? 'الصفحة التي تبحث عنها تم نقلها أو لم تعد متاحة. جرّب البحث أو العودة للصفحة الرئيسية.'
+          : 'The page you’re looking for has moved or is no longer available. Try searching or head back to the homepage.'}
+      </p>
+      <div className="mt-8 flex flex-wrap justify-center gap-3">
+        <Button asChild variant="accent" size="lg">
+          <Link href="/">{isAr ? 'الصفحة الرئيسية' : 'Go home'}</Link>
+        </Button>
+        <Button asChild variant="outline" size="lg">
+          <Link href="/search">
+            <Search className="me-2 h-5 w-5" strokeWidth={1.75} aria-hidden />
+            {isAr ? 'البحث في المتجر' : 'Search the store'}
+          </Link>
+        </Button>
+      </div>
+      <p className="mt-10 text-sm text-muted-foreground">
+        {isAr ? 'تحتاج مساعدة؟' : 'Need help?'}{' '}
+        <Link
+          href="/contact"
+          className="font-medium text-accent-strong hover:underline"
+        >
+          {isAr ? 'تواصل معنا' : 'Contact us'}
+        </Link>
+      </p>
+    </section>
+  );
+}
