@@ -39,33 +39,10 @@ type Labels = {
   actions: Record<OrderStatus, string>;
 };
 
-const DEFAULT_ACTION_LABELS_AR: Record<OrderStatus, string> = {
-  PENDING_CONFIRMATION: 'وضع بانتظار التأكيد',
-  CONFIRMED: 'تأكيد الطلب',
-  HANDED_TO_COURIER: 'تسليم لشركة الشحن',
-  OUT_FOR_DELIVERY: 'جاري التسليم',
-  DELIVERED: 'تأكيد التسليم',
-  CANCELLED: 'إلغاء الطلب',
-  RETURNED: 'تسجيل إرجاع',
-  DELAYED_OR_ISSUE: 'وضع علامة تأخير / مشكلة',
-};
-
-const DEFAULT_ACTION_LABELS_EN: Record<OrderStatus, string> = {
-  PENDING_CONFIRMATION: 'Mark Pending',
-  CONFIRMED: 'Confirm',
-  HANDED_TO_COURIER: 'Mark Handed to Courier',
-  OUT_FOR_DELIVERY: 'Mark Out for Delivery',
-  DELIVERED: 'Mark Delivered',
-  CANCELLED: 'Cancel order',
-  RETURNED: 'Record Return',
-  DELAYED_OR_ISSUE: 'Flag as Delayed / Issue',
-};
-
-export function defaultOrderStatusActionLabels(
-  locale: 'ar' | 'en',
-): Record<OrderStatus, string> {
-  return locale === 'ar' ? DEFAULT_ACTION_LABELS_AR : DEFAULT_ACTION_LABELS_EN;
-}
+// NOTE: `defaultOrderStatusActionLabels` lives in `lib/admin/order-action-labels.ts`.
+// Server Components import it from there to build the `labels.actions` map
+// before rendering this component. A re-export from this 'use client' file
+// would still tag the symbol as client-bound and break the server import.
 
 type DialogTarget =
   | { kind: 'simple'; to: OrderStatus }
