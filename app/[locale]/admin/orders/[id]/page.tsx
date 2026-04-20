@@ -4,9 +4,9 @@ import { requireAdmin } from '@/lib/auth';
 import { formatEgp } from '@/lib/catalog/price';
 import {
   OrderStatusActions,
-  defaultOrderStatusActionLabels,
   type CourierOption,
 } from '@/components/admin/order-status-actions';
+import { defaultOrderStatusActionLabels } from '@/lib/admin/order-action-labels';
 import { OrderNotesEditor } from '@/components/admin/order-notes-editor';
 import {
   RecordReturnButton,
