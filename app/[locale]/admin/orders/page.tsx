@@ -264,7 +264,9 @@ export default async function AdminOrdersPage({
         couriers={courierOptions}
         formId={BULK_FORM_ID}
         labels={{
-          selected: (n) => (isAr ? `تم اختيار ${n} طلب` : `${n} selected`),
+          // Templates use {n} / {s} / {f} placeholders — client interpolates.
+          // Functions can't cross the Server → Client Component boundary.
+          selectedTemplate: isAr ? 'تم اختيار {n} طلب' : '{n} selected',
           noneSelected: isAr
             ? 'اختر طلبات مؤهلة للتسليم لشركة الشحن'
             : 'Select orders eligible for courier handoff',
@@ -295,14 +297,12 @@ export default async function AdminOrdersPage({
             : "Included in every selected customer's status message",
           confirm: isAr ? 'تأكيد التسليم' : 'Confirm handoff',
           cancel: isAr ? 'إلغاء' : 'Cancel',
-          resultSuccess: (n) =>
-            isAr
-              ? `تم تسليم ${n} طلب لشركة الشحن`
-              : `${n} orders handed to courier`,
-          resultPartial: (s, f) =>
-            isAr
-              ? `نجح ${s}، فشل ${f} — راجع قائمة الطلبات`
-              : `${s} succeeded, ${f} failed — review the orders list`,
+          resultSuccessTemplate: isAr
+            ? 'تم تسليم {n} طلب لشركة الشحن'
+            : '{n} orders handed to courier',
+          resultPartialTemplate: isAr
+            ? 'نجح {s}، فشل {f} — راجع قائمة الطلبات'
+            : '{s} succeeded, {f} failed — review the orders list',
           resultAllFailed: isAr
             ? 'تعذّر تسليم أي طلب — راجع السجلات'
             : 'No orders could be handed over — check the logs',

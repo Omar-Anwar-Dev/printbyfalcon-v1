@@ -22,8 +22,16 @@ export type BulkBarCourier = {
   phone: string | null;
 };
 
+/**
+ * Label shape — all VALUES must be serializable (strings only) because this
+ * component is a Client Component receiving props from a Server Component.
+ * Counts are injected via `{n}`, `{s}`, `{f}` placeholders; client does the
+ * string replace. Function-valued labels would fail RSC serialization with
+ * "Functions cannot be passed directly to Client Components."
+ */
 type Labels = {
-  selected: (n: number) => string;
+  /** Uses `{n}` placeholder for selection count. e.g. "{n} selected". */
+  selectedTemplate: string;
   noneSelected: string;
   bulkHandoff: string;
   dialogTitle: string;
@@ -38,10 +46,22 @@ type Labels = {
   notePlaceholder: string;
   confirm: string;
   cancel: string;
-  resultSuccess: (n: number) => string;
-  resultPartial: (succeeded: number, failed: number) => string;
+  /** `{n}` placeholder for succeeded count. */
+  resultSuccessTemplate: string;
+  /** `{s}` for succeeded, `{f}` for failed counts. */
+  resultPartialTemplate: string;
   resultAllFailed: string;
 };
+
+function interp(
+  template: string,
+  vars: Record<string, string | number>,
+): string {
+  return Object.entries(vars).reduce(
+    (acc, [key, value]) => acc.replaceAll(`{${key}}`, String(value)),
+    template,
+  );
+}
 
 export function AdminOrdersBulkBar({
   couriers,
@@ -127,11 +147,16 @@ export function AdminOrdersBulkBar({
       );
 
       if (failed.length === 0) {
-        alert(labels.resultSuccess(succeeded.length));
+        alert(interp(labels.resultSuccessTemplate, { n: succeeded.length }));
       } else if (succeeded.length === 0) {
         alert(labels.resultAllFailed);
       } else {
-        alert(labels.resultPartial(succeeded.length, failed.length));
+        alert(
+          interp(labels.resultPartialTemplate, {
+            s: succeeded.length,
+            f: failed.length,
+          }),
+        );
       }
 
       reset();
@@ -152,7 +177,7 @@ export function AdminOrdersBulkBar({
         </Button>
         <span className="text-muted-foreground">
           {selectedCount > 0
-            ? labels.selected(selectedCount)
+            ? interp(labels.selectedTemplate, { n: selectedCount })
             : labels.noneSelected}
         </span>
       </div>
