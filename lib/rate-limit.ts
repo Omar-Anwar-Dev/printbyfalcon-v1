@@ -42,6 +42,16 @@ export const RATE_LIMIT_RULES = {
     max: 60,
     windowSeconds: 60,
   },
+  /**
+   * Customer-facing notification throttle (Sprint 5 S5-D8-T3). Cap at 5 messages
+   * per phone per hour so a status-oscillating order doesn't spam the customer.
+   * OTP and auth-critical sends bypass this — they use `otpRequest` above.
+   */
+  notificationPerPhone: {
+    name: 'notify-phone',
+    max: 5,
+    windowSeconds: 60 * 60,
+  },
 } as const satisfies Record<string, LimitRule>;
 
 export type RateLimitResult = {
@@ -89,8 +99,7 @@ export async function checkAndIncrement(
     const retryAfterSeconds = allowed
       ? 0
       : Math.ceil(
-          rule.windowSeconds -
-            (now.getTime() - currentWindow.getTime()) / 1000,
+          rule.windowSeconds - (now.getTime() - currentWindow.getTime()) / 1000,
         );
 
     if (!allowed) {
@@ -103,10 +112,7 @@ export async function checkAndIncrement(
     return { allowed, remaining, retryAfterSeconds };
   } catch (err) {
     // Fail open so a rate-limit infrastructure blip doesn't take down auth.
-    logger.error(
-      { err, rule: rule.name },
-      'rate_limit.error.failing_open',
-    );
+    logger.error({ err, rule: rule.name }, 'rate_limit.error.failing_open');
     return { allowed: true, remaining: rule.max, retryAfterSeconds: 0 };
   }
 }

@@ -28,7 +28,7 @@ The architecture is deliberately small and boring: one VPS, one database, one ap
 | CDN / DNS / DDoS / WAF / TLS edge | Edge cache, DNS, DDoS protection, basic WAF, TLS termination at edge | **Cloudflare Free** (ADR-024) | Cloudflare global edge |
 | DNS | Domain resolution | Hostinger DNS | Hostinger |
 | SMTP | Transactional emails | Hostinger SMTP | Hostinger |
-| WhatsApp automation | OTP delivery, status notifications | Meta WhatsApp Cloud API | Meta cloud |
+| WhatsApp automation | OTP delivery, status notifications | Whats360 (third-party middleware) per ADR-033 | Whats360 cloud |
 | Card payments | Card processing (Visa/Mastercard/Meeza) | Paymob (hosted iframe) | Paymob cloud |
 | Backups | Disaster recovery | Hostinger weekly snapshots + nightly local `pg_dump` rotation | Hostinger |
 | Uptime monitoring | External availability checks | UptimeRobot (free tier) | External |
@@ -75,7 +75,7 @@ flowchart TB
     NextS <--> PGS
 
     Next -. webhook .-> Paymob[Paymob<br/>Card Payments]
-    Worker -. outbound .-> Meta[Meta<br/>WhatsApp Cloud API]
+    Worker -. outbound .-> W360[Whats360<br/>WhatsApp middleware]
     Worker -. outbound .-> SMTP[Hostinger SMTP]
 
     UR[UptimeRobot] -. HTTP checks .-> Nginx
@@ -147,7 +147,7 @@ flowchart TB
    - Inserts `OrderStatusEvent` with note
    - Inserts `AuditLog` entry
    - Enqueues `notify-status-change` job (channel set per order type: WhatsApp only for B2C; WhatsApp + email for B2B)
-5. Worker sends notification via Meta WhatsApp Cloud API (and SMTP for B2B), records `Notification` row
+5. Worker sends notification via Whats360 `/api/v1/send-text` (and SMTP for B2B), records `Notification` row
 6. Customer sees updated status + courier info on `/account/orders/[id]`
 
 ---
@@ -306,7 +306,7 @@ All Server Actions are TypeScript functions in `app/actions/*.ts`, callable from
 | Method | Path | Purpose | Auth |
 |---|---|---|---|
 | POST | `/api/webhooks/paymob` | Paymob payment status callback | HMAC signature verification |
-| POST | `/api/webhooks/whatsapp` | Meta WhatsApp delivery status | Meta token verification |
+| POST | `/api/webhooks/whats360` | Whats360 custom-webhook events (`outgoing message`, `send failure`, `incoming message`, `subscription expiry`) | `X-Webhook-Token` header matches `WHATS360_WEBHOOK_SECRET` |
 | GET | `/api/health` | Liveness probe (200 OK + DB ping) | Public |
 | GET | `/sitemap.xml` | SEO sitemap (products, categories) | Public, cached |
 | GET | `/robots.txt` | SEO directives | Public, cached |
@@ -326,7 +326,7 @@ All webhooks are **idempotent**: external request ID stored in DB; duplicate cal
 
 ### 7.2 B2C auth flow (per ADR-005)
 
-1. User submits phone → server checks rate limit (max 3 OTPs per phone per 30 min) → generates 6-digit code → stores SHA-256 hash + expires_at (5 min) in `WhatsAppOtp` → calls Meta WhatsApp Cloud API with the authentication template
+1. User submits phone → server checks rate limit (max 3 OTPs per phone per 30 min) → generates 6-digit code → stores SHA-256 hash + expires_at (5 min) in `WhatsAppOtp` → calls Whats360 `/api/v1/send-text` with the rendered OTP message body (per ADR-033; no Meta template involved)
 2. User submits code → server hashes input + compares; on match, creates `Session` row, sets cookie
 3. New device detected (no cookie or device_label mismatch) → re-verify via OTP
 
@@ -373,16 +373,23 @@ Implemented via DB-backed sliding window counter (`RateLimit` table with `key + 
 
 The original architecture included Fawry as a second payment method (server-to-server reference-code generation + webhook on payment from a separate Fawry merchant account). Per ADR-022 the **direct Fawry integration** was dropped (avoiding a second merchant relationship). Per ADR-025, **pay-at-outlet is restored via Paymob Accept's `INTEGRATION_ID_FAWRY` sub-integration** — same merchant account, same webhook, same dashboard as the card flow described in §8.1. There is no `lib/fawry.ts` and no `/api/webhooks/fawry` endpoint; everything routes through §8.1.
 
-### 8.3 Meta WhatsApp Cloud API
-- **Type:** REST API for outbound, webhook for delivery status
-- **Phone number:** Dedicated NEW number for the store (separate from sales team's manual WhatsApp per ADR — sales team WhatsApp stays untouched)
-- **Templates:** Pre-approved by Meta (~3–5 business days each):
-  - `auth_otp_ar` — OTP delivery
-  - `order_confirmed_ar` — order confirmation
-  - `order_status_change_ar` — status updates
-  - `b2b_pending_review_ar` — B2B Submit-for-Review acknowledgement
-- **Touch points:** Worker enqueues outbound; Meta calls `/api/webhooks/whatsapp` with delivery status
-- **Critical path:** Template approvals must start in Sprint 1
+### 8.3 Whats360 (WhatsApp transport) — ADR-033
+
+- **Type:** Third-party HTTP middleware for WhatsApp. Outbound via `GET https://whats360.live/api/v1/send-text` (and sibling endpoints for image/doc/etc.); inbound via Whats360's "custom webhook" that forwards selected events (`outgoing message`, `send failure`, `incoming message`, `subscription expiry`) to a URL we own.
+- **Phone number:** Dedicated store business number, separate from the sales team's manual WhatsApp line (`+201116527773`). The number is attached to Whats360 by scanning a QR code from `/api/v1/instances/qr-page` — a physical phone or a headless scan at setup time. **Owner-operational concern:** the scanned device must stay powered + online; if it disconnects, sends fail.
+- **Credentials:** `WHATS360_TOKEN` (64-char hex per-owner-account), `WHATS360_INSTANCE_ID` (e.g. `device_mo76dfr1`), `WHATS360_WEBHOOK_SECRET` (we set this in Whats360 as a custom header so inbound webhook calls are authenticated). All three live only in `.env.staging` / `.env.production`; never committed.
+- **Templates — none.** Unlike Meta Cloud API, Whats360 sends arbitrary text. All message bodies are composed server-side in `lib/whatsapp/templates.ts` (bilingual AR/EN renderers keyed off customer's `languagePref`). This removes Meta's 3–5 business-day template approval cycle from the critical path.
+- **Send flow (outbound):**
+  1. Server-side caller (action handler or `send-whatsapp` worker job) renders a `{ phone, body }` payload.
+  2. `lib/whatsapp.ts::sendWhatsApp({ phone, body })` normalizes the phone to `<countrycode><number>@s.whatsapp.net` JID format, URL-encodes the body, and issues `GET /api/v1/send-text?token=...&instance_id=...&jid=...&msg=...`.
+  3. On success (`{ success: true }`), a `Notification` row is inserted/updated with `status = SENT`. On failure (non-200 or `{ success: false }`), it's marked `FAILED` with error message.
+  4. `NOTIFICATIONS_DEV_MODE=true` short-circuits the HTTP call and logs the payload — used in local dev; flipped to `false` in staging/prod when the device is live.
+- **Inbound webhook:** `POST /api/webhooks/whats360` accepts Whats360's custom-webhook payloads. We validate `X-Webhook-Token` against `WHATS360_WEBHOOK_SECRET` and then update `Notification.status` for `send failure` events (marking matched rows as `FAILED`), log audit entries for `subscription expiry` events, and ignore `incoming message` events in MVP (no auto-reply logic yet).
+- **Delivery semantics:** `Notification.status` enum is `PENDING | SENT | FAILED`. Whats360 does **not** expose per-message `delivered` / `read` like Meta does — we treat `SENT` (Whats360 accepted our send) as the positive terminal, and rely on the inbound webhook's `send failure` event to flip rows to `FAILED` after-the-fact when the device couldn't actually deliver.
+- **Failure modes to handle explicitly:** device disconnected (`/api/v1/instances/status` returns not-connected), token expired/invalid (401), rate-limit / plan-quota exceeded (403), network timeout (retry with backoff, 3 attempts). All of these flip `Notification.status = FAILED` and surface to admin-alert channel.
+- **Concentration risk:** Whats360 is a single-point-of-failure for all WhatsApp. If Whats360 suspends our account, the device loses its WhatsApp session, or WhatsApp flags the underlying number (unofficial API risk), our entire WhatsApp channel goes dark. Documented **failover path:** provision Meta Cloud API + re-submit 5 templates (~3–5 business days); `lib/whatsapp.ts` keeps the send surface small so the transport swap is contained. For B2B orders, the parallel email channel (Hostinger SMTP) absorbs interim notifications; for B2C it's WhatsApp-only per PRD Feature 5, so extended Whats360 outage degrades B2C notifications to nothing until failover lands.
+- **Meta Cloud API — not in use, documented as failover** (ADR-011's original "free auth templates" rationale no longer applies; Whats360 has middleman cost and no template friction). If MVP escalates to direct Meta integration, re-introduce `auth_otp_ar`, `order_confirmed_ar`, `order_status_change_ar`, `b2b_pending_review_ar`, `payment_failed_ar` on the Meta side; code-side, add a new `lib/whatsapp/transport-meta.ts` and swap the `sendWhatsApp` implementation via env flag.
+- **Sandbox:** `&sandbox=true` on any `/api/v1/send-*` endpoint exercises the API path without billing real sends. Used by CI + local dev for integration tests.
 
 ### 8.4 Hostinger SMTP
 - **Type:** SMTP submission
@@ -518,6 +525,6 @@ The original architecture included Fawry as a second payment method (server-to-s
 | Exact governorate-to-zone mapping | Affects shipping rate sanity | Set in admin during onboarding (Sprint 5–6) |
 | Image data quality from manufacturers | May force own photography (extra time) | Pilot with 50 SKUs end of Sprint 2 |
 | ~~Hostinger CDN coverage on KVM2~~ | ~~Affects asset delivery latency~~ — **resolved 2026-04-19**: not available on KVM2; ADR-023 keeps MVP CDN-less | — |
-| WhatsApp Cloud API cost in Egypt for high-volume notifications | Auth templates free; utility templates may cost ~$0.01–0.03 each | Monitor consumption from launch; switch to email-primary for B2C if costly |
+| Whats360 plan quota + device uptime in Egypt for high-volume notifications | Whats360 plan caps are dashboard-visible; device-disconnect risk from phone reboot / data outage | Monitor Whats360 dashboard + Notification failure rate; admin "device status" widget polls `/api/v1/instances/status` every 5 min (Sprint 5) |
 | Memory ceiling under combined prod + staging load | Could force separating staging | Monitor Netdata during integration testing (Sprint 5) |
 | pg-boss performance under concurrent worker scale | Should be fine at this volume | Load-test in staging Sprint 5 |

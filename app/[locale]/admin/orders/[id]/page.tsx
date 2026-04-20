@@ -2,6 +2,20 @@ import { notFound } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { formatEgp } from '@/lib/catalog/price';
+import {
+  OrderStatusActions,
+  defaultOrderStatusActionLabels,
+  type CourierOption,
+} from '@/components/admin/order-status-actions';
+import { OrderNotesEditor } from '@/components/admin/order-notes-editor';
+import {
+  RecordReturnButton,
+  type ReturnableItem,
+} from '@/components/admin/record-return-button';
+import {
+  ORDER_STATUS_LABELS,
+  type OrderStatusKey,
+} from '@/lib/whatsapp-templates';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,16 +27,37 @@ export default async function AdminOrderDetailPage({
   await requireAdmin(['OWNER', 'OPS']);
   const { locale, id } = await params;
   const isAr = locale === 'ar';
+  const statusLocale: 'ar' | 'en' = isAr ? 'ar' : 'en';
+  const statusLabel = (s: OrderStatusKey) =>
+    ORDER_STATUS_LABELS[s][statusLocale];
 
-  const order = await prisma.order.findUnique({
-    where: { id },
-    include: {
-      items: { orderBy: { createdAt: 'asc' } },
-      statusEvents: { orderBy: { createdAt: 'asc' } },
-      user: { select: { id: true, name: true, phone: true, email: true } },
-    },
-  });
+  const [order, couriers] = await Promise.all([
+    prisma.order.findUnique({
+      where: { id },
+      include: {
+        items: { orderBy: { createdAt: 'asc' } },
+        statusEvents: { orderBy: { createdAt: 'asc' } },
+        user: { select: { id: true, name: true, phone: true, email: true } },
+        courier: { select: { nameAr: true, nameEn: true, phone: true } },
+        returns: {
+          orderBy: { createdAt: 'desc' },
+          include: { items: true },
+        },
+      },
+    }),
+    prisma.courier.findMany({
+      where: { active: true },
+      orderBy: [{ position: 'asc' }, { nameEn: 'asc' }],
+      select: { id: true, nameAr: true, nameEn: true, phone: true },
+    }),
+  ]);
   if (!order) notFound();
+
+  const returnableItems: ReturnableItem[] = order.items.map((i) => ({
+    id: i.id,
+    label: `${isAr ? i.nameArSnapshot : i.nameEnSnapshot} (${i.skuSnapshot})`,
+    maxQty: i.qty,
+  }));
 
   const addr = order.addressSnapshot as {
     recipientName: string;
@@ -36,6 +71,21 @@ export default async function AdminOrderDetailPage({
     notes: string | null;
   };
 
+  const courierOptions: CourierOption[] = couriers.map((c) => ({
+    id: c.id,
+    label: isAr ? c.nameAr : c.nameEn,
+    phone: c.phone,
+  }));
+  const courierName = order.courier
+    ? isAr
+      ? order.courier.nameAr
+      : order.courier.nameEn
+    : null;
+  const courierPhone =
+    order.courierPhoneSnapshot ?? order.courier?.phone ?? null;
+
+  const actionLabels = defaultOrderStatusActionLabels(statusLocale);
+
   return (
     <div className="container max-w-4xl py-8">
       <header className="mb-6">
@@ -47,20 +97,73 @@ export default async function AdminOrderDetailPage({
         </p>
       </header>
 
+      <section className="mb-6 rounded-md border bg-background p-4">
+        <div className="mb-3 flex items-start justify-between gap-3">
+          <div>
+            <h2 className="text-base font-semibold">
+              {isAr ? 'إجراءات الحالة' : 'Status actions'}
+            </h2>
+            <p className="text-sm text-muted-foreground">
+              {isAr ? 'الحالة الحالية: ' : 'Current status: '}
+              <span className="font-medium text-foreground">
+                {statusLabel(order.status as OrderStatusKey)}
+              </span>
+            </p>
+          </div>
+        </div>
+        <OrderStatusActions
+          orderId={order.id}
+          currentStatus={order.status}
+          couriers={courierOptions}
+          labels={{
+            sectionTitle: isAr ? 'إجراءات الحالة' : 'Status actions',
+            note: isAr ? 'ملاحظة (اختياري)' : 'Note (optional)',
+            notePlaceholder: isAr
+              ? 'تُعرض للعميل مع رسالة التحديث'
+              : 'Shown to customer with the status update message',
+            courier: isAr ? 'شركة الشحن' : 'Courier',
+            courierPhone: isAr
+              ? 'هاتف المندوب (اختياري)'
+              : 'Courier agent phone (optional)',
+            courierPhoneHelp: isAr
+              ? 'يُستخدم بدلاً من الهاتف الافتراضي للشركة'
+              : 'Overrides the courier default phone',
+            waybill: isAr ? 'رقم البوليصة' : 'Waybill',
+            expectedDelivery: isAr ? 'التسليم المتوقع' : 'Expected delivery',
+            confirm: isAr ? 'تأكيد' : 'Confirm',
+            cancel: isAr ? 'إلغاء' : 'Cancel',
+            noTransitions: isAr
+              ? 'هذه الحالة نهائية — لا توجد إجراءات متاحة'
+              : 'Terminal state — no further actions',
+            actions: actionLabels,
+          }}
+        />
+      </section>
+
       <div className="grid gap-4 md:grid-cols-2">
         <section className="rounded-md border bg-background p-4 text-sm">
-          <h2 className="mb-2 text-base font-semibold">Status</h2>
+          <h2 className="mb-2 text-base font-semibold">
+            {isAr ? 'الحالة' : 'Status'}
+          </h2>
           <dl className="space-y-1">
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Order</dt>
-              <dd className="font-medium">{order.status}</dd>
+              <dt className="text-muted-foreground">
+                {isAr ? 'الطلب' : 'Order'}
+              </dt>
+              <dd className="font-medium">
+                {statusLabel(order.status as OrderStatusKey)}
+              </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Payment method</dt>
+              <dt className="text-muted-foreground">
+                {isAr ? 'طريقة الدفع' : 'Payment method'}
+              </dt>
               <dd>{order.paymentMethod}</dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Payment status</dt>
+              <dt className="text-muted-foreground">
+                {isAr ? 'حالة الدفع' : 'Payment status'}
+              </dt>
               <dd>{order.paymentStatus}</dd>
             </div>
             {order.paymobTransactionId ? (
@@ -75,25 +178,82 @@ export default async function AdminOrderDetailPage({
         </section>
 
         <section className="rounded-md border bg-background p-4 text-sm">
-          <h2 className="mb-2 text-base font-semibold">Customer</h2>
+          <h2 className="mb-2 text-base font-semibold">
+            {isAr ? 'العميل' : 'Customer'}
+          </h2>
           <p className="font-medium">{order.contactName}</p>
-          <p className="text-muted-foreground">{order.contactPhone}</p>
+          <p className="text-muted-foreground" dir="ltr">
+            {order.contactPhone}
+          </p>
           {order.contactEmail ? (
-            <p className="text-muted-foreground">{order.contactEmail}</p>
+            <p className="text-muted-foreground" dir="ltr">
+              {order.contactEmail}
+            </p>
           ) : null}
           {order.user ? (
             <p className="mt-2 text-xs text-muted-foreground">
-              B2C user · {order.user.id}
+              {isAr ? 'مستخدم مسجل' : 'Registered user'} · {order.user.id}
             </p>
           ) : (
             <p className="mt-2 text-xs italic text-muted-foreground">
-              Guest checkout
+              {isAr ? 'طلب ضيف' : 'Guest checkout'}
             </p>
           )}
         </section>
 
+        {courierName || order.waybill || order.expectedDeliveryDate ? (
+          <section className="rounded-md border bg-background p-4 text-sm md:col-span-2">
+            <h2 className="mb-2 text-base font-semibold">
+              {isAr ? 'الشحن' : 'Shipping'}
+            </h2>
+            <dl className="grid gap-3 md:grid-cols-3">
+              {courierName ? (
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {isAr ? 'شركة الشحن' : 'Courier'}
+                  </dt>
+                  <dd className="font-medium">{courierName}</dd>
+                  {courierPhone ? (
+                    <dd>
+                      <a
+                        href={`tel:${courierPhone}`}
+                        className="text-accent-strong hover:underline"
+                        dir="ltr"
+                      >
+                        {courierPhone}
+                      </a>
+                    </dd>
+                  ) : null}
+                </div>
+              ) : null}
+              {order.waybill ? (
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {isAr ? 'رقم البوليصة' : 'Waybill'}
+                  </dt>
+                  <dd className="font-mono">{order.waybill}</dd>
+                </div>
+              ) : null}
+              {order.expectedDeliveryDate ? (
+                <div>
+                  <dt className="text-xs text-muted-foreground">
+                    {isAr ? 'التسليم المتوقع' : 'Expected delivery'}
+                  </dt>
+                  <dd>
+                    {new Date(order.expectedDeliveryDate).toLocaleDateString(
+                      isAr ? 'ar-EG' : 'en-US',
+                    )}
+                  </dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
+        ) : null}
+
         <section className="rounded-md border bg-background p-4 text-sm md:col-span-2">
-          <h2 className="mb-2 text-base font-semibold">Address</h2>
+          <h2 className="mb-2 text-base font-semibold">
+            {isAr ? 'العنوان' : 'Address'}
+          </h2>
           <p>
             {addr.street}
             {addr.building ? `, ${addr.building}` : ''}
@@ -111,54 +271,200 @@ export default async function AdminOrderDetailPage({
         </section>
 
         <section className="rounded-md border bg-background p-4 text-sm md:col-span-2">
-          <h2 className="mb-2 text-base font-semibold">Items</h2>
+          <h2 className="mb-2 text-base font-semibold">
+            {isAr ? 'المنتجات' : 'Items'}
+          </h2>
           <ul className="space-y-2">
             {order.items.map((i) => (
               <li key={i.id} className="flex justify-between">
                 <span>
-                  {i.nameEnSnapshot} × {i.qty}
+                  {isAr ? i.nameArSnapshot : i.nameEnSnapshot} × {i.qty}
                   <span className="block font-mono text-xs text-muted-foreground">
                     {i.skuSnapshot}
                   </span>
                 </span>
-                <span>{formatEgp(i.lineTotalEgp.toString(), 'en')}</span>
+                <span>
+                  {formatEgp(i.lineTotalEgp.toString(), isAr ? 'ar' : 'en')}
+                </span>
               </li>
             ))}
           </ul>
           <dl className="mt-3 space-y-1 border-t pt-3">
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Subtotal</dt>
-              <dd>{formatEgp(order.subtotalEgp.toString(), 'en')}</dd>
+              <dt className="text-muted-foreground">
+                {isAr ? 'الإجمالي قبل الضريبة' : 'Subtotal'}
+              </dt>
+              <dd>
+                {formatEgp(order.subtotalEgp.toString(), isAr ? 'ar' : 'en')}
+              </dd>
             </div>
             <div className="flex justify-between">
-              <dt className="text-muted-foreground">Shipping</dt>
-              <dd>{formatEgp(order.shippingEgp.toString(), 'en')}</dd>
+              <dt className="text-muted-foreground">
+                {isAr ? 'الشحن' : 'Shipping'}
+              </dt>
+              <dd>
+                {formatEgp(order.shippingEgp.toString(), isAr ? 'ar' : 'en')}
+              </dd>
             </div>
             <div className="flex justify-between font-semibold">
-              <dt>Total</dt>
-              <dd>{formatEgp(order.totalEgp.toString(), 'en')}</dd>
+              <dt>{isAr ? 'الإجمالي' : 'Total'}</dt>
+              <dd>
+                {formatEgp(order.totalEgp.toString(), isAr ? 'ar' : 'en')}
+              </dd>
             </div>
           </dl>
         </section>
 
         <section className="rounded-md border bg-background p-4 text-sm md:col-span-2">
-          <h2 className="mb-2 text-base font-semibold">Timeline</h2>
-          <ol className="space-y-2">
-            {order.statusEvents.map((e) => (
-              <li key={e.id} className="flex gap-3">
-                <span className="text-xs text-muted-foreground">
-                  {new Date(e.createdAt).toLocaleString('en-US')}
-                </span>
-                <span>
-                  <span className="font-medium">{e.status}</span>
-                  {e.note ? (
-                    <span className="block text-muted-foreground">
-                      {e.note}
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="text-base font-semibold">
+              {isAr ? 'الإرجاعات' : 'Returns'}
+            </h2>
+            <RecordReturnButton
+              orderId={order.id}
+              items={returnableItems}
+              labels={{
+                trigger: isAr ? 'تسجيل إرجاع' : 'Record a return',
+                title: isAr ? 'تسجيل إرجاع' : 'Record a return',
+                body: isAr
+                  ? 'يتم إرسال قرار الاسترداد إلى القسم المالي يدوياً — لا يوجد استرداد تلقائي.'
+                  : 'The refund decision is forwarded to finance manually — no automatic refund processing.',
+                reason: isAr ? 'سبب الإرجاع' : 'Reason',
+                reasonPlaceholder: isAr
+                  ? 'مثال: تالف عند الاستلام'
+                  : 'e.g. damaged on arrival',
+                refundDecision: isAr ? 'قرار الاسترداد' : 'Refund decision',
+                refundDecisionOptions: {
+                  PENDING: isAr ? 'بانتظار المراجعة' : 'Pending review',
+                  APPROVED_CASH: isAr ? 'استرداد نقدي' : 'Cash refund',
+                  APPROVED_CARD_MANUAL: isAr
+                    ? 'استرداد بطاقة (يدوي)'
+                    : 'Card refund (manual)',
+                  DENIED: isAr ? 'مرفوض' : 'Denied',
+                },
+                refundAmount: isAr
+                  ? 'قيمة الاسترداد (جنيه)'
+                  : 'Refund amount (EGP)',
+                note: isAr ? 'ملاحظات داخلية' : 'Internal note',
+                notePlaceholder: isAr
+                  ? 'للفريق فقط — لا تظهر للعميل'
+                  : 'Team-only — not shown to the customer',
+                items: isAr ? 'المنتجات المُرجَعة' : 'Returned items',
+                itemQty: isAr ? 'الكمية القصوى:' : 'Max qty:',
+                confirm: isAr ? 'تسجيل الإرجاع' : 'Record return',
+                cancel: isAr ? 'إلغاء' : 'Cancel',
+              }}
+            />
+          </div>
+          {order.returns.length === 0 ? (
+            <p className="text-sm italic text-muted-foreground">
+              {isAr ? 'لا توجد إرجاعات.' : 'No returns yet.'}
+            </p>
+          ) : (
+            <ul className="space-y-3">
+              {order.returns.map((r) => (
+                <li
+                  key={r.id}
+                  className="rounded-md border bg-paper/40 p-3 text-sm"
+                >
+                  <div className="mb-1 flex items-start justify-between gap-3">
+                    <div>
+                      <p className="font-medium">{r.reason}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {new Date(r.createdAt).toLocaleString(
+                          isAr ? 'ar-EG' : 'en-US',
+                        )}
+                      </p>
+                    </div>
+                    <span className="rounded bg-muted px-2 py-0.5 text-xs font-medium">
+                      {r.refundDecision}
                     </span>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {isAr ? 'عدد البنود:' : 'Items:'} {r.items.length} ·
+                    {r.refundAmountEgp
+                      ? ` ${isAr ? 'المبلغ:' : 'Amount:'} ${r.refundAmountEgp.toString()} EGP`
+                      : ''}
+                  </p>
+                  {r.note ? (
+                    <p className="mt-1 whitespace-pre-line text-xs italic text-muted-foreground">
+                      {r.note}
+                    </p>
                   ) : null}
-                </span>
-              </li>
-            ))}
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        <section className="rounded-md border bg-background p-4 text-sm md:col-span-2">
+          <h2 className="mb-3 text-base font-semibold">
+            {isAr ? 'الملاحظات' : 'Notes'}
+          </h2>
+          <OrderNotesEditor
+            orderId={order.id}
+            initialInternal={order.internalNotes}
+            initialCustomer={order.customerNotes}
+            labels={{
+              sectionTitle: isAr ? 'الملاحظات' : 'Notes',
+              internal: isAr ? 'ملاحظات داخلية' : 'Internal notes',
+              internalHelp: isAr
+                ? 'لا تظهر للعميل مطلقاً — للفريق فقط'
+                : 'Never shown to the customer — team-only',
+              customer: isAr
+                ? 'ملاحظات تُعرض للعميل'
+                : 'Customer-visible notes',
+              customerHelp: isAr
+                ? 'تظهر في صفحة تفاصيل الطلب للعميل'
+                : "Rendered on the customer's order detail page",
+              save: isAr ? 'حفظ الملاحظات' : 'Save notes',
+              saved: isAr ? 'تم الحفظ' : 'Saved',
+              empty: isAr ? '—' : '—',
+            }}
+          />
+        </section>
+
+        <section className="rounded-md border bg-background p-4 text-sm md:col-span-2">
+          <h2 className="mb-4 text-base font-semibold">
+            {isAr ? 'سجل الحالة' : 'Timeline'}
+          </h2>
+          <ol className="relative space-y-5 ps-6">
+            <span
+              className="absolute bottom-1 start-2 top-1 w-px bg-border"
+              aria-hidden
+            />
+            {order.statusEvents.map((e, idx) => {
+              const isCurrent = idx === order.statusEvents.length - 1;
+              return (
+                <li key={e.id} className="relative">
+                  <span
+                    className={`absolute start-[-1.0625rem] top-1 h-3 w-3 rounded-full border-2 border-background ${
+                      isCurrent ? 'bg-accent-strong' : 'bg-muted-foreground/60'
+                    }`}
+                    aria-hidden
+                  />
+                  <div className="flex flex-col">
+                    <span
+                      className={`font-medium ${
+                        isCurrent ? 'text-foreground' : 'text-muted-foreground'
+                      }`}
+                    >
+                      {statusLabel(e.status as OrderStatusKey)}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(e.createdAt).toLocaleString(
+                        isAr ? 'ar-EG' : 'en-US',
+                      )}
+                    </span>
+                    {e.note ? (
+                      <span className="mt-1 text-muted-foreground">
+                        {e.note}
+                      </span>
+                    ) : null}
+                  </div>
+                </li>
+              );
+            })}
           </ol>
         </section>
       </div>

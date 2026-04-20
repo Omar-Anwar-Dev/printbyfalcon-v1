@@ -53,7 +53,9 @@
       "products": "Products",
       "brands": "Brands",
       "categories": "Categories",
-      "printerModels": "Printer Models"
+      "printerModels": "Printer Models",
+      "orders": "Orders",
+      "couriers": "Couriers"
     },
     "common": {
       "create": "Create",

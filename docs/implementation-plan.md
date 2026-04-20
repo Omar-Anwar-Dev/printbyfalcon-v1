@@ -46,7 +46,7 @@
 ### Day 3 (Wed Apr 22)
 - **S1-D3-T1** [M] (D1) Set up Auth.js (NextAuth v5) with **Credentials** provider for B2B (email + bcrypt). *Acceptance:* test seeded admin can log in via local API call.
 - **S1-D3-T2** [L] (D2) Docker Compose stack for **production** AND **staging** on the same VPS: Next.js (prod + staging), Postgres (prod + staging), Nginx config with separate server blocks, env file separation (`.env.production`, `.env.staging`). *Acceptance:* both stacks start; `staging.<domain>` and main domain resolve correctly. *Dep:* T2 (D2).
-- **S1-D3-T3** [L] (D3) Submit **WhatsApp message templates** to Meta for approval: `auth_otp_ar`, `order_confirmed_ar`, `order_status_change_ar`, `b2b_pending_review_ar`, `payment_failed_ar` (5 templates). *Acceptance:* all 5 in "Pending review". *Risk:* HIGH (3–5 business day approval — critical path for Sprint 5).
+- ~~**S1-D3-T3** [L] (D3) Submit **WhatsApp message templates** to Meta for approval~~ — **obsolete per ADR-033 (2026-04-20):** WhatsApp transport switched from Meta Cloud API to Whats360 (third-party middleware). Whats360 sends arbitrary text, so Meta template pre-approval is no longer a critical-path dependency. Message bodies live in `lib/whatsapp/templates.ts` server-side.
 
 ### Day 4 (Thu Apr 23)
 - **S1-D4-T1** [M] (D1) GitHub Actions CI: lint + typecheck + unit tests on PR; on merge to `main`, build + deploy to staging via SSH. *Acceptance:* test PR triggers CI; merge deploys to staging. *Dep:* T1, T2 (D2).
@@ -301,13 +301,13 @@
 
 ### Day 2 (Tue Jun 16)
 - **S5-D2-T1** [L] (D1) Admin order detail page (`/admin/orders/[id]`): full info, status action panel (state-machine-aware buttons), courier handoff modal (courier select, waybill, expected delivery date with auto-suggest from zone defaults). *Acceptance:* status changes work via admin UI; modal flows correctly.
-- **S5-D2-T2** [M] (D2) Worker job `notify-status-change`: sends WhatsApp via Meta Cloud API using approved template. Records `Notification` row. *Acceptance:* test status change sends WhatsApp message to test phone.
-- **S5-D2-T3** [M] (D3) WhatsApp delivery webhook at `POST /api/webhooks/whatsapp` (Meta delivery status callbacks): updates `Notification.status` (`sent`, `delivered`, `read`, `failed`). *Acceptance:* webhook updates statuses.
+- **S5-D2-T2** [M] (D2) Worker job `notify-status-change`: composes bilingual status-change message via `lib/whatsapp/templates.ts` and sends via Whats360 `/api/v1/send-text` per ADR-033. Records `Notification` row (`PENDING → SENT` / `FAILED`). *Acceptance:* test status change sends real WhatsApp message to owner's device.
+- **S5-D2-T3** [M] (D3) Whats360 inbound webhook at `POST /api/webhooks/whats360`: validates `X-Webhook-Token` against `WHATS360_WEBHOOK_SECRET`, processes `send failure` events → flips matching `Notification.status = FAILED`, processes `subscription expiry` events → emits admin alert. *Acceptance:* simulated failure event flips a notification row.
 
 ### Day 3 (Wed Jun 17)
 - **S5-D3-T1** [M] (D1) Admin order list bulk actions: select multiple orders → "Mark as Handed to Courier" with shared courier assignment modal. *Acceptance:* 5 orders updated in single action.
 - **S5-D3-T2** [M] (D2) Admin: customer-visible **order notes** field (separate from internal notes). Customer-visible note shows on the order detail page. *Acceptance:* notes show correctly on each side.
-- **S5-D3-T3** [M] (D3) Order status notification template logic: per-status WhatsApp templates (`order_packed_ar`, `order_handed_ar`, `order_out_for_delivery_ar`, `order_delivered_ar`) — ensure all are submitted to Meta if not already. *Acceptance:* templates approved or in queue.
+- **S5-D3-T3** [S] (D3) Status-change message renderers in `lib/whatsapp/templates.ts`: `orderConfirmed`, `orderStatusChange` (parameterized by status label), `orderDelayed`, `paymentFailed`, `orderCancelledApproved`, `b2bPendingReview`. Bilingual (AR + EN) renderers, each producing `{ body: string }`. No external approval step per ADR-033. *Acceptance:* vitest suite renders each template in both locales against a fixture order.
 
 ### Day 4 (Thu Jun 18)
 - **S5-D4-T1** [M] (D1) Customer-side "Cancel Order" button (only available pre-`HandedToCourier`). Submits cancellation request → admin queue. *Acceptance:* request submitted; status doesn't change yet.
@@ -329,7 +329,7 @@
 ### Day 7 (Tue Jun 23)
 - **S5-D7-T1** [M] (D1) "Delayed / Issue" exception state: admin sets with required note; customer sees clear message + reason. *Acceptance:* delayed state notifies customer + shows on order page.
 - **S5-D7-T2** [M] (D2) Returns log table + admin UI to record returns (no self-serve; admin enters reason, items, refund decision). *Acceptance:* admin can record a return.
-- **S5-D7-T3** [M] (D3) WhatsApp delivery failure handling: if message fails (recipient blocked, invalid number, etc.), retry once, then mark notification failed and admin alert. *Acceptance:* simulated failure surfaces alert.
+- **S5-D7-T3** [M] (D3) Whats360 send-failure handling: on non-2xx response from `/api/v1/send-text` (401 token-bad, 403 quota, 5xx transient, network timeout) retry once with 10s backoff, then mark `Notification.status = FAILED` with the Whats360 error message + admin alert. Same path handles inbound `send failure` webhook events (post-dispatch failures). *Acceptance:* simulated 403 + simulated network timeout each flip a notification row to FAILED and surface an admin alert.
 
 ### Day 8 (Wed Jun 24)
 - **S5-D8-T1** [M] (D1) Order detail page: invoice download placeholder button (full PDF generation in S6). *Acceptance:* button visible.
@@ -854,7 +854,8 @@ v2 (Arab market expansion) is a **separate initiative** of comparable scope to M
 |---|---|---|---|---|---|
 | **R1** | Paymob merchant approval delayed beyond Sprint 4 (M0) | Medium | High | Apply Sprint 1 day 1 with all docs ready; have Paymob support contact escalation path | Owner |
 | ~~**R2**~~ | ~~Fawry merchant approval delayed~~ — **closed by ADR-022 (Fawry dropped from MVP)**. New risk: lack of pay-at-outlet may suppress B2C in cash-economy segments — monitor COD share + cart-abandonment after launch | n/a | n/a | Revisit via Paymob Accept outlet-payment integration if needed | Owner |
-| **R3** | WhatsApp templates rejected by Meta or delayed | Medium | High | Submit Sprint 1 day 3; have backup SMS provider as fallback if templates fail | D3 |
+| ~~**R3**~~ | ~~WhatsApp templates rejected by Meta or delayed~~ — **closed by ADR-033 (Whats360 adopted, no Meta template dependency)**. Replaced by **R3-v2** below | n/a | n/a | — | — |
+| **R3-v2** | Whats360 account suspension or WhatsApp ban on the store's device number | Low | High | Failover to Meta Cloud API documented in ADR-033 (~3–5 business days to re-provision + 5 template approvals); email fallback for B2B orders; admin dashboard device-status widget (Sprint 5) alerts on disconnect | Owner |
 | **R4** | Catalog data team delivers SKUs slowly (images, AR copy, compatibility mappings) | High | High | Kick off Sprint 2 with clear deliverable schedule; partial data acceptable for M0; full data needed for M1 | Owner / data lead |
 | **R5** | Eid al-Adha (Sprint 3) reduces working days more than estimated | High | Medium | Plan Sprint 3 with reduced scope; carry remainder into Sprint 4 if needed | Tech lead |
 | **R6** | Memory pressure on KVM2 with combined prod + staging stacks | Medium | High | Monitor with Netdata; alerts at 90%; if hit, separate staging to KVM1 mid-sprint | D2 |

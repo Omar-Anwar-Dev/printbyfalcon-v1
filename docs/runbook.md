@@ -58,8 +58,9 @@ Nginx on the host terminates TLS (Let's Encrypt) and routes by hostname to the l
 | `AUTH_SECRET` | Signs session cookies | Generate new 32-char random, update env file, `docker compose restart app`. **Invalidates every session.** |
 | `DATABASE_URL` | Postgres connection | Change DB password: `ALTER USER pbf_prod WITH PASSWORD ...` in psql, update env, restart |
 | `OWNER_TEMP_PASSWORD` | Seeded on first boot only | Seed ignores on subsequent boots; rotate Owner via `/admin/change-password` UI |
-| `WHATSAPP_CLOUD_API_TOKEN` | Meta Cloud API | Meta Business → System Users → regenerate token |
-| `WHATSAPP_WEBHOOK_VERIFY_TOKEN` | Validates Meta → us webhook calls | Generate new UUID, update env + update webhook in Meta dashboard |
+| `WHATS360_TOKEN` | Whats360 API auth (sends + account mgmt) | Whats360 dashboard → API settings → regenerate token; update env + `docker compose restart app worker` |
+| `WHATS360_INSTANCE_ID` | Identifies the QR-attached device sending WhatsApp | Whats360 dashboard → Devices; instance_id is stable unless the device is deleted and re-created |
+| `WHATS360_WEBHOOK_SECRET` | `X-Webhook-Token` header check on `POST /api/webhooks/whats360` | Generate new 32-char hex, update env, update the `X-Webhook-Token` header value in Whats360 dashboard webhook config |
 | `SMTP_PASS` | Hostinger SMTP | hPanel → Emails → reset password, update env, restart |
 | `PAYMOB_API_KEY` | Paymob server auth | Paymob dashboard → Developers → rotate; update env, restart |
 | `PAYMOB_HMAC_SECRET` | Verifies webhook payloads | Same flow — rotate in Paymob dashboard first, then env |
@@ -283,12 +284,14 @@ ssh deploy@VPS 'docker compose ... logs --since 1h app | grep createOrderAction'
 3. Kill a runaway: `SELECT pg_cancel_backend(<pid>);` — then terminate if needed: `SELECT pg_terminate_backend(<pid>);`
 4. Sustained load → upgrade VPS to KVM3 (Hostinger support, in-place on same IP).
 
-### 8.5 WhatsApp OTPs not arriving
+### 8.5 WhatsApp OTPs / status notifications not arriving (Whats360 — per ADR-033)
 
-1. Is `OTP_DEV_MODE=false` in prod env? If `true`, codes are logged not sent.
-2. Meta Business → WhatsApp Business → Template status. If rejected/pending → dev mode stays on.
-3. Meta Business → System Users → token expired? Regenerate.
-4. Meta webhook URL correct? Should be `https://printbyfalcon.com/api/webhooks/whatsapp` (Sprint 5 work — until then this section is pre-emptive).
+1. Is `OTP_DEV_MODE=false` in prod env? If `true`, codes are logged not sent. Same check for `NOTIFICATIONS_DEV_MODE` for order-status sends.
+2. Is the Whats360 device connected? `curl "https://whats360.live/api/v1/instances/status?token=$WHATS360_TOKEN&instance_id=$WHATS360_INSTANCE_ID"`. If disconnected, re-scan the QR at `/api/v1/instances/qr-page` on the scanned device's phone.
+3. `WHATS360_TOKEN` expired or regenerated in dashboard? Reads as 401 from `/api/v1/send-text`. Fix: copy new token from Whats360 dashboard → update env → `docker compose restart app worker`.
+4. 403 responses = plan quota exceeded. Check Whats360 dashboard plan usage; upgrade or wait for rollover.
+5. Whats360 webhook URL set in dashboard? Should be `https://printbyfalcon.com/api/webhooks/whats360` with `X-Webhook-Token` header value matching `WHATS360_WEBHOOK_SECRET` in env.
+6. Check the `Notification` table for recent `FAILED` rows with error_message — that's where Whats360's failure reasons land: `SELECT created_at, status, error_message FROM "Notification" ORDER BY created_at DESC LIMIT 20;`
 
 ### 8.6 Storage (`/var/pbf/storage`) disk space runaway
 
