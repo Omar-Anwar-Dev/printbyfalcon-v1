@@ -14,7 +14,6 @@ export const runtime = 'nodejs';
  * Whats360 custom-webhook receiver (Sprint 5 S5-D2-T3 · ADR-033).
  *
  *   POST /api/webhooks/whats360
- *   headers: { "X-Webhook-Token": <WHATS360_WEBHOOK_SECRET> }
  *   body:    { event, message_id?, phone?, message?, status?, reason?, ... }
  *
  * Whats360 lets us subscribe to 4 event types per their docs:
@@ -29,11 +28,21 @@ export const runtime = 'nodejs';
  * (critical admin alert via audit log + error log). The other two are logged
  * at info level so traffic is observable without touching state.
  *
- * Auth: constant-time compare against WHATS360_WEBHOOK_SECRET. Bad/absent
- * header → 401 (not 403/404, so the failure mode is obvious in logs). No
- * secret set in env → we reject everything (fail-closed). Like the Paymob
- * webhook we always return 200 on logical errors (bad state, unknown event)
- * so Whats360 doesn't retry-storm — anything unusual is in the logs.
+ * Auth: the Whats360 dashboard exposes a single "Secret" field but does not
+ * document where in the HTTP request that secret arrives. Rather than guess,
+ * we accept the secret from ANY of the common locations and verify with
+ * constant-time equality:
+ *   - Headers: X-Webhook-Token, X-Webhook-Secret, X-Secret, X-Signature,
+ *              Authorization (raw or "Bearer <secret>")
+ *   - Query params: ?secret, ?token, ?webhook_secret
+ *   - JSON body fields: secret, token, webhook_secret, signature
+ * After the first successful live webhook we log which location actually
+ * carried the value (without the value itself) — if a single convention
+ * emerges we can tighten this to one location in a follow-up.
+ *
+ * No secret set in env → fail-closed (401). Missing secret in request → 401.
+ * Like the Paymob webhook we return 200 on logical errors so Whats360 doesn't
+ * retry-storm — anything unusual ends up in the logs.
  */
 export async function POST(request: Request) {
   const expected = process.env.WHATS360_WEBHOOK_SECRET;
@@ -45,26 +54,86 @@ export async function POST(request: Request) {
     );
   }
 
-  const supplied = request.headers.get('x-webhook-token') ?? '';
-  if (!constantTimeEq(expected, supplied)) {
-    logger.warn(
-      { suppliedLength: supplied.length },
-      'whats360.webhook.auth_failed',
-    );
-    return NextResponse.json(
-      { status: 'error', message: 'invalid webhook token' },
-      { status: 401 },
-    );
-  }
-
+  // Parse the body first so we can also check body-level secret candidates.
+  // `request.text()` is safe to call before a failed-auth 401 — this handler
+  // is only reachable through Cloudflare + our own Nginx proxy; a pre-auth
+  // body read adds no new attack surface vs the prior header-only check.
+  const rawBody = await request.text();
   let body: Record<string, unknown> = {};
   try {
-    body = (await request.json()) as Record<string, unknown>;
+    body = rawBody ? (JSON.parse(rawBody) as Record<string, unknown>) : {};
   } catch {
     logger.warn({}, 'whats360.webhook.invalid_json');
     return NextResponse.json(
       { status: 'error', message: 'invalid json' },
       { status: 400 },
+    );
+  }
+
+  const url = new URL(request.url);
+  const authHeader = request.headers.get('authorization') ?? '';
+  const authToken = authHeader.startsWith('Bearer ')
+    ? authHeader.slice('Bearer '.length).trim()
+    : authHeader.trim();
+
+  const candidates: { location: string; value: string }[] = [
+    {
+      location: 'header:x-webhook-token',
+      value: request.headers.get('x-webhook-token') ?? '',
+    },
+    {
+      location: 'header:x-webhook-secret',
+      value: request.headers.get('x-webhook-secret') ?? '',
+    },
+    {
+      location: 'header:x-secret',
+      value: request.headers.get('x-secret') ?? '',
+    },
+    {
+      location: 'header:x-signature',
+      value: request.headers.get('x-signature') ?? '',
+    },
+    { location: 'header:authorization', value: authToken },
+    { location: 'query:secret', value: url.searchParams.get('secret') ?? '' },
+    { location: 'query:token', value: url.searchParams.get('token') ?? '' },
+    {
+      location: 'query:webhook_secret',
+      value: url.searchParams.get('webhook_secret') ?? '',
+    },
+    {
+      location: 'body:secret',
+      value:
+        pickWhats360String(body, [
+          'secret',
+          'token',
+          'webhook_secret',
+          'signature',
+        ]) ?? '',
+    },
+  ].filter((c) => c.value.length > 0);
+
+  const matchedLocation = candidates.find((c) =>
+    constantTimeEq(expected, c.value),
+  )?.location;
+
+  // Diagnostic log (presence only, never the value) so we can observe the
+  // actual Whats360 convention from real staging traffic.
+  logger.info(
+    {
+      candidatePresence: candidates.map((c) => c.location),
+      matchedLocation: matchedLocation ?? null,
+    },
+    'whats360.webhook.auth_debug',
+  );
+
+  if (!matchedLocation) {
+    logger.warn(
+      { candidateCount: candidates.length },
+      'whats360.webhook.auth_failed',
+    );
+    return NextResponse.json(
+      { status: 'error', message: 'invalid webhook token' },
+      { status: 401 },
     );
   }
 
