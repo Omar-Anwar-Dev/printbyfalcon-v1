@@ -367,7 +367,7 @@ Grouped by persona. Each MVP story has an explicit acceptance criterion. (Compre
 | Sessions | DB-backed (no Redis) | Simpler infrastructure | ADR-010 |
 | Auth | Auth.js (NextAuth v5) — custom WhatsApp OTP + Credentials providers | Two-flow split fits B2C vs B2B segments | ADR-005 |
 | Payment | Paymob hosted iframe (card + Paymob-Fawry sub-integration) + COD | Egypt-native, lower PCI burden; single Paymob merchant account covers card + Fawry (ADR-025) | (Phase 3) |
-| WhatsApp | Meta WhatsApp Cloud API (direct) | Free auth templates, no middleman fees | (Phase 3) |
+| WhatsApp | Whats360 (third-party middleware; HTTP GET send API + QR-attached device) | No Meta template approvals; owner-subscribed; Meta Cloud API kept as documented failover | ADR-033 |
 | File storage | VPS disk + Cloudflare Free CDN at edge | Adequate at MVP scale; B2 deferred to v1.1 | ADR-011, ADR-024 |
 | PDF generation | react-pdf | JSX templating fits team's React skills | (Phase 3) |
 | Transactional email | Hostinger SMTP | Already paid for | (Phase 3) |
@@ -470,7 +470,7 @@ Full details in [docs/architecture.md](architecture.md).
 |---|---|---|---|
 | 1 | Final domain name (`printbyfalcon.com` or alternative) | Owner | Sprint 1 day 1 |
 | 2 | Sales team's existing WhatsApp number (for support bridge) | Owner | Sprint 1 day 1 |
-| 3 | New WhatsApp Cloud API phone number procurement | Owner | Sprint 1 |
+| ~~3~~ | ~~New WhatsApp Cloud API phone number procurement~~ — **closed per ADR-033**: Whats360 used instead; device number procured and QR-scanned by owner | — | — |
 | 4 | Paymob merchant account application docs ready (CR, tax card, bank) | Owner | Sprint 1 day 1 |
 | ~~5~~ | ~~Fawry merchant account application docs ready~~ — **dropped per ADR-022** | — | — |
 | ~~6~~ | ~~Hostinger CDN actually included on KVM2~~ — **resolved 2026-04-19**: not included; ADR-023 keeps MVP CDN-less | — | — |
@@ -494,3 +494,4 @@ Full details in [docs/architecture.md](architecture.md).
 | 2026-04-19 | No CDN in MVP — direct Nginx serving with strong cache headers | ADR-023 — Hostinger CDN unavailable on KVM2; Cloudflare excluded by ADR-011 |
 | 2026-04-19 | Adopt Cloudflare Free as CDN/DNS/TLS/DDoS/WAF edge | ADR-024 — supersedes ADR-023; reverses "no Cloudflare" part of ADR-011 |
 | 2026-04-19 | Re-introduce Fawry pay-at-outlet via Paymob Accept sub-integration | ADR-025 — partially amends ADR-022; cost driver eliminated when Paymob auto-provisioned the sub-integration |
+| 2026-04-20 | Switch WhatsApp transport from Meta Cloud API to Whats360 | ADR-033 — drops Meta template-approval bottleneck; owner already subscribed to Whats360; Meta Cloud API documented as failover |

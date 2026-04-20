@@ -9,6 +9,8 @@ export async function AdminNav() {
     { href: '/admin/brands', label: t('brands') },
     { href: '/admin/categories', label: t('categories') },
     { href: '/admin/printer-models', label: t('printerModels') },
+    { href: '/admin/orders', label: t('orders') },
+    { href: '/admin/couriers', label: t('couriers') },
   ];
   return (
     <nav className="flex flex-col gap-1 p-4 text-sm">

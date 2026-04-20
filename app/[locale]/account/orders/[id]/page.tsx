@@ -3,6 +3,11 @@ import type { Metadata } from 'next';
 import { prisma } from '@/lib/db';
 import { getOptionalUser } from '@/lib/auth';
 import { formatEgp } from '@/lib/catalog/price';
+import {
+  ORDER_STATUS_LABELS,
+  type OrderStatusKey,
+} from '@/lib/whatsapp-templates';
+import { CancelOrderButton } from '@/components/account/cancel-order-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -33,10 +38,31 @@ export default async function OrderDetailPage({
     include: {
       items: { orderBy: { createdAt: 'asc' } },
       statusEvents: { orderBy: { createdAt: 'asc' } },
+      courier: { select: { nameAr: true, nameEn: true, phone: true } },
     },
   });
   if (!order) notFound();
   if (order.userId !== user.id && user.type !== 'ADMIN') notFound();
+
+  const statusLocale: 'ar' | 'en' = isAr ? 'ar' : 'en';
+  const statusLabel = (s: OrderStatusKey) =>
+    ORDER_STATUS_LABELS[s][statusLocale];
+  const courierName = order.courier
+    ? isAr
+      ? order.courier.nameAr
+      : order.courier.nameEn
+    : null;
+  const courierPhone =
+    order.courierPhoneSnapshot ?? order.courier?.phone ?? null;
+
+  const canRequestCancel =
+    (order.status === 'PENDING_CONFIRMATION' || order.status === 'CONFIRMED') &&
+    !order.cancellationRequestedAt;
+  const cancelRequestedPending =
+    order.cancellationRequestedAt && !order.cancellationResolvedAt;
+  const cancelRequestDenied =
+    order.cancellationResolution === 'DENIED' &&
+    order.cancellationResolvedAt !== null;
 
   const addr = order.addressSnapshot as {
     recipientName: string;
@@ -67,7 +93,9 @@ export default async function OrderDetailPage({
           <dt className="text-xs text-muted-foreground">
             {isAr ? 'الحالة' : 'Status'}
           </dt>
-          <dd className="font-medium">{order.status}</dd>
+          <dd className="font-medium">
+            {statusLabel(order.status as OrderStatusKey)}
+          </dd>
         </div>
         <div>
           <dt className="text-xs text-muted-foreground">
@@ -81,6 +109,144 @@ export default async function OrderDetailPage({
           </dt>
           <dd className="font-medium">{order.paymentStatus}</dd>
         </div>
+      </section>
+
+      {courierName || order.waybill || order.expectedDeliveryDate ? (
+        <section className="mb-6 rounded-md border bg-background p-4 text-sm">
+          <h2 className="mb-3 text-base font-semibold">
+            {isAr ? 'الشحن' : 'Shipping'}
+          </h2>
+          <dl className="grid gap-3 md:grid-cols-3">
+            {courierName ? (
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  {isAr ? 'شركة الشحن' : 'Courier'}
+                </dt>
+                <dd className="font-medium">{courierName}</dd>
+                {courierPhone ? (
+                  <dd>
+                    <a
+                      href={`tel:${courierPhone}`}
+                      className="text-accent-strong hover:underline"
+                      dir="ltr"
+                    >
+                      {courierPhone}
+                    </a>
+                  </dd>
+                ) : null}
+              </div>
+            ) : null}
+            {order.waybill ? (
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  {isAr ? 'رقم البوليصة' : 'Waybill'}
+                </dt>
+                <dd className="font-mono">{order.waybill}</dd>
+              </div>
+            ) : null}
+            {order.expectedDeliveryDate ? (
+              <div>
+                <dt className="text-xs text-muted-foreground">
+                  {isAr ? 'التسليم المتوقع' : 'Expected delivery'}
+                </dt>
+                <dd>
+                  {new Date(order.expectedDeliveryDate).toLocaleDateString(
+                    isAr ? 'ar-EG' : 'en-US',
+                  )}
+                </dd>
+              </div>
+            ) : null}
+          </dl>
+        </section>
+      ) : null}
+
+      {order.customerNotes ? (
+        <section className="mb-6 rounded-md border border-accent-strong/30 bg-accent-soft/40 p-4 text-sm">
+          <h2 className="mb-1 text-sm font-semibold text-accent-strong">
+            {isAr ? 'ملاحظة من المتجر' : 'A note from the shop'}
+          </h2>
+          <p className="whitespace-pre-line text-foreground">
+            {order.customerNotes}
+          </p>
+        </section>
+      ) : null}
+
+      {cancelRequestedPending ? (
+        <section className="mb-6 rounded-md border border-warning/30 bg-warning/10 p-4 text-sm">
+          <p className="font-medium">
+            {isAr
+              ? 'تم استلام طلب الإلغاء — سنتواصل معك قريباً.'
+              : 'Cancellation request received — we will be in touch soon.'}
+          </p>
+          {order.cancellationReason ? (
+            <p className="mt-1 text-xs text-muted-foreground">
+              {isAr ? 'السبب: ' : 'Reason: '}
+              {order.cancellationReason}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {cancelRequestDenied ? (
+        <section className="mb-6 rounded-md border border-destructive/30 bg-destructive/5 p-4 text-sm">
+          <p className="font-medium">
+            {isAr ? 'تم رفض طلب الإلغاء.' : 'Cancellation request was denied.'}
+          </p>
+          {order.cancellationResolutionNote ? (
+            <p className="mt-1 whitespace-pre-line text-xs text-muted-foreground">
+              {order.cancellationResolutionNote}
+            </p>
+          ) : null}
+        </section>
+      ) : null}
+
+      {canRequestCancel ? (
+        <section className="mb-6 flex items-center justify-between rounded-md border bg-background p-4 text-sm">
+          <p className="text-muted-foreground">
+            {isAr
+              ? 'لم نسلّم الطلب للشحن بعد — يمكنك طلب إلغائه.'
+              : "We haven't handed your order to the courier yet — you can request cancellation."}
+          </p>
+          <CancelOrderButton
+            orderId={order.id}
+            labels={{
+              trigger: isAr ? 'طلب إلغاء' : 'Request cancellation',
+              title: isAr ? 'طلب إلغاء الطلب' : 'Request order cancellation',
+              body: isAr
+                ? 'سنراجع طلبك ونؤكد الإلغاء عبر الواتساب خلال ساعات العمل.'
+                : "We'll review your request and confirm via WhatsApp during business hours.",
+              reason: isAr ? 'سبب الإلغاء (اختياري)' : 'Reason (optional)',
+              reasonPlaceholder: isAr
+                ? 'مثال: لم تعد لدي حاجة للمنتج'
+                : 'e.g. no longer need the item',
+              confirm: isAr ? 'إرسال الطلب' : 'Submit request',
+              cancel: isAr ? 'إلغاء' : 'Cancel',
+              error: isAr ? 'خطأ' : 'Error',
+            }}
+          />
+        </section>
+      ) : null}
+
+      <section className="mb-6 flex items-center justify-between rounded-md border bg-background p-4 text-sm">
+        <div>
+          <h2 className="text-base font-semibold">
+            {isAr ? 'الفاتورة' : 'Invoice'}
+          </h2>
+          <p className="text-xs text-muted-foreground">
+            {isAr
+              ? 'تنزيل PDF متاح بعد تأكيد الطلب — يتم تفعيله قريباً.'
+              : 'PDF download available after order confirmation — coming soon.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled
+          className="inline-flex h-9 cursor-not-allowed items-center rounded-md border bg-muted px-3 text-sm font-medium text-muted-foreground"
+          aria-disabled="true"
+          title={isAr ? 'متاح في Sprint 6' : 'Available in Sprint 6'}
+        >
+          {isAr ? 'تنزيل PDF' : 'Download PDF'}
+        </button>
       </section>
 
       <section className="mb-6 rounded-md border bg-background p-4">
@@ -144,23 +310,42 @@ export default async function OrderDetailPage({
       </section>
 
       <section className="rounded-md border bg-background p-4">
-        <h2 className="mb-3 text-base font-semibold">
+        <h2 className="mb-4 text-base font-semibold">
           {isAr ? 'تاريخ الحالة' : 'Status timeline'}
         </h2>
-        <ol className="space-y-2 text-sm">
-          {order.statusEvents.map((e) => (
-            <li key={e.id} className="flex gap-3">
-              <span className="text-xs text-muted-foreground">
-                {new Date(e.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}
-              </span>
-              <span>
-                <span className="font-medium">{e.status}</span>
-                {e.note ? (
-                  <span className="block text-muted-foreground">{e.note}</span>
-                ) : null}
-              </span>
-            </li>
-          ))}
+        <ol className="relative space-y-6 ps-6 text-sm">
+          <span
+            className="absolute bottom-1 start-2 top-1 w-px bg-border"
+            aria-hidden
+          />
+          {order.statusEvents.map((e, idx) => {
+            const isCurrent = idx === order.statusEvents.length - 1;
+            return (
+              <li key={e.id} className="relative">
+                <span
+                  className={`absolute start-[-1.0625rem] top-1 h-3 w-3 rounded-full border-2 border-background ${
+                    isCurrent ? 'bg-accent-strong' : 'bg-muted-foreground/60'
+                  }`}
+                  aria-hidden
+                />
+                <div className="flex flex-col">
+                  <span
+                    className={`font-medium ${isCurrent ? 'text-foreground' : 'text-muted-foreground'}`}
+                  >
+                    {statusLabel(e.status as OrderStatusKey)}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    {new Date(e.createdAt).toLocaleString(
+                      isAr ? 'ar-EG' : 'en-US',
+                    )}
+                  </span>
+                  {e.note ? (
+                    <span className="mt-1 text-muted-foreground">{e.note}</span>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
         </ol>
       </section>
     </div>

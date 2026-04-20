@@ -53,7 +53,9 @@
       "products": "المنتجات",
       "brands": "العلامات التجارية",
       "categories": "التصنيفات",
-      "printerModels": "موديلات الطابعات"
+      "printerModels": "موديلات الطابعات",
+      "orders": "الطلبات",
+      "couriers": "شركات الشحن"
     },
     "common": {
       "create": "إضافة",

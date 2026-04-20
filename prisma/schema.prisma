@@ -46,19 +46,19 @@ enum Locale {
 }
 
 model User {
-  id                   String     @id @default(cuid())
-  type                 UserType
-  name                 String
-  phone                String?    @unique
-  email                String?    @unique
-  passwordHash         String?    // null for B2C (OTP-only)
-  adminRole            AdminRole? // only for type=ADMIN
-  status               UserStatus @default(ACTIVE)
-  languagePref         Locale     @default(AR)
-  mustChangePassword   Boolean    @default(false)
-  lastLoginAt          DateTime?
-  createdAt            DateTime   @default(now())
-  updatedAt            DateTime   @updatedAt
+  id                 String     @id @default(cuid())
+  type               UserType
+  name               String
+  phone              String?    @unique
+  email              String?    @unique
+  passwordHash       String? // null for B2C (OTP-only)
+  adminRole          AdminRole? // only for type=ADMIN
+  status             UserStatus @default(ACTIVE)
+  languagePref       Locale     @default(AR)
+  mustChangePassword Boolean    @default(false)
+  lastLoginAt        DateTime?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
 
   sessions       Session[]
   passwordResets PasswordReset[]
@@ -66,46 +66,48 @@ model User {
   addresses      Address[]       @relation("UserAddresses")
   cart           Cart?           @relation("UserCart")
   orders         Order[]         @relation("UserOrders")
+  notifications  Notification[]  @relation("UserNotifications")
+  authoredReturns Return[]       @relation("ReturnAuthor")
 
   @@index([type, status])
 }
 
 model Session {
-  id           String   @id @default(cuid())
-  token        String   @unique // hashed; the raw token lives only in the cookie
-  userId       String
-  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  deviceLabel  String?
-  ipAddress    String?
-  userAgent    String?
-  expiresAt    DateTime
-  lastSeenAt   DateTime @default(now())
-  createdAt    DateTime @default(now())
+  id          String   @id @default(cuid())
+  token       String   @unique // hashed; the raw token lives only in the cookie
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deviceLabel String?
+  ipAddress   String?
+  userAgent   String?
+  expiresAt   DateTime
+  lastSeenAt  DateTime @default(now())
+  createdAt   DateTime @default(now())
 
   @@index([userId])
   @@index([expiresAt])
 }
 
 model WhatsAppOtp {
-  id         String   @id @default(cuid())
-  phone      String
-  codeHash   String   // SHA-256 of the 6-digit code
-  attempts   Int      @default(0)
-  expiresAt  DateTime
-  usedAt     DateTime?
-  createdAt  DateTime @default(now())
+  id        String    @id @default(cuid())
+  phone     String
+  codeHash  String // SHA-256 of the 6-digit code
+  attempts  Int       @default(0)
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([phone, createdAt])
 }
 
 model PasswordReset {
-  id         String   @id @default(cuid())
-  userId     String
-  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  tokenHash  String   @unique
-  expiresAt  DateTime
-  usedAt     DateTime?
-  createdAt  DateTime @default(now())
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
   @@index([userId])
 }
@@ -144,11 +146,11 @@ model RateLimit {
 // -------------------------------------------------------------------------
 
 model Setting {
-  key         String   @id
-  value       Json
-  updatedBy   String?
-  updatedAt   DateTime @updatedAt
-  createdAt   DateTime @default(now())
+  key       String   @id
+  value     Json
+  updatedBy String?
+  updatedAt DateTime @updatedAt
+  createdAt DateTime @default(now())
 }
 
 // -------------------------------------------------------------------------
@@ -205,30 +207,30 @@ model Category {
 }
 
 model Product {
-  id            String        @id @default(cuid())
-  sku           String        @unique
+  id            String                   @id @default(cuid())
+  sku           String                   @unique
   brandId       String
-  brand         Brand         @relation(fields: [brandId], references: [id], onDelete: Restrict)
+  brand         Brand                    @relation(fields: [brandId], references: [id], onDelete: Restrict)
   categoryId    String
-  category      Category      @relation(fields: [categoryId], references: [id], onDelete: Restrict)
-  slug          String        @unique
+  category      Category                 @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  slug          String                   @unique
   nameAr        String
   nameEn        String
-  descriptionAr String        @db.Text
-  descriptionEn String        @db.Text
+  descriptionAr String                   @db.Text
+  descriptionEn String                   @db.Text
   // free-form key/value bag: `{ "printSpeed": "35 ppm", "pageYield": 3000 }`.
   // Shape isn't enforced at DB level; admin UI provides a key/value editor.
-  specs         Json          @default("{}")
-  basePriceEgp  Decimal       @db.Decimal(10, 2)
-  vatExempt     Boolean       @default(false)
-  authenticity  Authenticity  @default(GENUINE)
-  status        CatalogStatus @default(ACTIVE)
+  specs         Json                     @default("{}")
+  basePriceEgp  Decimal                  @db.Decimal(10, 2)
+  vatExempt     Boolean                  @default(false)
+  authenticity  Authenticity             @default(GENUINE)
+  status        CatalogStatus            @default(ACTIVE)
   // Full-text search vector — populated by `lib/catalog/search-vector.ts` on
   // product create/update + brand rename. GIN index added by scripts/post-push.ts
   // (db push doesn't emit indexes on Unsupported types).
   searchVector  Unsupported("tsvector")?
-  createdAt     DateTime      @default(now())
-  updatedAt     DateTime      @updatedAt
+  createdAt     DateTime                 @default(now())
+  updatedAt     DateTime                 @updatedAt
 
   images                ProductImage[]
   compatibilities       ProductCompatibility[]
@@ -326,22 +328,22 @@ enum Governorate {
 }
 
 model Address {
-  id             String   @id @default(cuid())
-  userId         String?
-  user           User?    @relation("UserAddresses", fields: [userId], references: [id], onDelete: Cascade)
+  id            String      @id @default(cuid())
+  userId        String?
+  user          User?       @relation("UserAddresses", fields: [userId], references: [id], onDelete: Cascade)
   // Recipient info — snapshot to allow guest checkout without a User row.
-  recipientName  String
-  phone          String
-  governorate    Governorate
-  city           String
-  area           String?
-  street         String
-  building       String?
-  apartment      String?
-  notes          String?
-  isDefault      Boolean  @default(false)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  recipientName String
+  phone         String
+  governorate   Governorate
+  city          String
+  area          String?
+  street        String
+  building      String?
+  apartment     String?
+  notes         String?
+  isDefault     Boolean     @default(false)
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
 
   @@index([userId, isDefault])
 }
@@ -351,13 +353,13 @@ model Address {
 // -------------------------------------------------------------------------
 
 model Cart {
-  id         String     @id @default(cuid())
-  userId     String?    @unique
-  user       User?      @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
-  sessionKey String?    @unique // for guest carts; migrated to userId on sign-in
+  id         String    @id @default(cuid())
+  userId     String?   @unique
+  user       User?     @relation("UserCart", fields: [userId], references: [id], onDelete: Cascade)
+  sessionKey String?   @unique // for guest carts; migrated to userId on sign-in
   expiresAt  DateTime?
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
 
   items CartItem[]
 }
@@ -381,7 +383,7 @@ model CartItem {
 // -------------------------------------------------------------------------
 
 enum InventoryReservationType {
-  CART  // 15-min TTL soft hold
+  CART // 15-min TTL soft hold
   ORDER // firm hold until order terminal state
 }
 
@@ -394,23 +396,23 @@ enum InventoryMovementType {
 }
 
 model Inventory {
-  productId          String   @id
-  product            Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
-  currentQty         Int      @default(0)
-  lowStockThreshold  Int?
-  updatedAt          DateTime @updatedAt
+  productId         String   @id
+  product           Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  currentQty        Int      @default(0)
+  lowStockThreshold Int?
+  updatedAt         DateTime @updatedAt
 }
 
 model InventoryReservation {
-  id         String                   @id @default(cuid())
-  type       InventoryReservationType
-  productId  String
-  product    Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  id        String                   @id @default(cuid())
+  type      InventoryReservationType
+  productId String
+  product   Product                  @relation(fields: [productId], references: [id], onDelete: Cascade)
   // CART reservations: refId = CartItem.id. ORDER reservations: refId = OrderItem.id.
-  refId      String
-  qty        Int
-  expiresAt  DateTime?                // null for ORDER-type (until terminal state)
-  createdAt  DateTime                 @default(now())
+  refId     String
+  qty       Int
+  expiresAt DateTime? // null for ORDER-type (until terminal state)
+  createdAt DateTime                 @default(now())
 
   @@index([productId, expiresAt])
   @@index([refId])
@@ -418,15 +420,15 @@ model InventoryReservation {
 }
 
 model InventoryMovement {
-  id         String                @id @default(cuid())
-  productId  String
-  product    Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
-  type       InventoryMovementType
-  qtyDelta   Int                   // positive for RECEIVE/RETURN, negative for SALE/ADJUST-down
-  reason     String?
-  refId      String?               // order_id, adjustment_id, etc.
-  actorId    String?
-  createdAt  DateTime              @default(now())
+  id        String                @id @default(cuid())
+  productId String
+  product   Product               @relation(fields: [productId], references: [id], onDelete: Cascade)
+  type      InventoryMovementType
+  qtyDelta  Int // positive for RECEIVE/RETURN, negative for SALE/ADJUST-down
+  reason    String?
+  refId     String? // order_id, adjustment_id, etc.
+  actorId   String?
+  createdAt DateTime              @default(now())
 
   @@index([productId, createdAt])
 }
@@ -441,7 +443,7 @@ enum OrderType {
 }
 
 enum OrderStatus {
-  PENDING_CONFIRMATION   // B2B Submit-for-Review only
+  PENDING_CONFIRMATION // B2B Submit-for-Review only
   CONFIRMED
   HANDED_TO_COURIER
   OUT_FOR_DELIVERY
@@ -453,9 +455,9 @@ enum OrderStatus {
 
 enum PaymentMethod {
   PAYMOB_CARD
-  PAYMOB_FAWRY        // Sprint 9 via Paymob sub-integration
+  PAYMOB_FAWRY // Sprint 9 via Paymob sub-integration
   COD
-  SUBMIT_FOR_REVIEW   // B2B path (S6+)
+  SUBMIT_FOR_REVIEW // B2B path (S6+)
 }
 
 enum PaymentStatus {
@@ -467,80 +469,155 @@ enum PaymentStatus {
 }
 
 model Order {
-  id              String         @id @default(cuid())
+  id          String    @id @default(cuid())
   /// Human-readable ID: `ORD-YY-DDMM-NNNNN` — daily-reset serial per ADR-019.
-  orderNumber     String         @unique
-  userId          String?
-  user            User?          @relation("UserOrders", fields: [userId], references: [id], onDelete: SetNull)
-  type            OrderType      @default(B2C)
+  orderNumber String    @unique
+  userId      String?
+  user        User?     @relation("UserOrders", fields: [userId], references: [id], onDelete: SetNull)
+  type        OrderType @default(B2C)
 
   // Guest-checkout snapshot fields (also populated for logged-in users for stability).
-  contactName     String
-  contactPhone    String
-  contactEmail    String?
+  contactName  String
+  contactPhone String
+  contactEmail String?
 
   // Address snapshot — JSON so the order stays legible even if the Address row later changes.
   addressSnapshot Json
 
-  status          OrderStatus    @default(CONFIRMED)
-  paymentMethod   PaymentMethod
-  paymentStatus   PaymentStatus  @default(PENDING)
+  status        OrderStatus   @default(CONFIRMED)
+  paymentMethod PaymentMethod
+  paymentStatus PaymentStatus @default(PENDING)
 
-  subtotalEgp     Decimal        @db.Decimal(10, 2)
-  shippingEgp     Decimal        @db.Decimal(10, 2) @default(0)
-  discountEgp     Decimal        @db.Decimal(10, 2) @default(0)
-  vatEgp          Decimal        @db.Decimal(10, 2) @default(0)
-  totalEgp        Decimal        @db.Decimal(10, 2)
+  subtotalEgp Decimal @db.Decimal(10, 2)
+  shippingEgp Decimal @default(0) @db.Decimal(10, 2)
+  discountEgp Decimal @default(0) @db.Decimal(10, 2)
+  vatEgp      Decimal @default(0) @db.Decimal(10, 2)
+  totalEgp    Decimal @db.Decimal(10, 2)
 
   // Paymob correlation — populated when paymentMethod is a Paymob flow.
-  paymobOrderId        String?
-  paymobTransactionId  String?   @unique
+  paymobOrderId       String?
+  paymobTransactionId String? @unique
 
-  internalNotes   String?
-  customerNotes   String?
+  // Courier handoff — populated when the order transitions to HANDED_TO_COURIER.
+  courierId            String?
+  courier              Courier?  @relation(fields: [courierId], references: [id], onDelete: SetNull)
+  courierPhoneSnapshot String? // snapshot so the customer-facing page survives courier edits
+  waybill              String?
+  expectedDeliveryDate DateTime?
 
-  createdAt       DateTime       @default(now())
-  updatedAt       DateTime       @updatedAt
-  confirmedAt     DateTime?
-  deliveredAt     DateTime?
+  internalNotes String?
+  customerNotes String?
+
+  // Cancellation request (Sprint 5 S5-D4): customer requests cancel pre-HandedToCourier;
+  // admin approves (→ status=CANCELLED + reservation release) or denies (resolution recorded).
+  // Null `cancellationRequestedAt` = no request ever. `cancellationResolvedAt` null while pending.
+  cancellationRequestedAt     DateTime?
+  cancellationReason          String?
+  cancellationResolvedAt      DateTime?
+  cancellationResolution      CancellationResolution?
+  cancellationResolutionNote  String?
+  cancellationResolvedById    String?
+
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  confirmedAt DateTime?
+  deliveredAt DateTime?
 
   items         OrderItem[]
   statusEvents  OrderStatusEvent[]
+  notifications Notification[]
+  returns       Return[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
   @@index([paymentMethod, paymentStatus])
   @@index([createdAt])
+  @@index([courierId])
+  // Fast filter for the admin cancellation queue: pending cancellations
+  // (requested but not resolved). `resolvedAt IS NULL AND requestedAt IS NOT NULL`.
+  @@index([cancellationRequestedAt, cancellationResolvedAt])
+}
+
+enum CancellationResolution {
+  APPROVED
+  DENIED
+}
+
+// ---------------------------------------------------------------------------
+// Returns (Sprint 5 S5-D7-T2)
+// Customer messages via WhatsApp; admin records a Return row here with the
+// decision (per ADR-033 resolution). No self-serve return UI in MVP — the
+// admin types it in, picks the refund path, and the Whats360 message to the
+// customer goes out via the existing notification pipeline.
+// ---------------------------------------------------------------------------
+
+enum RefundDecision {
+  PENDING
+  APPROVED_CASH
+  APPROVED_CARD_MANUAL
+  DENIED
+}
+
+model Return {
+  id                String          @id @default(cuid())
+  orderId           String
+  order             Order           @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  reason            String
+  refundDecision    RefundDecision  @default(PENDING)
+  refundAmountEgp   Decimal?        @db.Decimal(10, 2)
+  note              String?
+  createdById       String?
+  createdBy         User?           @relation("ReturnAuthor", fields: [createdById], references: [id], onDelete: SetNull)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
+
+  items             ReturnItem[]
+
+  @@index([orderId])
+  @@index([refundDecision, createdAt])
+}
+
+model ReturnItem {
+  id          String   @id @default(cuid())
+  returnId    String
+  return      Return   @relation(fields: [returnId], references: [id], onDelete: Cascade)
+  orderItemId String
+  orderItem   OrderItem @relation(fields: [orderItemId], references: [id], onDelete: Cascade)
+  qty         Int
+
+  @@index([returnId])
 }
 
 model OrderItem {
-  id                String   @id @default(cuid())
-  orderId           String
-  order             Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  productId         String?
-  product           Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
+  id             String   @id @default(cuid())
+  orderId        String
+  order          Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId      String?
+  product        Product? @relation(fields: [productId], references: [id], onDelete: SetNull)
   // Snapshots — preserve line-item details even if the product is later edited/archived.
-  skuSnapshot       String
-  nameArSnapshot    String
-  nameEnSnapshot    String
-  qty               Int
-  unitPriceEgp      Decimal  @db.Decimal(10, 2)
-  lineTotalEgp      Decimal  @db.Decimal(10, 2)
-  vatEgp            Decimal  @db.Decimal(10, 2) @default(0)
-  createdAt         DateTime @default(now())
+  skuSnapshot    String
+  nameArSnapshot String
+  nameEnSnapshot String
+  qty            Int
+  unitPriceEgp   Decimal  @db.Decimal(10, 2)
+  lineTotalEgp   Decimal  @db.Decimal(10, 2)
+  vatEgp         Decimal  @default(0) @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+
+  returnItems    ReturnItem[]
 
   @@index([orderId])
   @@index([productId])
 }
 
 model OrderStatusEvent {
-  id         String       @id @default(cuid())
-  orderId    String
-  order      Order        @relation(fields: [orderId], references: [id], onDelete: Cascade)
-  status     OrderStatus
-  note       String?
-  actorId    String?
-  createdAt  DateTime     @default(now())
+  id        String      @id @default(cuid())
+  orderId   String
+  order     Order       @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  status    OrderStatus
+  note      String?
+  actorId   String?
+  createdAt DateTime    @default(now())
 
   @@index([orderId, createdAt])
 }
@@ -548,9 +625,65 @@ model OrderStatusEvent {
 /// Per-day order-serial counter — `ORD-YY-DDMM-NNNNN` daily reset (ADR-019).
 /// Row keyed by `YYYYMMDD` int; SERIALIZABLE increment in generateOrderNumber().
 model OrderDailySequence {
-  id          Int      @id   // YYYYMMDD
-  lastSerial  Int      @default(0)
-  updatedAt   DateTime @updatedAt
+  id         Int      @id // YYYYMMDD
+  lastSerial Int      @default(0)
+  updatedAt  DateTime @updatedAt
+}
+
+// -------------------------------------------------------------------------
+// Couriers — admin-editable partner list used at HANDED_TO_COURIER transition.
+// -------------------------------------------------------------------------
+
+model Courier {
+  id        String   @id @default(cuid())
+  nameAr    String
+  nameEn    String
+  phone     String? // default contact line (overridable per-order at handoff)
+  position  Int      @default(0) // sort order in admin dropdowns
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  orders Order[]
+
+  @@index([active, position])
+}
+
+// -------------------------------------------------------------------------
+// Notifications — append-only send log (worker-managed, Whats360 + SMTP).
+// -------------------------------------------------------------------------
+
+enum NotificationChannel {
+  WHATSAPP
+  EMAIL
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+model Notification {
+  id                String              @id @default(cuid())
+  userId            String?
+  user              User?               @relation("UserNotifications", fields: [userId], references: [id], onDelete: SetNull)
+  channel           NotificationChannel
+  /// Logical template key (e.g. `order.statusChange`, `otp`, `order.confirmed`).
+  template          String
+  /// Rendered payload at enqueue time — phone/email, body text, subject, etc.
+  payload           Json
+  relatedOrderId    String?
+  relatedOrder      Order?              @relation(fields: [relatedOrderId], references: [id], onDelete: SetNull)
+  status            NotificationStatus  @default(PENDING)
+  externalMessageId String? // Whats360 id or SMTP message-id
+  errorMessage      String?
+  createdAt         DateTime            @default(now())
+  sentAt            DateTime?
+
+  @@index([status, createdAt])
+  @@index([userId, createdAt])
+  @@index([relatedOrderId])
 }
 
 // -------------------------------------------------------------------------
@@ -561,8 +694,8 @@ model AuditLog {
   id         String   @id @default(cuid())
   actorId    String?
   actor      User?    @relation("ActorAuditLogs", fields: [actorId], references: [id], onDelete: SetNull)
-  action     String   // e.g., "auth.login", "user.create", "order.status_change"
-  entityType String?  // e.g., "User", "Order"
+  action     String // e.g., "auth.login", "user.create", "order.status_change"
+  entityType String? // e.g., "User", "Order"
   entityId   String?
   before     Json?
   after      Json?

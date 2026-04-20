@@ -674,3 +674,53 @@ Status: Accepted
 - Deploy cadence (sprint → staging → verify → prod → next sprint) per owner's 2026-04-19 preference — unchanged.
 - Schema sync via `prisma db push --accept-data-loss` in both envs per Sprint 1 pattern — still open as Sprint 11 parking lot (switch to `migrate deploy`).
 - Backup strategy (nightly `pg_dump` + Hostinger snapshots, 14d retention, no off-site) per ADR-014 — unchanged; now documented in runbook §9 instead of scattered.
+
+---
+
+## ADR-033: Switch WhatsApp messaging from Meta Cloud API to Whats360 — supersedes ADR-011/PRD §6/arch §8.3 on WhatsApp transport
+Date: 2026-04-20 (Sprint 5 kickoff)
+Status: Accepted with vendor-risk acknowledged
+
+**Context:** PRD §6, architecture §8.3, and the Sprint 1 template-approval tasks (S1-D3-T3) all assumed Meta WhatsApp Cloud API as the transport. Sprint 4 shipped with `lib/whatsapp.ts` scaffolded for Meta Cloud API and `OTP_DEV_MODE=true` while awaiting Meta template approvals (`auth_otp_ar`, `order_confirmed_ar`, etc. — each 3-5 business-day approval). The Sprint 5 plan (S5-D3-T3) would have added 4 more per-status templates, extending the approval bottleneck. At Sprint 5 kickoff the owner reported they've subscribed to **Whats360** — a third-party service that exposes an HTTP GET send API (`/api/v1/send-text`, `/api/v1/send-image`, `/api/v1/send-doc`) backed by a QR-attached WhatsApp device — and will use it instead of Meta's official Cloud API.
+
+**Decision:** **All WhatsApp outbound (OTP, order confirmation, status change, B2B review acknowledgement, delayed/issue, cancellation approval, payment failure) is sent via Whats360's REST API.** The concept of pre-approved Meta "templates" is dropped entirely — messages are composed server-side as plain AR/EN text and sent with one HTTP GET per recipient.
+
+**Concrete configuration:**
+- **Base URL:** `https://whats360.live` (configurable via `WHATS360_BASE_URL` env for sandbox/mocks).
+- **Credentials:** `WHATS360_TOKEN` + `WHATS360_INSTANCE_ID` in `.env.staging` and `.env.production`. The token is a 64-char hex; instance_id looks like `device_<random>`.
+- **JID format:** Egyptian mobile `201XXXXXXXXX@s.whatsapp.net` (country code without +, no leading zero).
+- **Send flow:** `GET https://whats360.live/api/v1/send-text?token=...&instance_id=...&jid=<phone>@s.whatsapp.net&msg=<urlencoded-text>`. Success = `{"success": true, ...}`. 403 = rate-limit / quota exceeded.
+- **Dev mode:** `NOTIFICATIONS_DEV_MODE=true` (new, mirrors `OTP_DEV_MODE`) skips the HTTP call and logs the payload. `OTP_DEV_MODE=true` continues to short-circuit the OTP flow independently. Prod flips both to `false` once the Whats360 device is confirmed connected and the staging smoke test has sent a real message end-to-end.
+- **Sandbox flag:** `&sandbox=true` appended in non-prod envs to exercise the API without billing real sends (per Whats360 docs).
+- **Inbound (delivery-status / receive):** Whats360's "custom webhook" delivers `outgoing message`, `send failure`, `incoming message`, and `subscription expiry` events to `POST /api/webhooks/whats360` (new endpoint). Used to mark `Notification.status` as `sent`/`failed` and to alert admin on subscription expiry. Unlike Meta, there is no per-message `delivered`/`read` status — we capture `sent` (we dispatched) and `failed` (Whats360 couldn't send), and treat anything not explicitly failed as delivered.
+- **Auth:** Whats360 webhooks include a shared secret header (`X-Webhook-Token`) we compare against `WHATS360_WEBHOOK_SECRET` before processing.
+
+**Alternatives reconsidered:**
+- **Stay on Meta Cloud API with 5 collapsed templates** — rejected. Owner has already subscribed to Whats360; Meta's template-approval coordination would still gate the Sprint 5 demo by 3–5 business days per template.
+- **Run both (Meta primary, Whats360 fallback)** — rejected; doubles the integration surface and branching logic for zero MVP value. One transport, clear code path.
+- **Roll our own WhatsApp integration via whatsapp-web.js or Baileys** — rejected. Same risk shape as Whats360 (unofficial), much more infrastructure (persistent session management, QR re-scan handling, WhatsApp blocks); Whats360 takes that on as SaaS.
+
+**Consequences:**
+- **Template approval blocker evaporates.** Sprint 5 ships real WhatsApp delivery end-to-end as soon as the device is connected — no 3-5 day wait. `order_status_change_ar` / `order_confirmed_ar` / etc. are now server-side template strings in `lib/whatsapp/templates.ts`, rendered bilingually with customer's `languagePref`.
+- **Vendor concentration risk — new.** Whats360 becomes a single point of failure for OTP + all order notifications. If Whats360 suspends our account, the device disconnects, or WhatsApp bans the underlying number (unofficial API risk), our entire WhatsApp channel goes dark. **Fallback path:** ~3-5 business days to provision Meta Cloud API + re-submit the 5 templates (unchanged from pre-MVP plan); code abstraction in `lib/whatsapp.ts` keeps the send surface small so the transport swap is a single-file change. Email remains as the parallel channel for B2B orders (per PRD Feature 5).
+- **Device uptime is now an operational concern.** The physical phone scanning the QR must stay powered + connected. Owner action: keep the store's new business number's device powered and data-enabled. Admin dashboard gets a "Whats360 device status" widget in Sprint 5 that polls `/api/v1/instances/status` every 5 minutes.
+- **PII now flows through Whats360's servers.** Customer phone + message body (which includes order number, status, name) are readable by Whats360 while in transit. Risk acceptance: same shape as Cloudflare proxy (ADR-024); no card data ever passes through. Documented in privacy-policy placeholder for M1-eve legal review.
+- **No per-message delivered/read tracking.** Sprint 5's `Notification.status` uses `PENDING` → `SENT` (on success response) or `FAILED` (on exception / 4xx / 5xx / webhook `send failure` event). We drop the Meta-specific `DELIVERED`/`READ` states from the plan; the `Notification.status` enum is `PENDING | SENT | FAILED` (no `DELIVERED | READ`).
+- **Rate limits shift.** Meta auth templates were free; utility templates were ~$0.01–0.03 each. Whats360 limit = "depends on your current plan" per their docs. S5-D8-T3's "5 per phone per hour" app-side limiter stays (protects customers from spam); Whats360's own plan limit is a separate concern owner tracks in the Whats360 dashboard.
+- **No changes to `OTP_DEV_MODE` semantics.** Sprint 1's OTP dev-mode (prints code in server logs, bypasses WhatsApp) remains a dev-only affordance. `NOTIFICATIONS_DEV_MODE` is analogous for order status notifications.
+
+**Supersedes / amends:**
+- **ADR-011** "WhatsApp Cloud API (direct) — free auth templates, no middleman fees." → WhatsApp transport is now Whats360 (explicit middleman, subscription-based). The "free auth templates" rationale no longer applies; the decision driver is template-approval-free setup, not cost.
+- **PRD §6** tech-stack row "WhatsApp — Meta WhatsApp Cloud API (direct)" → "Whats360 (third-party middleware)".
+- **Architecture §8.3** "Meta WhatsApp Cloud API" section → Whats360 section (send endpoints, JID format, custom webhook model, device uptime concern).
+- **Implementation-plan S1-D3-T3** (template submissions) → closed as obsolete; no Meta templates to submit.
+- **Implementation-plan S5-D2-T2 / S5-D2-T3 / S5-D3-T3 / S5-D7-T3** — rewrite WhatsApp calls to target Whats360 + consume Whats360 webhook events + drop template-approval language.
+- **Risk register R1** ("WhatsApp templates blocking launch") — **closed.** Replaced by **R-NEW-2: Whats360 service suspension / WhatsApp ban on the store's device number.** Monitor: Whats360 subscription status, device connection status, WhatsApp compliance. Mitigation: email fallback for B2B orders; documented Meta Cloud API failover path (~3-5 days to re-provision + template approvals) if Whats360 fails permanently.
+
+**Doc-side propagation (done in Sprint 5 docs-pass task before any WhatsApp code change):**
+- PRD §6 row updated
+- architecture §8.3 rewritten
+- implementation-plan Sprint 1 / Sprint 5 entries amended
+- runbook §5 (secrets table) adds `WHATS360_TOKEN`, `WHATS360_INSTANCE_ID`, `WHATS360_WEBHOOK_SECRET` rows; removes Meta WhatsApp rows (kept as "future-fallback" comment)
+- Risk register R1 closed, R-NEW-2 added
+- memory `project_print_by_falcon.md` WhatsApp note updated

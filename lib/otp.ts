@@ -5,7 +5,8 @@
 import { prisma } from '@/lib/db';
 import { generateNumericOtp, sha256Hex } from '@/lib/crypto';
 import { logger } from '@/lib/logger';
-import { sendWhatsAppTemplate } from '@/lib/whatsapp';
+import { sendWhatsApp } from '@/lib/whatsapp';
+import { renderOtp, type SupportedLocale } from '@/lib/whatsapp-templates';
 
 const OTP_TTL_MINUTES = 5;
 const OTP_MAX_ATTEMPTS = 3;
@@ -14,11 +15,12 @@ export type OtpRequestResult =
   | { ok: true; devCode?: string }
   | { ok: false; errorKey: string };
 
-export type OtpVerifyResult =
-  | { ok: true }
-  | { ok: false; errorKey: string };
+export type OtpVerifyResult = { ok: true } | { ok: false; errorKey: string };
 
-export async function issueOtp(phone: string): Promise<OtpRequestResult> {
+export async function issueOtp(
+  phone: string,
+  locale: SupportedLocale = 'ar',
+): Promise<OtpRequestResult> {
   const code = generateNumericOtp(6);
   const codeHash = sha256Hex(code);
   const expiresAt = new Date(Date.now() + OTP_TTL_MINUTES * 60 * 1000);
@@ -33,12 +35,9 @@ export async function issueOtp(phone: string): Promise<OtpRequestResult> {
     data: { phone, codeHash, expiresAt },
   });
 
-  const sendResult = await sendWhatsAppTemplate({
-    to: phone,
-    template: 'auth_otp_ar',
-    languageCode: 'ar',
-    bodyParams: [code],
-    buttonParam: code,
+  const sendResult = await sendWhatsApp({
+    phone,
+    body: renderOtp(code, locale),
   });
 
   if (!sendResult.ok) {
