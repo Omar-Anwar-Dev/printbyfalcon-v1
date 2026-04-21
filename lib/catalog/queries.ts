@@ -5,6 +5,8 @@
  */
 import { prisma } from '@/lib/db';
 import { productImageUrl } from '@/lib/storage/paths';
+import { getStockStatus, type StockStatus } from '@/lib/catalog/stock';
+import { getGlobalLowStockThreshold } from '@/lib/settings/inventory';
 
 export type ProductSort = 'newest' | 'price-asc' | 'price-desc';
 
@@ -21,6 +23,7 @@ export type ProductListItem = {
   primaryImageUrl: string | null;
   brand: { nameAr: string; nameEn: string; slug: string };
   category: { nameAr: string; nameEn: string; slug: string };
+  stockStatus: StockStatus;
 };
 
 function orderByFor(sort: ProductSort) {
@@ -59,7 +62,7 @@ export async function listActiveProducts({
     category: { status: 'ACTIVE' as const },
   };
 
-  const [total, rows] = await Promise.all([
+  const [total, rows, globalThreshold] = await Promise.all([
     prisma.product.count({ where }),
     prisma.product.findMany({
       where,
@@ -74,8 +77,12 @@ export async function listActiveProducts({
           take: 1,
           select: { filename: true },
         },
+        inventory: {
+          select: { currentQty: true, lowStockThreshold: true },
+        },
       },
     }),
+    getGlobalLowStockThreshold(),
   ]);
 
   const items: ProductListItem[] = rows.map((p) => ({
@@ -91,6 +98,10 @@ export async function listActiveProducts({
       : null,
     brand: p.brand,
     category: p.category,
+    stockStatus: getStockStatus(
+      { status: p.status, inventory: p.inventory },
+      globalThreshold,
+    ),
   }));
 
   return {

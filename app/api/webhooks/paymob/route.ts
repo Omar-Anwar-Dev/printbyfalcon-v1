@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { prisma } from '@/lib/db';
 import { verifyPaymobHmac } from '@/lib/payments/paymob';
+import { ensureInvoiceForOrder } from '@/lib/invoices/ensure';
+import { sendInvoiceToCustomer } from '@/lib/invoices/delivery';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -145,6 +147,18 @@ export async function POST(request: Request) {
       });
     });
     logger.info({ orderId: order.id, txnId }, 'paymob.webhook.order_paid');
+
+    // Sprint 6 — fire invoice delivery on PAID. Best-effort; failure here
+    // doesn't block the webhook's 200 response so Paymob never retries.
+    try {
+      const { invoiceId } = await ensureInvoiceForOrder(order.id, null);
+      if (invoiceId) await sendInvoiceToCustomer(invoiceId);
+    } catch (err) {
+      logger.error(
+        { err: (err as Error).message, orderId: order.id },
+        'paymob.webhook.invoice_delivery_failed',
+      );
+    }
   } else {
     await prisma.$transaction(async (tx) => {
       await tx.order.update({

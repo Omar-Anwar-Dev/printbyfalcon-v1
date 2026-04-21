@@ -11,6 +11,7 @@ import { cleanupExpiredSessions } from '@/lib/session';
 import { cleanupExpiredOtps } from '@/lib/otp';
 import { releaseExpiredCartReservations } from '@/lib/cart/stock';
 import { reconcileStalePaymobOrders } from '@/lib/order/reconciliation';
+import { sendLowStockDigest } from '@/lib/inventory/digest';
 import { registerEmailJob } from './jobs/send-email';
 import { registerWhatsAppJob } from './jobs/send-whatsapp';
 import { registerHeartbeatJob } from './jobs/heartbeat';
@@ -112,6 +113,23 @@ async function main() {
     const { checked, updated } = await reconcileStalePaymobOrders();
     if (checked > 0) {
       logger.warn({ checked, updated }, 'reconcile.paymob.done');
+    }
+  });
+
+  // Sprint 6: low-stock digest (daily 08:00 Africa/Cairo).
+  await boss.createQueue('low-stock-digest');
+  await boss.schedule(
+    'low-stock-digest',
+    '0 8 * * *',
+    {},
+    { tz: 'Africa/Cairo' },
+  );
+  await boss.work<Record<string, never>>('low-stock-digest', async () => {
+    const { rows, enqueued } = await sendLowStockDigest();
+    if (rows > 0) {
+      logger.warn({ rows, enqueued }, 'low_stock_digest.sent');
+    } else {
+      logger.info('low_stock_digest.empty');
     }
   });
 

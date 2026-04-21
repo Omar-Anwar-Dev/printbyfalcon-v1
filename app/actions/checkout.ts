@@ -36,6 +36,8 @@ import { generateOrderNumber } from '@/lib/order/order-number';
 import { createPaymentKey } from '@/lib/payments/paymob';
 import { enqueueJob } from '@/lib/queue';
 import { renderOrderConfirmationEmail } from '@/lib/email/order-confirmation';
+import { ensureInvoiceForOrder } from '@/lib/invoices/ensure';
+import { sendInvoiceToCustomer } from '@/lib/invoices/delivery';
 import { logger } from '@/lib/logger';
 
 type ActionOk<T> = { ok: true; data: T };
@@ -154,119 +156,160 @@ export async function createOrderAction(
     notes: toNullable(parsed.data.address.notes),
   };
 
-  const result = await prisma.$transaction(async (tx) => {
-    const orderNumber = await generateOrderNumber(tx);
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const orderNumber = await generateOrderNumber(tx);
 
-    // For COD, mark the order Confirmed with payment_status=PENDING_ON_DELIVERY.
-    // For Paymob card, mark Confirmed (stock reserved) with payment_status=PENDING;
-    // the webhook flips to PAID.
-    const paymentMethod: PaymentMethod =
-      parsed.data.paymentMethod === 'COD' ? 'COD' : 'PAYMOB_CARD';
+      // For COD, mark the order Confirmed with payment_status=PENDING_ON_DELIVERY.
+      // For Paymob card, mark Confirmed (stock reserved) with payment_status=PENDING;
+      // the webhook flips to PAID.
+      const paymentMethod: PaymentMethod =
+        parsed.data.paymentMethod === 'COD' ? 'COD' : 'PAYMOB_CARD';
 
-    const order = await tx.order.create({
-      data: {
-        orderNumber,
-        userId: user?.type === 'B2C' ? user.id : null,
-        type: 'B2C',
-        contactName: parsed.data.contact.name,
-        contactPhone: parsed.data.contact.phone,
-        contactEmail: toNullable(parsed.data.contact.email),
-        addressSnapshot: addressSnapshot as never,
-        status: 'CONFIRMED',
-        paymentMethod,
-        paymentStatus:
-          paymentMethod === 'COD' ? 'PENDING_ON_DELIVERY' : 'PENDING',
-        subtotalEgp: subtotal,
-        shippingEgp: shipping,
-        discountEgp: discount,
-        vatEgp: vat,
-        totalEgp: total,
-        customerNotes: toNullable(parsed.data.customerNotes),
-        confirmedAt: new Date(),
-      },
-    });
-
-    // Snapshotted order items.
-    await tx.orderItem.createMany({
-      data: items.map((i) => ({
-        orderId: order.id,
-        productId: i.product.id,
-        skuSnapshot: i.product.sku,
-        nameArSnapshot: i.product.nameAr,
-        nameEnSnapshot: i.product.nameEn,
-        qty: i.qty,
-        unitPriceEgp: i.unitPriceEgpSnapshot,
-        lineTotalEgp: Number(i.unitPriceEgpSnapshot) * i.qty,
-      })),
-    });
-
-    const orderItems = await tx.orderItem.findMany({
-      where: { orderId: order.id },
-      select: { id: true, productId: true, qty: true },
-    });
-
-    // Convert CART reservations → ORDER reservations (firm, no expiresAt).
-    await tx.inventoryReservation.deleteMany({
-      where: { refId: { in: reservationRefIds }, type: 'CART' },
-    });
-    await tx.inventoryReservation.createMany({
-      data: orderItems
-        .filter((oi) => oi.productId)
-        .map((oi) => ({
-          type: 'ORDER' as const,
-          productId: oi.productId!,
-          refId: oi.id,
-          qty: oi.qty,
-          expiresAt: null,
-        })),
-    });
-
-    // Decrement inventory + log movements.
-    for (const oi of orderItems) {
-      if (!oi.productId) continue;
-      await tx.inventory.update({
-        where: { productId: oi.productId },
-        data: { currentQty: { decrement: oi.qty } },
-      });
-      await tx.inventoryMovement.create({
+      const order = await tx.order.create({
         data: {
-          productId: oi.productId,
-          type: 'SALE',
-          qtyDelta: -oi.qty,
-          refId: order.id,
-          actorId: user?.id ?? null,
+          orderNumber,
+          userId: user?.type === 'B2C' ? user.id : null,
+          type: 'B2C',
+          contactName: parsed.data.contact.name,
+          contactPhone: parsed.data.contact.phone,
+          contactEmail: toNullable(parsed.data.contact.email),
+          addressSnapshot: addressSnapshot as never,
+          status: 'CONFIRMED',
+          paymentMethod,
+          paymentStatus:
+            paymentMethod === 'COD' ? 'PENDING_ON_DELIVERY' : 'PENDING',
+          subtotalEgp: subtotal,
+          shippingEgp: shipping,
+          discountEgp: discount,
+          vatEgp: vat,
+          totalEgp: total,
+          customerNotes: toNullable(parsed.data.customerNotes),
+          confirmedAt: new Date(),
         },
       });
+
+      // Snapshotted order items.
+      await tx.orderItem.createMany({
+        data: items.map((i) => ({
+          orderId: order.id,
+          productId: i.product.id,
+          skuSnapshot: i.product.sku,
+          nameArSnapshot: i.product.nameAr,
+          nameEnSnapshot: i.product.nameEn,
+          qty: i.qty,
+          unitPriceEgp: i.unitPriceEgpSnapshot,
+          lineTotalEgp: Number(i.unitPriceEgpSnapshot) * i.qty,
+        })),
+      });
+
+      const orderItems = await tx.orderItem.findMany({
+        where: { orderId: order.id },
+        select: { id: true, productId: true, qty: true },
+      });
+
+      // Convert CART reservations → ORDER reservations (firm, no expiresAt).
+      await tx.inventoryReservation.deleteMany({
+        where: { refId: { in: reservationRefIds }, type: 'CART' },
+      });
+      await tx.inventoryReservation.createMany({
+        data: orderItems
+          .filter((oi) => oi.productId)
+          .map((oi) => ({
+            type: 'ORDER' as const,
+            productId: oi.productId!,
+            refId: oi.id,
+            qty: oi.qty,
+            expiresAt: null,
+          })),
+      });
+
+      // Decrement inventory + log movements — race-safe (S6-D7-T2):
+      // `updateMany` with `currentQty >= qty` predicate only applies when
+      // there's enough stock. If count === 0 we raced another checkout for the
+      // last unit; throw to rollback the whole transaction.
+      for (const oi of orderItems) {
+        if (!oi.productId) continue;
+        const { count } = await tx.inventory.updateMany({
+          where: { productId: oi.productId, currentQty: { gte: oi.qty } },
+          data: { currentQty: { decrement: oi.qty } },
+        });
+        if (count === 0) {
+          throw new Error('cart.insufficient_stock');
+        }
+        await tx.inventoryMovement.create({
+          data: {
+            productId: oi.productId,
+            type: 'SALE',
+            qtyDelta: -oi.qty,
+            refId: order.id,
+            actorId: user?.id ?? null,
+          },
+        });
+      }
+
+      // OrderStatusEvent + AuditLog.
+      await tx.orderStatusEvent.create({
+        data: {
+          orderId: order.id,
+          status: 'CONFIRMED',
+          actorId: user?.id ?? null,
+          note:
+            paymentMethod === 'COD' ? 'COD placed' : 'Card checkout started',
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: user?.id ?? null,
+          action: 'order.create',
+          entityType: 'Order',
+          entityId: order.id,
+          after: {
+            orderNumber,
+            paymentMethod,
+            totalEgp: total,
+          } as never,
+        },
+      });
+
+      // Empty the cart — items + any stray reservations for it.
+      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+
+      return { order, orderNumber, paymentMethod };
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'cart.insufficient_stock') {
+      return { ok: false, errorKey: 'cart.insufficient_stock' };
     }
+    logger.error({ err: msg }, 'order.create.transaction_failed');
+    return { ok: false, errorKey: 'order.create_failed' };
+  }
 
-    // OrderStatusEvent + AuditLog.
-    await tx.orderStatusEvent.create({
-      data: {
-        orderId: order.id,
-        status: 'CONFIRMED',
-        actorId: user?.id ?? null,
-        note: paymentMethod === 'COD' ? 'COD placed' : 'Card checkout started',
-      },
-    });
-    await tx.auditLog.create({
-      data: {
-        actorId: user?.id ?? null,
-        action: 'order.create',
-        entityType: 'Order',
-        entityId: order.id,
-        after: {
-          orderNumber,
-          paymentMethod,
-          totalEgp: total,
-        } as never,
-      },
-    });
-
-    // Empty the cart — items + any stray reservations for it.
-    await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
-
-    return { order, orderNumber, paymentMethod };
-  });
+  // Sprint 6 (ADR-034): Invoice row allocated on CONFIRMED. No file on disk —
+  // PDF rendered on-demand from Order snapshot. Best-effort: invoice row
+  // failure shouldn't block order placement (we can back-fill later).
+  // COD sends immediately; PAYMOB_CARD waits for webhook PAID so the customer
+  // isn't handed an invoice for a payment that never lands.
+  try {
+    const invoiceOutcome = await ensureInvoiceForOrder(
+      result.order.id,
+      user?.id ?? null,
+    );
+    if (
+      invoiceOutcome.created &&
+      result.paymentMethod === 'COD' &&
+      invoiceOutcome.invoiceId
+    ) {
+      await sendInvoiceToCustomer(invoiceOutcome.invoiceId);
+    }
+  } catch (err) {
+    logger.error(
+      { err: (err as Error).message, orderId: result.order.id },
+      'order.invoice.ensure_failed',
+    );
+  }
 
   // For Paymob card, call out to their API for a payment key. If that fails,
   // we keep the order but mark it FAILED so the customer can retry.

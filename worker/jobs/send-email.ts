@@ -9,6 +9,12 @@ export type SendEmailJobPayload = {
   text?: string;
   html?: string;
   replyTo?: string;
+  /** In-memory attachments (base64-encoded bytes); used for invoice PDFs. */
+  attachments?: Array<{
+    filename: string;
+    contentBase64: string;
+    contentType?: string;
+  }>;
   /**
    * Optional Notification row id; when set, the worker flips that row's
    * status (PENDING → SENT / FAILED) after SMTP settles. Matches the

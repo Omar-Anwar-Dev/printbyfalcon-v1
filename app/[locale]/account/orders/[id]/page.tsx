@@ -44,6 +44,12 @@ export default async function OrderDetailPage({
   if (!order) notFound();
   if (order.userId !== user.id && user.type !== 'ADMIN') notFound();
 
+  const currentInvoice = await prisma.invoice.findFirst({
+    where: { orderId: order.id, isAmended: false },
+    orderBy: { version: 'desc' },
+    select: { id: true, invoiceNumber: true, version: true },
+  });
+
   const statusLocale: 'ar' | 'en' = isAr ? 'ar' : 'en';
   const statusLabel = (s: OrderStatusKey) =>
     ORDER_STATUS_LABELS[s][statusLocale];
@@ -227,27 +233,31 @@ export default async function OrderDetailPage({
         </section>
       ) : null}
 
-      <section className="mb-6 flex items-center justify-between rounded-md border bg-background p-4 text-sm">
-        <div>
-          <h2 className="text-base font-semibold">
-            {isAr ? 'الفاتورة' : 'Invoice'}
-          </h2>
-          <p className="text-xs text-muted-foreground">
-            {isAr
-              ? 'تنزيل PDF متاح بعد تأكيد الطلب — يتم تفعيله قريباً.'
-              : 'PDF download available after order confirmation — coming soon.'}
-          </p>
-        </div>
-        <button
-          type="button"
-          disabled
-          className="inline-flex h-9 cursor-not-allowed items-center rounded-md border bg-muted px-3 text-sm font-medium text-muted-foreground"
-          aria-disabled="true"
-          title={isAr ? 'متاح في Sprint 6' : 'Available in Sprint 6'}
-        >
-          {isAr ? 'تنزيل PDF' : 'Download PDF'}
-        </button>
-      </section>
+      {currentInvoice ? (
+        <section className="mb-6 flex items-center justify-between rounded-md border bg-background p-4 text-sm">
+          <div>
+            <h2 className="text-base font-semibold">
+              {isAr ? 'الفاتورة' : 'Invoice'}
+            </h2>
+            <p className="font-mono text-xs text-muted-foreground">
+              {currentInvoice.invoiceNumber}
+              {currentInvoice.version > 1
+                ? isAr
+                  ? ` — نسخة ${currentInvoice.version}`
+                  : ` — v${currentInvoice.version}`
+                : ''}
+            </p>
+          </div>
+          <a
+            href={`/invoices/${currentInvoice.id}.pdf`}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex h-9 items-center rounded-md border bg-background px-3 text-sm font-medium hover:bg-muted"
+          >
+            {isAr ? 'تنزيل PDF' : 'Download PDF'}
+          </a>
+        </section>
+      ) : null}
 
       <section className="mb-6 rounded-md border bg-background p-4">
         <h2 className="mb-3 text-base font-semibold">

@@ -11,7 +11,25 @@
       "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5432/pbf_dev?schema=public\" AUTH_SECRET=\"test-only-not-a-real-secret-test-only-32ch\" npx next build)",
       "Bash(npm ls *)",
       "Bash(DATABASE_URL=\"postgres://x:y@localhost:5432/x?schema=public\" AUTH_SECRET=\"x\" npx tsc --noEmit)",
-      "Bash(DATABASE_URL=\"postgres://x:y@localhost:5432/x?schema=public\" AUTH_SECRET=\"test-only-not-a-real-secret-test-only-32ch\" npx next build)"
+      "Bash(DATABASE_URL=\"postgres://x:y@localhost:5432/x?schema=public\" AUTH_SECRET=\"test-only-not-a-real-secret-test-only-32ch\" npx next build)",
+      "Bash(DATABASE_URL=postgresql://pbf:pbf@localhost:5432/pbf npx prisma validate)",
+      "Bash(DATABASE_URL=postgresql://pbf:pbf@localhost:5432/pbf npx prisma generate)",
+      "Bash(DATABASE_URL=postgresql://pbf:pbf@localhost:5432/pbf npx tsc --noEmit)",
+      "Bash(curl -sL \"https://github.com/google/fonts/raw/main/ofl/notosansarabic/NotoSansArabic%5Bwdth%2Cwght%5D.ttf\" -o D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/public/fonts/NotoSansArabic.ttf)",
+      "Bash(curl -sL \"https://github.com/google/fonts/raw/main/ofl/notosansarabic/static/NotoSansArabic/NotoSansArabic-Regular.ttf\" -o D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/public/fonts/NotoSansArabic-Regular.ttf)",
+      "Bash(curl -sL \"https://github.com/google/fonts/raw/main/ofl/notosansarabic/static/NotoSansArabic/NotoSansArabic-Bold.ttf\" -o D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/public/fonts/NotoSansArabic-Bold.ttf)",
+      "Bash(curl -sL \"https://cdn.jsdelivr.net/gh/alif-type/amiri@main/amiri-regular.ttf\" -o D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/public/fonts/Amiri-Regular.ttf)",
+      "Bash(curl -sL \"https://cdn.jsdelivr.net/gh/alif-type/amiri@main/amiri-bold.ttf\" -o D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/public/fonts/Amiri-Bold.ttf)",
+      "Bash(curl -sL -o /tmp/amiri.zip \"https://github.com/alif-type/amiri/releases/download/1.000/Amiri-1.000.zip\")",
+      "Bash(unzip -jo /tmp/amiri.zip \"Amiri-1.000/amiri-regular.ttf\" \"Amiri-1.000/amiri-bold.ttf\" -d D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/public/fonts/)",
+      "Bash(DATABASE_URL=postgresql://pbf:pbf@localhost:5432/pbf npx vitest run)",
+      "Bash(DATABASE_URL=postgresql://pbf:pbf@localhost:5432/pbf npx next lint)",
+      "Bash(echo \"EXIT=$?\")",
+      "Bash(DATABASE_URL=postgresql://pbf:pbf@localhost:5432/pbf npx eslint --resolve-plugins-relative-to . lib/invoices/ lib/inventory/ app/actions/admin-inventory.ts app/actions/admin-inventory-bulk.ts app/actions/admin-invoices.ts app/actions/admin-store-info.ts)",
+      "Bash(DATABASE_URL=postgresql://pbf:pbf@localhost:5432/pbf SESSION_SECRET=dev-secret-32b INVOICE_URL_SECRET=dev-invoice-secret npx next build)",
+      "Bash(cp D:/PrintByFalcon/docs/progress.md D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/docs/progress.md)",
+      "Bash(cp D:/PrintByFalcon/docs/decisions.md D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/docs/decisions.md)",
+      "Bash(cp D:/PrintByFalcon/docs/inventory-ops-guide.md D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/docs/inventory-ops-guide.md)"
     ]
   }
 }

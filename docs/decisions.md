@@ -724,3 +724,90 @@ Status: Accepted with vendor-risk acknowledged
 - runbook §5 (secrets table) adds `WHATS360_TOKEN`, `WHATS360_INSTANCE_ID`, `WHATS360_WEBHOOK_SECRET` rows; removes Meta WhatsApp rows (kept as "future-fallback" comment)
 - Risk register R1 closed, R-NEW-2 added
 - memory `project_print_by_falcon.md` WhatsApp note updated
+
+---
+
+## ADR-034: Invoices are metadata rows + on-demand PDF rendering — no files on disk
+Date: 2026-04-21 (Sprint 6 kickoff)
+Status: Accepted · Supersedes PRD §5 Feature 7 "Storage" line + architecture §5.8 `file_path` column
+
+**Context:** PRD §5 Feature 7 originally specified permanent PDF retention at `/storage/invoices/`, and architecture §5.8 modelled `Invoice.file_path`. Sprint 6 kickoff (2026-04-21) — owner pushed back on persisting files to the VPS: "If it's possible to send a PDF file via Whats360, please send the PDF and don't save it on my computer. However, if I want to generate, download, and print the invoice on the computer where the admin panel is logged in, I should do so instead of downloading and saving it to the local host, as I want to conserve storage space."
+
+**Decision:** The `Invoice` model stores **metadata only** — `invoiceNumber`, `orderId`, `version`, `amendedFromId`, `isAmended`, `amendmentReason`, `generatedById`, `generatedAt`. **No `filePath` column.** PDFs are rendered on-demand in-memory (`@react-pdf/renderer` → `Buffer`) from the deterministic projection of:
+
+- The immutable `Order` + `OrderItem` snapshot columns (ADR-030 snapshots SKU/name/unit price/qty/VAT at create time).
+- The current `store.info` Setting KV (CR#, tax card#, address, phone — editable via `/admin/settings/store`).
+- The `Invoice` row (number, version, amendment flag + reason).
+
+Because all inputs are immutable or versioned, re-rendering the same `invoiceId` always produces semantically identical bytes; the Invoice row is the durable legal record.
+
+**Delivery paths (all in-memory):**
+1. **Signed public URL** `/invoices/[invoiceId].pdf?t=<hmac-sha256>` — renders each hit. Same URL handed to Whats360's `/api/v1/send-doc` for WhatsApp delivery, embedded in B2B confirmation emails, and opened/printed by admins.
+2. **Email attachment (B2B only per PRD Feature 5)** — renderer outputs a `Buffer`, mailer encodes as base64 for the pg-boss payload, nodemailer re-decodes at send time. Never touches disk.
+3. **Browser print (admin)** — same URL, opened inline (`Content-Disposition: inline`), admin hits browser Print.
+
+**Numbering (ADR-020 preserved):** `INV-YY-NNNNNN` gapless annual serial via `InvoiceAnnualSequence` + atomic upsert-and-return — same pattern as `OrderDailySequence`. Each amendment consumes a fresh serial; the prior version's number is retained.
+
+**Alternatives considered:**
+- **Keep `/storage/invoices/` persistent PDFs** (PRD original) — rejected by owner; storage growth isn't a real MVP issue but the simpler code path + "nothing on disk to leak or back up" properties are worth the change.
+- **Cache rendered bytes for 5 min on CDN / in memory** — partial; the `Cache-Control: private, max-age=300` on the route lets Whats360's short-lived fetch share a render with the customer's near-immediate click. Longer caches are deferred until a clear perf signal.
+- **Render TOFU (lazy one-time, then persist)** — rejected; adds the "where" question back (disk? S3? R2?) that ADR-034 was explicitly removing.
+
+**Consequences:**
+- **Legal retention (5 years per ADR-003)** satisfied by the Invoice row + deterministic regeneration. The Order/OrderItem snapshots have been in place since Sprint 4; no schema change required there.
+- **PDF rendering cost is per-request** — ~50-200 ms per render on the Hostinger KVM2 CPU. Acceptable: invoices fire at most a few times per order (CONFIRMED → one Whats360 fetch, one customer download, one admin open). No user is sitting on a download spinner measured in seconds.
+- **Arabic font** — Noto Sans Arabic TTF committed to `public/fonts/NotoSansArabic.ttf` (OFL, 844 KB). Registered once via `@react-pdf/renderer` `Font.register`; variable-font default axes are used. Adds to the image size but keeps renders CDN-free.
+- **No 404-then-regenerate fallback needed** — Invoice row has the truth; PDF is a projection.
+- **Amendment flow** — `amendInvoice(priorId, reason)` marks prior as `isAmended=true`, allocates a new number, sets `amendedFromId`. Prior version is still downloadable from admin UI for audit.
+- **Security surface** — invoice URLs need a signed token to be shareable (WhatsApp delivery, email attachment reference). Signing uses `INVOICE_URL_SECRET` (or falls back to `SESSION_SECRET`). No expiry for MVP; token is scoped per invoiceId so leak doesn't cascade. If an invoice's contents become sensitive after amendment, re-sign by rotating the env secret.
+- **Whats360 `/api/v1/send-doc`** — accepts a public URL + filename + caption. Our signed URL is self-contained — Whats360's fetcher doesn't need to carry cookies or auth.
+- **Email attachments (B2B)** — `pgboss.job.data` now carries base64 bytes. pg-boss's JSON payload size limits are generous (~16 MB default); invoice PDFs are ~60-200 KB. Fine.
+
+**Supersedes / amends:**
+- **PRD §5 Feature 7 "Storage: object storage on VPS filesystem (`/storage/invoices/`), permanent retention"** → replaced by "Rendered on demand; Invoice row + immutable Order snapshot satisfy legal retention (5 years per ADR-003). No files on disk."
+- **architecture §5.8 `Invoice | ... file_path`** → `filePath` column removed; all other fields preserved. `amendedFromId` + `amendmentReason` + `isAmended` added explicitly.
+- **implementation-plan Sprint 6 S6-D5-T2** "writes PDF to `/storage/invoices/`" → "renders in-memory, streams via `/invoices/[id].pdf`".
+- **runbook §3 secrets** — `INVOICE_URL_SECRET` added (defaults to `SESSION_SECRET` when unset; production should set its own).
+
+**Doc-side propagation (done in the Sprint 6 close-out commit):**
+- `docs/PRD.md` §5 Feature 7 Storage line updated + change-log row appended.
+- `docs/architecture.md` §5.8 `Invoice` entity updated; §8 integration notes add the signed-URL surface.
+- `docs/implementation-plan.md` Sprint 6 Day-4/Day-5 amended to point at this ADR.
+- `docs/inventory-ops-guide.md` §5 documents the lifecycle for ops staff.
+
+---
+
+## ADR-035: Inventory global low-stock threshold default — 5 units
+Date: 2026-04-21 (Sprint 6 kickoff)
+Status: Accepted · Closes PRD Open Question #12
+
+**Context:** PRD Open Question #12 asked the owner for a default low-stock threshold. No value had been set through Sprints 1–5. Sprint 6 S6-D2-T3 (dashboard widget) and S6-D3-T1 (daily digest) both need a fallback when a per-SKU override isn't set.
+
+**Decision:** Global default = **5 units**, editable via `/admin/settings/inventory`. Per-SKU overrides set on the product's inventory page win when present; otherwise the global default applies.
+
+**Rationale:** 5 matches small-shop ops norms: a toner cartridge order cycle is typically a couple of days in Egypt, so ~5 days of ordinary sell-through is a humane reorder signal. Easy to retune without a release — it's a `Setting` row.
+
+**Consequences:**
+- Per-SKU overrides can be set on any product where 5 is wrong (bulk paper SKUs benefit from 10+; slow-moving spare parts benefit from 2).
+- PRD Open Question #12 closed.
+
+---
+
+## ADR-036: Stock reservation race-guard — conditional `updateMany` inside createOrder transaction
+Date: 2026-04-21 (Sprint 6 S6-D7-T2)
+Status: Accepted
+
+**Context:** Sprint 4's `createOrderAction` checked `availableQty >= cart qty` *before* opening the DB transaction, then unconditionally decremented `Inventory.currentQty`. Two concurrent checkouts for the last unit both passed the pre-check and both decremented, producing `currentQty = -1`. Discovered during Sprint 6 hardening (S6-D7-T2).
+
+**Decision:** Inside the transaction, replace the unconditional `inventory.update({ decrement })` with a conditional `updateMany({ where: { productId, currentQty: { gte: qty } }, data: { decrement } })`. Prisma returns `count` of affected rows. When `count === 0` we raced — throw `'cart.insufficient_stock'`, which the outer `try/catch` converts to a user-facing error (`ok: false, errorKey: 'cart.insufficient_stock'`) and the transaction rolls back (Order row, reservations, inventory deltas all undone).
+
+**Alternatives considered:**
+- **`SELECT ... FOR UPDATE` + re-check inside txn** — same correctness, more round-trips; conditional update is atomic in one SQL.
+- **Serializable isolation level** — heavier hammer; conditional update is enough for this specific race.
+- **Redis-backed reservation lock** — rejected per ADR-010 (no Redis on the app stack).
+
+**Consequences:**
+- `Inventory.currentQty` is now guaranteed `>= 0` by the write path. Previously protected by convention, now protected by SQL.
+- No schema change.
+- A live concurrency test needs Postgres; for MVP it's validated in staging under manual load + the typecheck/build gate. Promoted to CI when the nightly staging suite is wired.
+

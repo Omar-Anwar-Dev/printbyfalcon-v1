@@ -98,6 +98,87 @@ export async function sendWhatsApp(
   }
 }
 
+/**
+ * Send a hosted document (PDF) via Whats360. Takes a publicly-fetchable URL —
+ * we use the signed /invoices/[id].pdf route so Whats360 can retrieve the
+ * bytes without our session cookie. The caption is the text that appears
+ * under the attachment in the WhatsApp chat.
+ *
+ * Dev mode short-circuits to log-only just like `sendWhatsApp`.
+ */
+export type WhatsAppSendDoc = {
+  phone: string;
+  docUrl: string;
+  filename: string;
+  caption: string;
+};
+
+export async function sendWhatsAppDoc(
+  payload: WhatsAppSendDoc,
+): Promise<WhatsAppSendResult> {
+  const devMode = process.env.NOTIFICATIONS_DEV_MODE === 'true';
+  const token = process.env.WHATS360_TOKEN;
+  const instanceId = process.env.WHATS360_INSTANCE_ID;
+  const baseUrl = process.env.WHATS360_BASE_URL ?? DEFAULT_BASE_URL;
+  const sandbox = process.env.WHATS360_SANDBOX === 'true';
+
+  if (devMode || !token || !instanceId) {
+    logger.warn(
+      {
+        to: maskPhone(payload.phone),
+        docUrl: payload.docUrl,
+        filename: payload.filename,
+        devMode,
+      },
+      'whatsapp.dev_mode.send_doc',
+    );
+    return { ok: true, externalMessageId: `dev-doc-${Date.now()}` };
+  }
+
+  const jid = normalizeJid(payload.phone);
+  if (!jid) return { ok: false, error: 'invalid_phone_format' };
+
+  const params = new URLSearchParams({
+    token,
+    instance_id: instanceId,
+    jid,
+    url: payload.docUrl,
+    filename: payload.filename,
+    caption: payload.caption,
+  });
+  if (sandbox) params.set('sandbox', 'true');
+
+  const url = `${baseUrl}/api/v1/send-doc?${params.toString()}`;
+
+  try {
+    const res = await fetch(url, { method: 'GET' });
+    const json = (await res.json().catch(() => ({}))) as {
+      success?: boolean;
+      message?: string;
+      response?: { key?: { id?: string } };
+      error?: string;
+    };
+    if (!res.ok || json.success === false) {
+      const err = json.error ?? json.message ?? `HTTP ${res.status}`;
+      logger.error(
+        { status: res.status, error: err, to: maskPhone(payload.phone) },
+        'whatsapp.send_doc.failed',
+      );
+      return { ok: false, error: err };
+    }
+    return {
+      ok: true,
+      externalMessageId: json.response?.key?.id ?? `w360-doc-${Date.now()}`,
+    };
+  } catch (err) {
+    logger.error(
+      { err, to: maskPhone(payload.phone) },
+      'whatsapp.send_doc.exception',
+    );
+    return { ok: false, error: (err as Error).message };
+  }
+}
+
 export type Whats360DeviceStatus = {
   connected: boolean;
   raw?: unknown;

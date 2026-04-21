@@ -10,7 +10,7 @@ import { formatEgp } from '@/lib/catalog/price';
 import { ProductGallery } from '@/components/catalog/product-gallery';
 import { ProductCard } from '@/components/catalog/product-card';
 import { StockBadge } from '@/components/catalog/stock-badge';
-import { getStockStatus } from '@/lib/catalog/stock';
+import { getStockStatusForProduct } from '@/lib/catalog/stock';
 import { AddToCartButton } from '@/components/catalog/add-to-cart-button';
 
 export const revalidate = 300;
@@ -89,7 +89,10 @@ export default async function ProductDetailPage({
       ? (product.specs as Record<string, string>)
       : {};
 
-  const stockStatus = getStockStatus({ status: product.status });
+  const stockStatus =
+    product.status === 'ACTIVE'
+      ? await getStockStatusForProduct(product.id)
+      : 'OUT_OF_STOCK';
   const isOutOfStock = stockStatus === 'OUT_OF_STOCK';
 
   const jsonLd = {
@@ -169,9 +172,6 @@ export default async function ProductDetailPage({
             )}
           </div>
 
-          {/* Stock status badge — driven by getStockStatus placeholder until
-              Sprint 6 wires real inventory. Swap the helper body then; the
-              rendering here stays unchanged. */}
           <div>
             <StockBadge status={stockStatus} locale={isAr ? 'ar' : 'en'} />
           </div>
