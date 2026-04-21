@@ -45,20 +45,33 @@ jobs:
           script: |
             bash -lc '/var/pbf/repo/scripts/deploy-production.sh'
 
-      - name: Post-deploy health probe
-        run: |
-          sleep 15  # allow containers to finish boot
-          echo "Probing production health endpoint…"
-          for i in 1 2 3 4 5; do
-            response=$(curl -sS -o /tmp/health.json -w "%{http_code}" https://printbyfalcon.com/api/health || true)
-            echo "Attempt $i — HTTP $response"
-            cat /tmp/health.json || true
-            echo
-            if [ "$response" = "200" ]; then
-              echo "::notice::Production health OK on attempt $i"
-              exit 0
-            fi
-            sleep 10
-          done
-          echo "::error::Production health check FAILED after 5 attempts. See docs/runbook.md §6 for rollback."
-          exit 1
+      # Post-deploy health probe runs INSIDE the VPS (via the same SSH action)
+      # rather than from the GitHub-hosted runner. Cloudflare's Bot Fight Mode
+      # challenges the runner's outbound curl (serves an HTML JS-check page
+      # instead of our JSON), which produced false-negative workflow failures
+      # even when prod was healthy. Running the curl from the VPS's shell goes
+      # through Cloudflare too but from a trusted origin IP that doesn't get
+      # challenged — matches how our own ops smoke-tests from the VPS also work.
+      - name: Post-deploy health probe (from VPS)
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            sleep 15  # allow containers to finish boot
+            echo "Probing production health endpoint from VPS…"
+            for i in 1 2 3 4 5; do
+              response=$(curl -sS -o /tmp/health.json -w "%{http_code}" https://printbyfalcon.com/api/health || true)
+              echo "Attempt $i — HTTP $response"
+              cat /tmp/health.json || true
+              echo
+              if [ "$response" = "200" ]; then
+                echo "::notice::Production health OK on attempt $i"
+                exit 0
+              fi
+              sleep 10
+            done
+            echo "::error::Production health check FAILED after 5 attempts. See docs/runbook.md §6 for rollback."
+            exit 1
