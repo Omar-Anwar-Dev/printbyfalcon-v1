@@ -55,7 +55,9 @@
       "categories": "التصنيفات",
       "printerModels": "موديلات الطابعات",
       "orders": "الطلبات",
-      "couriers": "شركات الشحن"
+      "couriers": "شركات الشحن",
+      "inventory": "المخزون",
+      "settings": "الإعدادات"
     },
     "common": {
       "create": "إضافة",

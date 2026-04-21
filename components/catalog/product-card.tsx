@@ -50,10 +50,7 @@ export function ProductCard({
           <p className="num text-base font-semibold text-foreground">
             {formatEgp(product.basePriceEgp, locale)}
           </p>
-          {/* Placeholder: real stock wiring arrives in Sprint 6 (Inventory
-              model + reservations). Every ACTIVE listing product shows IN_STOCK
-              until then. */}
-          <StockBadge status="IN_STOCK" locale={locale} />
+          <StockBadge status={product.stockStatus} locale={locale} />
         </div>
       </div>
     </Link>

@@ -17,6 +17,8 @@ import { prisma } from '@/lib/db';
 import { productImageUrl } from '@/lib/storage/paths';
 import type { ProductListItem } from '@/lib/catalog/queries';
 import { normalizeSearchTerm } from '@/lib/catalog/search-vector';
+import { getStockStatus } from '@/lib/catalog/stock';
+import { getGlobalLowStockThreshold } from '@/lib/settings/inventory';
 
 export type SearchSort = 'relevance' | 'newest' | 'price-asc' | 'price-desc';
 
@@ -234,7 +236,11 @@ export async function detectPrinterModel(
   };
 }
 
-type RawSearchRow = RawSuggestRow & { rank: number | null };
+type RawSearchRow = RawSuggestRow & {
+  rank: number | null;
+  current_qty: number;
+  low_stock_threshold: number | null;
+};
 
 export type SearchResultItem = ProductListItem & { rank: number | null };
 
@@ -465,10 +471,13 @@ async function execSearch({
         ORDER BY img.position ASC
         LIMIT 1
       ) AS image_filename,
+      COALESCE(inv."currentQty", 0)::int AS current_qty,
+      inv."lowStockThreshold" AS low_stock_threshold,
       ${rankSelect} AS rank
     FROM "Product" p
     JOIN "Brand" b ON b.id = p."brandId"
     JOIN "Category" c ON c.id = p."categoryId"
+    LEFT JOIN "Inventory" inv ON inv."productId" = p.id
     WHERE ${whereSql}
     ORDER BY ${orderBy}
     LIMIT ${limit} OFFSET ${offset}
@@ -488,6 +497,7 @@ async function execSearch({
 }
 
 async function hydrateRows(rows: RawSearchRow[]): Promise<SearchResultItem[]> {
+  const globalThreshold = await getGlobalLowStockThreshold();
   return rows.map((r) => {
     const row = r as RawSearchRow & {
       authenticity: 'GENUINE' | 'COMPATIBLE';
@@ -519,6 +529,16 @@ async function hydrateRows(rows: RawSearchRow[]): Promise<SearchResultItem[]> {
         nameEn: row.category_name_en,
         slug: row.category_slug,
       },
+      stockStatus: getStockStatus(
+        {
+          status: 'ACTIVE',
+          inventory: {
+            currentQty: Number(row.current_qty ?? 0),
+            lowStockThreshold: row.low_stock_threshold ?? null,
+          },
+        },
+        globalThreshold,
+      ),
       rank: row.rank,
     };
   });

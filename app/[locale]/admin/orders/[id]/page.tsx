@@ -16,6 +16,7 @@ import {
   ORDER_STATUS_LABELS,
   type OrderStatusKey,
 } from '@/lib/whatsapp-templates';
+import { OrderInvoicePanel } from '@/components/admin/order-invoice-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,23 @@ export default async function AdminOrderDetailPage({
     }),
   ]);
   if (!order) notFound();
+
+  const invoices = await prisma.invoice.findMany({
+    where: { orderId: order.id },
+    orderBy: { version: 'desc' },
+    select: {
+      id: true,
+      invoiceNumber: true,
+      version: true,
+      isAmended: true,
+      amendmentReason: true,
+      generatedAt: true,
+    },
+  });
+  const currentInvoice = invoices.find((i) => !i.isAmended) ?? null;
+  const priorInvoices = invoices.filter(
+    (i) => !currentInvoice || i.id !== currentInvoice.id,
+  );
 
   const returnableItems: ReturnableItem[] = order.items.map((i) => ({
     id: i.id,
@@ -139,6 +157,30 @@ export default async function AdminOrderDetailPage({
           }}
         />
       </section>
+
+      <OrderInvoicePanel
+        current={
+          currentInvoice
+            ? {
+                id: currentInvoice.id,
+                invoiceNumber: currentInvoice.invoiceNumber,
+                version: currentInvoice.version,
+                isAmended: currentInvoice.isAmended,
+                amendmentReason: currentInvoice.amendmentReason,
+                generatedAt: currentInvoice.generatedAt.toISOString(),
+              }
+            : null
+        }
+        history={priorInvoices.map((i) => ({
+          id: i.id,
+          invoiceNumber: i.invoiceNumber,
+          version: i.version,
+          isAmended: i.isAmended,
+          amendmentReason: i.amendmentReason,
+          generatedAt: i.generatedAt.toISOString(),
+        }))}
+        locale={locale}
+      />
 
       <div className="grid gap-4 md:grid-cols-2">
         <section className="rounded-md border bg-background p-4 text-sm">

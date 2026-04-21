@@ -31,12 +31,20 @@ function getTransport(): Transporter | null {
   return cached;
 }
 
+export type EmailAttachment = {
+  filename: string;
+  /** Base64-encoded bytes. Required because pg-boss payloads are JSON. */
+  contentBase64: string;
+  contentType?: string;
+};
+
 export type SendEmailInput = {
   to: string;
   subject: string;
   html?: string;
   text?: string;
   replyTo?: string;
+  attachments?: EmailAttachment[];
 };
 
 export async function sendEmail(input: SendEmailInput): Promise<void> {
@@ -53,6 +61,12 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
     return;
   }
 
+  const attachments = input.attachments?.map((a) => ({
+    filename: a.filename,
+    content: Buffer.from(a.contentBase64, 'base64'),
+    contentType: a.contentType,
+  }));
+
   const info = await transport.sendMail({
     from,
     to: input.to,
@@ -60,6 +74,7 @@ export async function sendEmail(input: SendEmailInput): Promise<void> {
     text: input.text,
     html: input.html,
     replyTo: input.replyTo,
+    attachments,
   });
 
   logger.info(

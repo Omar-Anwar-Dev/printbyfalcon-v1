@@ -55,7 +55,9 @@
       "categories": "Categories",
       "printerModels": "Printer Models",
       "orders": "Orders",
-      "couriers": "Couriers"
+      "couriers": "Couriers",
+      "inventory": "Inventory",
+      "settings": "Settings"
     },
     "common": {
       "create": "Create",

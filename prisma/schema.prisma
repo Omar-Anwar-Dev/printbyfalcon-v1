@@ -68,6 +68,7 @@ model User {
   orders         Order[]         @relation("UserOrders")
   notifications  Notification[]  @relation("UserNotifications")
   authoredReturns Return[]       @relation("ReturnAuthor")
+  generatedInvoices Invoice[]    @relation("InvoiceAuthor")
 
   @@index([type, status])
 }
@@ -527,6 +528,7 @@ model Order {
   statusEvents  OrderStatusEvent[]
   notifications Notification[]
   returns       Return[]
+  invoices      Invoice[]
 
   @@index([userId, createdAt])
   @@index([status, createdAt])
@@ -707,4 +709,44 @@ model AuditLog {
   @@index([action, createdAt])
   @@index([entityType, entityId])
   @@index([actorId, createdAt])
+}
+
+// -------------------------------------------------------------------------
+// Invoicing (Sprint 6 — ADR-034).
+// Invoices are *metadata rows* only. PDFs are rendered on-demand from the
+// immutable Order/OrderItem snapshots; we never write files to disk. Legal
+// retention (5 years per ADR-003) is satisfied by the Invoice row + the
+// deterministic re-render path in lib/invoices/render.ts.
+//
+// Numbering (ADR-020): `INV-YY-NNNNNN` gapless annual serial via
+// InvoiceAnnualSequence (atomic upsert + RETURNING pattern, identical to
+// OrderDailySequence in lib/order/order-number.ts).
+// -------------------------------------------------------------------------
+
+model Invoice {
+  id              String    @id @default(cuid())
+  /// `INV-YY-NNNNNN` — gapless annual serial (ADR-020).
+  invoiceNumber   String    @unique
+  orderId         String
+  order           Order     @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  version         Int       @default(1)
+  /// When > 1, this invoice amends a prior version. The chain walks via amendedFromId.
+  amendedFromId   String?
+  amendedFrom     Invoice?  @relation("InvoiceAmendments", fields: [amendedFromId], references: [id], onDelete: SetNull)
+  amendedBy       Invoice[] @relation("InvoiceAmendments")
+  amendmentReason String?
+  isAmended       Boolean   @default(false)
+  generatedById   String?
+  generatedBy     User?     @relation("InvoiceAuthor", fields: [generatedById], references: [id], onDelete: SetNull)
+  generatedAt     DateTime  @default(now())
+
+  @@index([orderId, version])
+  @@index([generatedAt])
+}
+
+/// Gapless annual invoice-number counter (ADR-020). Row keyed by YY (e.g., 26).
+model InvoiceAnnualSequence {
+  year       Int      @id // last two digits of the year, e.g., 26
+  lastSerial Int      @default(0)
+  updatedAt  DateTime @updatedAt
 }
