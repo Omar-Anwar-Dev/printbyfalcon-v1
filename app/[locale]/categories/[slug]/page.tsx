@@ -7,8 +7,10 @@ import {
   type ProductSort,
 } from '@/lib/catalog/queries';
 import { ProductCard } from '@/components/catalog/product-card';
+import { resolveViewerPrices } from '@/lib/pricing/storefront';
 
-export const revalidate = 300;
+// Dynamic rendering so B2B viewers see tier prices (Sprint 7 ADR-037).
+export const dynamic = 'force-dynamic';
 
 const SORTS: ProductSort[] = ['newest', 'price-asc', 'price-desc'];
 
@@ -46,6 +48,7 @@ export default async function CategoryPage({
     page,
     sort,
   });
+  const { priceById } = await resolveViewerPrices(items);
 
   return (
     <div className="container py-8">
@@ -105,7 +108,11 @@ export default async function CategoryPage({
         <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {items.map((p) => (
             <li key={p.id}>
-              <ProductCard product={p} locale={isAr ? 'ar' : 'en'} />
+              <ProductCard
+                product={p}
+                locale={isAr ? 'ar' : 'en'}
+                finalPriceEgp={priceById.get(p.id)}
+              />
             </li>
           ))}
         </ul>

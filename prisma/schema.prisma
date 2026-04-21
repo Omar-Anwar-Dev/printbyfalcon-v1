@@ -7,6 +7,10 @@
 // Sprint 4: address, cart, minimal inventory + reservations + movements, order
 // + order items + status events, payment plumbing (Paymob card + COD per ADR-030;
 // Fawry via Paymob sub-integration deferred to Sprint 9 per ADR-025).
+// Sprint 5: courier handoff, notifications, cancellation, returns.
+// Sprint 6: inventory polish, invoice metadata (ADR-034), store settings.
+// Sprint 7: B2B — Company, B2BApplication, PricingTier, CompanyPriceOverride.
+// Auth keeps plain Server Actions + Session table per ADR-021 (no Auth.js).
 
 generator client {
   provider        = "prisma-client-js"
@@ -69,6 +73,11 @@ model User {
   notifications  Notification[]  @relation("UserNotifications")
   authoredReturns Return[]       @relation("ReturnAuthor")
   generatedInvoices Invoice[]    @relation("InvoiceAuthor")
+
+  // B2B (Sprint 7): the shared company login is the primaryUser; reverse side
+  // is optional (null for B2C / ADMIN / unapproved applicants).
+  companyOwned   Company?         @relation("CompanyPrimaryUser")
+  b2bReviews     B2BApplication[] @relation("B2BApplicationReviewer")
 
   @@index([type, status])
 }
@@ -240,6 +249,7 @@ model Product {
   inventoryMovements    InventoryMovement[]
   cartItems             CartItem[]
   orderItems            OrderItem[]
+  priceOverrides        CompanyPriceOverride[]
 
   @@index([brandId])
   @@index([categoryId])
@@ -475,6 +485,14 @@ model Order {
   orderNumber String    @unique
   userId      String?
   user        User?     @relation("UserOrders", fields: [userId], references: [id], onDelete: SetNull)
+  // B2B: companyId is set whenever the user placing the order is the
+  // primary user of a Company (ADR-007 — one shared login per company).
+  // Null for B2C orders and for B2B users whose company relation is not yet
+  // active (applicants still browsing / checking out via B2C path per PRD
+  // Feature 2 "Pending state"). Used by /b2b/orders to scope history
+  // company-wide instead of per-user.
+  companyId   String?
+  company     Company?  @relation("CompanyOrders", fields: [companyId], references: [id], onDelete: SetNull)
   type        OrderType @default(B2C)
 
   // Guest-checkout snapshot fields (also populated for logged-in users for stability).
@@ -531,6 +549,7 @@ model Order {
   invoices      Invoice[]
 
   @@index([userId, createdAt])
+  @@index([companyId, createdAt])
   @@index([status, createdAt])
   @@index([paymentMethod, paymentStatus])
   @@index([createdAt])
@@ -749,4 +768,157 @@ model InvoiceAnnualSequence {
   year       Int      @id // last two digits of the year, e.g., 26
   lastSerial Int      @default(0)
   updatedAt  DateTime @updatedAt
+}
+
+// -------------------------------------------------------------------------
+// B2B (Sprint 7) — Company accounts, admin-approval pipeline, pricing tiers.
+// See PRD Feature 2 + Feature 4, architecture §5.3, ADR-005/006/007/016.
+//
+// Flow:
+//   1. Applicant submits B2BApplication via /b2b/register. No User row yet.
+//   2. Admin approves → we create User (type=B2B, mustChangePassword=true)
+//      + Company (links to PricingTier + optional per-SKU overrides) in one
+//      transaction, email temp password.
+//   3. Admin rejects → application row marked REJECTED with a reason;
+//      email + CR# stay free for resubmission (Design A, Sprint 7 kickoff).
+// -------------------------------------------------------------------------
+
+enum CompanyStatus {
+  /// Accepted via admin approval. Normal operating state.
+  ACTIVE
+  /// Temporarily disabled by admin (credit issue, policy breach, etc.).
+  /// User can't log in; historical orders remain for audit.
+  SUSPENDED
+}
+
+enum CreditTerms {
+  /// Pay on placement — no credit extended. Default for new accounts.
+  NONE
+  NET_15
+  NET_30
+  /// Admin sets a specific creditLimitEgp; terms documented separately.
+  CUSTOM
+}
+
+enum PricingTierCode {
+  A // default 10% off base price
+  B // default 15% off base price
+  C // per-SKU overrides only (no blanket discount)
+}
+
+enum B2BApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum B2BCheckoutPolicy {
+  /// Default for new B2B accounts — both "Submit for Review" and "Pay Now"
+  /// visible at checkout (Sprint 8 consumes this field).
+  BOTH
+  SUBMIT_FOR_REVIEW_ONLY
+  PAY_NOW_ONLY
+}
+
+/// Pricing tier. A/B carry a blanket percentage discount applied to base
+/// price; C has no blanket discount — pricing is driven by per-SKU
+/// `CompanyPriceOverride` rows. Defaults seeded by scripts/post-push.ts.
+model PricingTier {
+  id                     String          @id @default(cuid())
+  code                   PricingTierCode @unique
+  nameAr                 String
+  nameEn                 String
+  /// Percent discount off Product.basePriceEgp. Null for tier C (per-SKU only).
+  defaultDiscountPercent Decimal?        @db.Decimal(5, 2)
+  createdAt              DateTime        @default(now())
+  updatedAt              DateTime        @updatedAt
+
+  companies Company[]
+}
+
+/// Company application — system-of-record up to approval. Stores the
+/// applicant's chosen password hash so approval can create the User row
+/// in the same transaction without re-prompting. Rejected applications
+/// are kept for audit but do NOT create User rows (Design A).
+model B2BApplication {
+  id                    String               @id @default(cuid())
+  companyName           String
+  crNumber              String
+  taxCardNumber         String
+  contactName           String
+  phone                 String
+  email                 String
+  /// bcrypt hash of the applicant's password — carried forward to User on approve.
+  passwordHash          String
+  governorate           Governorate
+  /// Free-text city within the governorate (admin can use this + governorate to
+  /// choose the right ShippingZone mapping once Sprint 9 lands).
+  city                  String
+  addressLine           String?
+  /// Free-text like "50,000 EGP/month" — not parsed, shown to admin for context.
+  monthlyVolumeEstimate String?
+  status                B2BApplicationStatus @default(PENDING)
+  reviewerId            String?
+  reviewer              User?                @relation("B2BApplicationReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
+  reviewedAt            DateTime?
+  /// Rejection reason or approval note.
+  decisionNote          String?
+  /// Set on approval — points at the Company we created so admins can trace
+  /// an application back to its company row.
+  resultingCompanyId    String?
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+
+  @@index([status, createdAt])
+  @@index([email])
+  @@index([crNumber])
+}
+
+/// Approved B2B company. One Company has exactly one primaryUser (ADR-007 —
+/// shared login for MVP; multi-user in v1.1). Orders link to Company for
+/// company-wide history.
+model Company {
+  id                    String            @id @default(cuid())
+  nameAr                String
+  nameEn                String?
+  crNumber              String            @unique
+  taxCardNumber         String            @unique
+  status                CompanyStatus     @default(ACTIVE)
+  pricingTierId         String
+  pricingTier           PricingTier       @relation(fields: [pricingTierId], references: [id], onDelete: Restrict)
+  creditTerms           CreditTerms       @default(NONE)
+  creditLimitEgp        Decimal?          @db.Decimal(12, 2)
+  monthlyVolumeEstimate String?
+  /// Default BOTH — Sprint 8 uses this to control checkout options per company.
+  checkoutPolicy        B2BCheckoutPolicy @default(BOTH)
+  /// Shared login (ADR-007). Exactly one User per Company in MVP.
+  primaryUserId         String            @unique
+  primaryUser           User              @relation("CompanyPrimaryUser", fields: [primaryUserId], references: [id], onDelete: Cascade)
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
+
+  priceOverrides CompanyPriceOverride[]
+  orders         Order[]                @relation("CompanyOrders")
+
+  @@index([status])
+  @@index([pricingTierId])
+}
+
+/// Per-SKU price override for a company. Wins over the blanket tier discount
+/// during pricing resolution (lib/pricing/resolve.ts). Used primarily for
+/// tier C companies where pricing is negotiated line-by-line, but valid for
+/// any tier (an A/B company can still carry an override on a single SKU).
+model CompanyPriceOverride {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  productId      String
+  product        Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  /// The negotiated price in EGP — replaces `basePriceEgp - tierDiscount` entirely.
+  customPriceEgp Decimal  @db.Decimal(10, 2)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([companyId, productId])
+  @@index([productId])
 }

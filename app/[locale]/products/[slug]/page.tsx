@@ -6,14 +6,22 @@ import {
   getActiveProductBySlug,
   listActiveProducts,
 } from '@/lib/catalog/queries';
-import { formatEgp } from '@/lib/catalog/price';
 import { ProductGallery } from '@/components/catalog/product-gallery';
 import { ProductCard } from '@/components/catalog/product-card';
+import { ProductPrice } from '@/components/catalog/product-price';
 import { StockBadge } from '@/components/catalog/stock-badge';
-import { getStockStatusForProduct } from '@/lib/catalog/stock';
+import {
+  getAvailableQtyExact,
+  getStockStatusForProduct,
+} from '@/lib/catalog/stock';
 import { AddToCartButton } from '@/components/catalog/add-to-cart-button';
+import { resolveViewerPrices } from '@/lib/pricing/storefront';
+import { getOptionalUser } from '@/lib/auth';
+import { getPricingContextForUser } from '@/lib/pricing/context';
+import { resolvePrice } from '@/lib/pricing/resolve';
 
-export const revalidate = 300;
+// Dynamic so B2B tier pricing + exact stock qty render per viewer.
+export const dynamic = 'force-dynamic';
 
 const BASE_URL =
   process.env.APP_URL?.replace(/\/+$/, '') ?? 'https://printbyfalcon.com';
@@ -82,6 +90,17 @@ export default async function ProductDetailPage({
     .filter((p) => p.id !== product.id)
     .slice(0, 4);
 
+  // Resolve pricing for the current viewer. The detail-page price uses the
+  // same source of truth as the list page so the displayed price is stable
+  // across the browse → detail transition.
+  const viewer = await getOptionalUser();
+  const pricingCtx = await getPricingContextForUser(viewer);
+  const resolvedDetail = resolvePrice(product, pricingCtx);
+  const displayPriceEgp = resolvedDetail.finalPriceEgp.toString();
+  const basePriceEgpStr = product.basePriceEgp.toString();
+  const { priceById: relatedPriceById } =
+    await resolveViewerPrices(relatedItems);
+
   const specs =
     product.specs &&
     typeof product.specs === 'object' &&
@@ -94,6 +113,12 @@ export default async function ProductDetailPage({
       ? await getStockStatusForProduct(product.id)
       : 'OUT_OF_STOCK';
   const isOutOfStock = stockStatus === 'OUT_OF_STOCK';
+  // B2B users see the exact available qty so procurement can commit to the
+  // right PO size without ping-ponging with sales (PRD Feature 1).
+  const exactStockQty =
+    viewer?.type === 'B2B' && product.status === 'ACTIVE'
+      ? await getAvailableQtyExact(product.id)
+      : null;
 
   const jsonLd = {
     '@context': 'https://schema.org',
@@ -110,7 +135,9 @@ export default async function ProductDetailPage({
     offers: {
       '@type': 'Offer',
       priceCurrency: 'EGP',
-      price: Number(product.basePriceEgp).toFixed(2),
+      // Schema.org Offer price reflects the list price (public SEO).
+      // B2B-specific pricing is negotiated + not shown to anonymous crawlers.
+      price: Number(basePriceEgpStr).toFixed(2),
       availability: isOutOfStock
         ? 'https://schema.org/OutOfStock'
         : 'https://schema.org/InStock',
@@ -157,10 +184,14 @@ export default async function ProductDetailPage({
           <p className="font-mono text-xs text-muted-foreground">
             SKU: {product.sku}
           </p>
-          <div className="flex items-baseline gap-3">
-            <span className="text-3xl font-bold">
-              {formatEgp(product.basePriceEgp.toString(), isAr ? 'ar' : 'en')}
-            </span>
+          <div className="flex flex-wrap items-baseline gap-3">
+            <ProductPrice
+              finalPriceEgp={displayPriceEgp}
+              basePriceEgp={basePriceEgpStr}
+              locale={isAr ? 'ar' : 'en'}
+              className="text-3xl"
+              listPriceClassName="text-sm"
+            />
             {product.authenticity === 'COMPATIBLE' ? (
               <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
                 {isAr ? 'متوافق' : 'Compatible'}
@@ -170,10 +201,36 @@ export default async function ProductDetailPage({
                 {isAr ? 'أصلي' : 'Genuine'}
               </span>
             )}
+            {resolvedDetail.source === 'tier' ? (
+              <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
+                {isAr
+                  ? `سعر المستوى ${pricingCtx.tier?.code}`
+                  : `Tier ${pricingCtx.tier?.code} pricing`}
+              </span>
+            ) : resolvedDetail.source === 'override' ? (
+              <span className="rounded bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">
+                {isAr ? 'سعر متفق عليه' : 'Negotiated price'}
+              </span>
+            ) : null}
           </div>
 
-          <div>
+          <div className="flex flex-wrap items-center gap-2">
             <StockBadge status={stockStatus} locale={isAr ? 'ar' : 'en'} />
+            {exactStockQty != null && exactStockQty > 0 ? (
+              <span
+                className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-800"
+                dir={isAr ? 'rtl' : 'ltr'}
+                title={
+                  isAr
+                    ? 'الكمية الفعلية المتاحة بعد خصم حجوزات العربات والطلبات'
+                    : 'Exact available qty (reservations subtracted)'
+                }
+              >
+                {isAr
+                  ? `${exactStockQty} وحدة متاحة`
+                  : `${exactStockQty} units available`}
+              </span>
+            ) : null}
           </div>
 
           {isOutOfStock ? (
@@ -260,7 +317,11 @@ export default async function ProductDetailPage({
           <ul className="grid grid-cols-2 gap-4 md:grid-cols-4">
             {relatedItems.map((p) => (
               <li key={p.id}>
-                <ProductCard product={p} locale={isAr ? 'ar' : 'en'} />
+                <ProductCard
+                  product={p}
+                  locale={isAr ? 'ar' : 'en'}
+                  finalPriceEgp={relatedPriceById.get(p.id)}
+                />
               </li>
             ))}
           </ul>

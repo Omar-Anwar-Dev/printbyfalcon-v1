@@ -1,18 +1,25 @@
 import Image from 'next/image';
 import { Link } from '@/lib/i18n/routing';
-import { formatEgp } from '@/lib/catalog/price';
 import type { ProductListItem } from '@/lib/catalog/queries';
 import { StockBadge } from '@/components/catalog/stock-badge';
+import { ProductPrice } from '@/components/catalog/product-price';
 
 export function ProductCard({
   product,
   locale,
+  /**
+   * Optional viewer-specific price (B2B tier / override). When omitted we
+   * fall back to the product's list price. Sprint 7 — S7-D3-T1.
+   */
+  finalPriceEgp,
 }: {
   product: ProductListItem;
   locale: 'ar' | 'en';
+  finalPriceEgp?: string;
 }) {
   const isAr = locale === 'ar';
   const name = isAr ? product.nameAr : product.nameEn;
+  const displayPrice = finalPriceEgp ?? product.basePriceEgp;
   return (
     <Link
       href={`/products/${product.slug}`}
@@ -47,9 +54,12 @@ export function ProductCard({
           {name}
         </h3>
         <div className="mt-auto flex items-center justify-between gap-2 pt-2">
-          <p className="num text-base font-semibold text-foreground">
-            {formatEgp(product.basePriceEgp, locale)}
-          </p>
+          <ProductPrice
+            finalPriceEgp={displayPrice}
+            basePriceEgp={product.basePriceEgp}
+            locale={locale}
+            className="text-base"
+          />
           <StockBadge status={product.stockStatus} locale={locale} />
         </div>
       </div>

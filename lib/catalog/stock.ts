@@ -65,6 +65,16 @@ export async function getStockStatusForProduct(
   return 'IN_STOCK';
 }
 
+/**
+ * Exact available quantity — surfaced to B2B logged-in users on the product
+ * detail page per PRD Feature 1 ("B2B logged-in sees exact count") and
+ * Sprint 7 S7-D4-T1. Reservation-aware so procurement officers see the
+ * number they can actually commit to.
+ */
+export async function getAvailableQtyExact(productId: string): Promise<number> {
+  return getAvailableQty(productId);
+}
+
 export const STOCK_LABELS = {
   ar: {
     IN_STOCK: 'متاح',

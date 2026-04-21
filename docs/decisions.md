@@ -811,3 +811,84 @@ Status: Accepted
 - No schema change.
 - A live concurrency test needs Postgres; for MVP it's validated in staging under manual load + the typecheck/build gate. Promoted to CI when the nightly staging suite is wired.
 
+---
+
+## ADR-037: Storefront catalog pages render dynamically — drop ISR for per-viewer pricing
+
+**Date:** 2026-04-21 (Sprint 7 S7-D3-T1)
+
+**Status:** Accepted
+
+**Context:**
+- Sprint 7 introduces B2B tier pricing that must render per-viewer on catalog surfaces (`/products`, `/categories/[slug]`, `/search`, `/products/[slug]`). A Tier-A (10% off) buyer and a Tier-B (15% off) buyer looking at the same SKU must see different prices on the same page.
+- Pre-Sprint-7 the catalog pages used `export const revalidate = 300` — 5-minute ISR caching at the edge — so every visitor saw the same bytes.
+- ISR is a *shared* cache keyed on path + search params only. It can't fork by session cookie, so "B2B viewer sees a different price" is fundamentally incompatible with a 5-minute ISR window.
+
+**Decision:**
+- Flip the affected catalog pages to `export const dynamic = 'force-dynamic'` so every request renders fresh against the DB with the viewer's pricing context.
+- Keep per-query caching via `React.cache` (`getPricingContextForUser`) so N components on the same render pass only fetch the context once.
+- Cloudflare edge cache is tuned to bypass `/api/*` already (per ADR-024 page rules); Next's ISR was the only cache layer touching HTML, and that's what we're dropping here.
+
+**Alternatives considered:**
+- **Split routes — public `/products` (cached) + gated `/b2b/products` (dynamic).** Rejected: splits the catalog UX, confuses SEO, and doubles the maintenance surface.
+- **Client-side price overlay** — server-render list prices, then hydrate B2B-specific prices via a small client fetch. Rejected: flashes the wrong price on first paint, complicates the tests, and fights the SSR-for-SEO baseline.
+- **Per-session cache key** — would need a cache layer we don't have (Redis rejected per ADR-010). Too much new infra for a tradeoff that evaporates at our scale.
+
+**Consequences:**
+- Every catalog request now hits Postgres. Expected at MVP scale (100–500 daily visitors); `EXPLAIN ANALYZE` on the hot queries is clean on the 200-SKU fixture.
+- B2C / guest viewers lose the ISR speedup. Mitigated by Cloudflare's edge HTML cache (where applicable), Postgres warm cache, and the existing response-size budget.
+- B2B viewers finally see the prices they should see — the correctness win justifies the perf cost.
+- D7-T3 acceptance ("catalog load with B2B user <500ms p95") holds locally on the 200-SKU fixture. Staging will re-verify once Sprint 7 deploys.
+- Re-litigate later if MVP traffic jumps into the thousands/day and the Postgres load becomes the bottleneck. Migration path: page-level edge cache with `Vary: Cookie` once Cloudflare's higher-tier surface allows it, or move to a cache layer that can key per-session.
+
+---
+
+## ADR-038: B2B application rejection is soft — never create a User row pre-approval
+
+**Date:** 2026-04-21 (Sprint 7 kickoff)
+
+**Status:** Accepted
+
+**Context:**
+- `User.email` is `@unique` in Prisma. If we create a User at signup time for B2B applicants, a rejected applicant's email is permanently bound to an inactive User row.
+- The plan's S7-D5-T1 acceptance calls for "CR# and email re-usable for re-application" so applicants can fix whatever the rejection flagged and resubmit cleanly.
+- Two designs were considered at kickoff — Design A (soft) and Design B (hard).
+
+**Decision:**
+- **Design A — soft reject.** `B2BApplication` is the system-of-record up to approval. No `User` or `Company` rows exist until the admin approves. On rejection, the application is marked `REJECTED` with a reason and an email goes out; email + CR# remain free for a fresh application.
+- Approval is the atomic moment where User + Company get created in a single DB transaction, at which point the applicant's email is locked down to that User row.
+
+**Alternatives considered:**
+- **Design B — hard reject.** Create a User + `B2BApplication` at signup time; rejection marks the User inactive. Rejected because: (a) permanently locks the email, (b) needs a cleanup path for "delete inactive users X days old", (c) makes "apply again after fixing the tax card scan" unnecessarily painful.
+
+**Consequences:**
+- The applicant's bcrypt-hashed password has to live on `B2BApplication` (carried forward to User on approval). That's a sensitive column — mitigated by: only Owner/Sales Rep can read applications via admin role gating, the hash is bcrypt cost 12 (same as User), no logging / UI ever renders it.
+- Rejected applications accumulate in the DB. At the scale we expect (applications/month), this is noise-level; pruning old rejected rows is a v1.1 housekeeping task if needed.
+- If an applicant browses + places B2C orders under the same email *before* approval, the approval flow upgrades their existing B2C User row to B2B (preserving order history) rather than colliding on the unique email constraint. This branch is wired in `approveB2BApplicationAction`.
+
+---
+
+## ADR-039: B2B order = B2B User's Company — `Order.companyId` is the authoritative linkage
+
+**Date:** 2026-04-21 (Sprint 7 S7-D4-T3)
+
+**Status:** Accepted
+
+**Context:**
+- Sprint 7 needed "company-wide order history" visible to any user logged in to the company (shared-login per ADR-007).
+- Order was linked to the placing `User` (`Order.userId`) but had no direct link to Company — making company-wide history a join through `User → Company.primaryUser`, which is fragile (what if we rotate primary users in v1.1 multi-user mode?).
+
+**Decision:**
+- Add `Order.companyId` (nullable, indexed). `createOrderAction` sets this whenever the placing user is the primary user of an ACTIVE Company. Null for B2C orders and for B2B users whose company is SUSPENDED at placement time.
+- Also set `Order.type = 'B2B'` in the same condition — this was the field the Sprint 5 notification pipeline was already branching on; Sprint 7 just makes sure it's populated correctly.
+- Query company-wide order history via `Order.companyId` (stable), not `Order.user.companyOwned.id` (fragile).
+
+**Alternatives considered:**
+- **Join through primary user** — works in MVP (single login per company), breaks the moment v1.1 adds multi-user-per-company. Rejected.
+- **No direct link; filter by primaryUser on read** — same problem, and adds a join to every history query.
+
+**Consequences:**
+- Order history queries stay a single indexed lookup: `WHERE companyId = $1`.
+- Forward-compatible with v1.1 multi-user teams — a second User under the same Company places an order, `companyId` is set consistently, history shows both.
+- One more nullable FK to maintain; trivial migration since `null` is the correct value for all existing (B2C-only) orders.
+

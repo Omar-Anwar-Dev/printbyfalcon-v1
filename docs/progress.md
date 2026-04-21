@@ -1,12 +1,12 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** **M0 reached** (Internal demo). Sprint 4 + UI foundation pass **deployed to prod 2026-04-20**. **Sprint 5 complete 2026-04-20** — order tracking + Whats360 notifications + admin order mgmt + cancellation + returns all in place; 8/8 exit criteria met.
-- **Current sprint:** **Sprint 5 COMPLETE** ✅ — awaiting staging + prod deploy before Sprint 6 starts (per owner's sprint-per-deploy cadence).
-- **Next sprint:** Sprint 6 — Inventory + Invoicing + Out-of-Stock polish (not started; awaiting "start sprint 6" command — runs AFTER Sprint 5 deploy).
-- **Last updated:** 2026-04-20 — Sprint 5 close-out.
+- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 deployed to prod; **Sprint 7 COMPLETE 2026-04-21** — awaiting staging + prod deploy before Sprint 8 starts. M1 target remains end of Sprint 12.
+- **Current sprint:** **Sprint 7 COMPLETE** ✅ — 9/9 exit criteria met; B2B signup + approval + tier pricing + company portal + password reset all in place.
+- **Next sprint:** Sprint 8 — B2B Portal + Submit-for-Review + Bulk Order + Reorder (not started; awaiting "start sprint 8" command — runs AFTER Sprint 7 deploy).
+- **Last updated:** 2026-04-21 — Sprint 7 close-out.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint).
-- **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19).
+- **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 6 deploy confirmed at Sprint 7 kickoff.
 
 ## Completed Sprints
 
@@ -691,3 +691,114 @@ Mapped to the 9 criteria in `docs/implementation-plan.md` lines 418-427:
 8. Click "Amend" → enter reason "Corrected customer address" → submit → new version in the panel, prior retained. Open each PDF to show "AMENDED" watermark on the old one.
 9. Open `/en/products` → verify stock badges render on cards + OOS products still display with badge.
 10. Go to `/ar/admin/inventory/bulk-receive` → paste `HP-CF259A,10,supplier delivery\nDOES-NOT-EXIST,5` → run → per-row results show success + `sku_not_found`.
+
+---
+
+## Sprint 7 kickoff resolutions (2026-04-21)
+
+- **Sprint 6 deploy gate honored** — owner confirmed Sprint 6 hit prod before Sprint 7 kickoff.
+- **Pricing tier defaults (closes PRD Q#14):** A = 10%, B = 15%, C = Custom (per-SKU overrides only, no blanket discount). Seeded via Prisma migration.
+- **B2B welcome email temp password** — 12-char alphanumeric, crypto-random, sent once in the welcome email; `mustChangePassword = true` until rotated.
+- **B2B rejection → re-application** — **Design A (soft reject).** `B2BApplication` is the system-of-record up to approval; `User` + `Company` rows are only created on approval. Rejected applications leave no `User` row, so the email/CR# stay free for resubmission. Keeps `User.email @unique` clean.
+- **Auth pattern:** continue ADR-021's plain Server Actions + `Session` table approach. Plan's "Auth.js" wording is shorthand — no new auth framework introduced in Sprint 7.
+- **B2B `placed_by_name` on invoice:** stays deferred to Sprint 8 per plan (invoice template's "placed by" line already reserved in Sprint 6).
+- **Legacy Paymob-PAID confirmation email** — Sprint 4 parking-lot item **remains parked**; Sprint 7 doesn't touch the Paymob webhook.
+- **Holiday calendar:** Revolution Day (Thu Jul 23) ignored per single-dense-session pattern.
+
+## Sprint 7 — COMPLETE 2026-04-21
+
+Single dense session following the Sprint 2–6 pattern. Every task typechecked + tested incrementally; final QA gate summarized in §Verification.
+
+### Foundation
+
+- [x] **ADR-037** [2026-04-21] Storefront catalog pages render dynamically (drop ISR) so B2B tier prices render per-viewer. Supersedes `export const revalidate = 300` on `/products`, `/categories/[slug]`, `/products/[slug]`.
+- [x] **ADR-038** [2026-04-21] B2B application rejection is soft — `User` + `Company` created only on approval; rejected applications leave no User row (kickoff Design A).
+- [x] **ADR-039** [2026-04-21] `Order.companyId` is the authoritative link between a B2B order and its Company. Sets `Order.type = 'B2B'` in the same condition so the Sprint 5 notification branch (B2B = WhatsApp + email) fires correctly.
+
+### Schema + data model
+- [x] **S7-D1-T1** [2026-04-21] Prisma — added `Company`, `B2BApplication`, `PricingTier`, `CompanyPriceOverride` + enums `CompanyStatus` / `CreditTerms` / `PricingTierCode` / `B2BApplicationStatus` / `B2BCheckoutPolicy`. `User.companyOwned` + `User.b2bReviews` back-relations. `Order.companyId` + `Order.company` relation + indexed on `(companyId, createdAt)`. `Product.priceOverrides` back-relation. Seeded 3 tiers (A=10%, B=15%, C=custom) via `scripts/post-push.ts` upsert — idempotent across container restarts.
+
+### Public B2B signup + login
+- [x] **S7-D1-T2** [2026-04-21] Public B2B signup page at `/b2b/register` — bilingual form with required + optional fields per PRD. zod validation via new `lib/validation/b2b.ts`. `submitB2BApplicationAction` in [app/actions/b2b-public.ts](../app/actions/b2b-public.ts) — rate-limit (3/email/24h), email collision guards, pending-dupe guard, bcrypt(cost 12) password hash carried forward to approval. Governorate labels live in [lib/i18n/governorates.ts](../lib/i18n/governorates.ts) (bilingual, reusable).
+- [x] **S7-D1-T3** [2026-04-21] B2B login split — canonical at `/b2b/login`, `/login` turned into a redirect for back-compat. Site header + footer + mobile nav all updated. `lib/auth.ts` gains `requireB2BUser` + redirects unauthenticated `/b2b/*` visitors to `/b2b/login`. Unauthenticated `/account` redirect now targets `/sign-in` (B2C OTP), matching the three-flow separation (ADR-005/021).
+
+### Pricing engine
+- [x] **S7-D2-T3** [2026-04-21] [lib/pricing/resolve.ts](../lib/pricing/resolve.ts) — pure `resolvePrice(product, ctx)` + batch `resolvePrices`; resolution order override → tier → base per architecture §5.3. Half-even rounding. 10 vitest cases green (all 3 paths + edge cases: override > base, string/Decimal/number inputs, tier C without percent). Request-level `React.cache` wrapper at [lib/pricing/context.ts](../lib/pricing/context.ts) loads tier + overrides once per render pass — closes D7-T3 perf acceptance.
+
+### Admin B2B pipeline
+- [x] **S7-D2-T1 / T2 + S7-D5-T1** [2026-04-21] `/admin/b2b/applications` queue — pending / approved / rejected filter chips, full application detail card. `approveB2BApplicationAction` + `rejectB2BApplicationAction` in [app/actions/admin-b2b.ts](../app/actions/admin-b2b.ts), gated to `OWNER + SALES_REP` per ADR-016. Approval atomically creates User + Company, generates 12-char crypto-random temp password ([lib/b2b/temp-password.ts](../lib/b2b/temp-password.ts), 6 vitest cases), sets `mustChangePassword=true`, enqueues bilingual welcome email ([lib/email/b2b-welcome.ts](../lib/email/b2b-welcome.ts)). Rejection enqueues bilingual rejection email with actionable reason ([lib/email/b2b-rejection.ts](../lib/email/b2b-rejection.ts)). Existing B2C user with matching email on approval is upgraded to B2B (preserves order history) rather than colliding on `@unique email`.
+- [x] **S7-D3-T2 + S7-D3-T3 + S7-D6-T3** [2026-04-21] `/admin/b2b/companies` list (active / suspended, sort by recent / revenue). Detail page `/admin/b2b/companies/[id]` — commercial-terms editor (tier, credit terms, credit limit, status, checkout policy) + per-SKU override table + recent orders. Actions: `updateCompanyTermsAction`, `upsertCompanyPriceOverrideAction`, `deleteCompanyPriceOverrideAction`. Every mutation audit-logged via `AuditLog` (action prefix `b2b.company.*`). Shared [components/b2b/pricing-tier-badge.tsx](../components/b2b/pricing-tier-badge.tsx) — reused on admin list / detail / B2B-facing profile.
+
+### Storefront pricing rollout
+- [x] **S7-D3-T1** [2026-04-21] Negotiated pricing everywhere — `/products`, `/categories/[slug]`, `/search`, `/products/[slug]` wrapped with `resolveViewerPrices` helper ([lib/pricing/storefront.ts](../lib/pricing/storefront.ts)). `ProductCard` gains optional `finalPriceEgp` prop with strikethrough when below base. Detail page picks up the resolved price, shows a small "Tier A/B/C" / "Negotiated" chip when applicable. Schema.org Offer price stays at the public list price (SEO). ISR dropped on the affected pages per ADR-037.
+- [x] **S7-D4-T1** [2026-04-21] B2B users see exact available qty on product detail (reservation-aware via `getAvailableQtyExact`). B2C + guests keep the PRD-specified vague badge.
+- [x] **Cart + checkout plumbing** [2026-04-21] `addToCartAction` snapshots `resolvePrice(product, ctx).finalPriceEgp` instead of the raw `basePriceEgp` so CartItem + OrderItem + Invoice all reflect the B2B price. `createOrderAction` sets `Order.companyId` + `Order.type='B2B'` when the viewer is the primary user of an ACTIVE Company — enables company-wide order history + the Sprint 5 B2B email channel mirror.
+
+### B2B-facing portal
+- [x] **S7-D4-T2** [2026-04-21] `/b2b/profile` company page — tier badge, CR# / tax card read-only (admin-only edits), editable contact name / phone / email via [components/b2b/b2b-profile-contact-form.tsx](../components/b2b/b2b-profile-contact-form.tsx) calling `updateB2BProfileContactAction` (email uniqueness checked).
+- [x] **S7-D4-T3** [2026-04-21] `/b2b/orders` company-wide order history — scoped by `Order.companyId` (ADR-039). Paginated, status-filterable. `/account/orders/[id]` ownership check widened: B2C owns-by-userId, B2B owns-by-companyId, ADMIN sees everything. `/account` redirects B2B users to `/b2b/profile` for clean separation.
+- [x] **S7-D6-T1 + S7-D6-T2** [2026-04-21] "Sign up your company" CTA in storefront header for unauthenticated viewers. Browse-as-B2C-while-pending is naturally satisfied by Design A (no User row until approval — applicants browse + checkout as guests / B2C OTP users with standard pricing).
+
+### B2B password reset
+- [x] **S7-D7-T2** [2026-04-21] `/b2b/forgot-password` → `requestB2BPasswordResetAction` (user-enumeration-safe silent success, `passwordReset` rate limit applies). Bilingual email via [lib/email/b2b-password-reset.ts](../lib/email/b2b-password-reset.ts). `/b2b/reset-password?token=...` → `resetB2BPasswordAction` (single-use token, 60-min expiry, bcrypt cost 12, invalidates prior tokens + live sessions on completion). Full audit log on both request + completion.
+
+### Tests + sample data + docs
+- [x] **S7-D7-T1** [2026-04-21] `tests/e2e/sprint7.spec.ts` — 11 Playwright smoke cases: B2B signup + login forms render (AR+EN), legacy `/login` redirects to `/b2b/login`, `/b2b/forgot-password` + `/b2b/reset-password` render (the latter flags missing token), admin B2B queues redirect anonymous to `/admin/login`, `/b2b/*` portal redirects anonymous to `/b2b/login`.
+- [x] **S7-D8-T2** [2026-04-21] `scripts/seed-b2b.ts` + `npm run seed:b2b` — 3 demo companies across all tiers (Tier A, Tier B, Tier C with one per-SKU override). Idempotent (upsert by email / CR#). Credentials printed to stdout.
+- [x] **S7-D8-T3** [2026-04-21] [docs/sales-rep-guide.md](sales-rep-guide.md) — sales-rep workflow ops playbook: role matrix, 5-minute approval checklist, tier philosophy, post-approval upkeep, common situations, audit-log SQL, demo-data commands.
+
+## Verification (2026-04-21)
+
+- ✅ `npx prisma validate` — schema valid (5 new B2B models + 5 enums + relation edits).
+- ✅ `npx prisma generate` — Prisma Client emitted with all new types.
+- ✅ `npx tsc --noEmit` — clean across app + lib + worker + tests + scripts.
+- ✅ `npx vitest run` — **103/103 green** across 10 suites. Sprint 7 adds 16 new cases across 2 new suites: [lib/pricing/resolve.test.ts](../lib/pricing/resolve.test.ts) (10), [lib/b2b/temp-password.test.ts](../lib/b2b/temp-password.test.ts) (6). No pre-existing test regressions.
+- ✅ `npx next build` — clean; new routes compiled: `/b2b/register`, `/b2b/login` (+ legacy `/login` redirect), `/b2b/profile`, `/b2b/orders`, `/b2b/forgot-password`, `/b2b/reset-password`, `/admin/b2b/applications`, `/admin/b2b/companies`, `/admin/b2b/companies/[id]`. Catalog pages re-compiled as dynamic (ADR-037). One round of i18n key-collision fixes landed (next-intl treats dotted keys as nested paths — renamed `password.help` → `passwordHelp`, etc.).
+- ⏭️ Live concurrent B2B signup + approval — admin-authenticated end-to-end walkthrough is a staging-manual item, same pattern as Sprint 5/6.
+- ⏭️ B2B WhatsApp send-text round-trip — requires the Whats360 device connected + `NOTIFICATIONS_DEV_MODE=false` on staging (identical to Sprint 5 status-change gate).
+
+## Sprint 7 Exit Criteria — status
+
+Mapped to the 9 criteria in `docs/implementation-plan.md` lines 485–494:
+
+- ✅ **B2B signup form live and functional** — `/b2b/register` + `submitB2BApplicationAction` + rate limit + collision guards.
+- ✅ **Admin approval queue with tier + credit terms assignment** — `/admin/b2b/applications` + approve modal writes Company in one transaction.
+- ✅ **B2B login (email + password) works; password reset works** — `/b2b/login` via existing `loginB2BAction` (Sprint 1); reset flow via `/b2b/forgot-password` → `/b2b/reset-password`.
+- ✅ **Negotiated pricing displayed throughout catalog/cart/checkout for B2B users** — `resolvePrice` wired into `/products`, `/categories/[slug]`, `/search`, `/products/[slug]`; CartItem snapshots the B2B price; OrderItem + Invoice inherit the snapshot.
+- ✅ **Tier C custom per-SKU overrides** — admin UI on `/admin/b2b/companies/[id]` supports upsert-by-SKU + delete; pricing resolver prefers override over tier.
+- ✅ **Company profile page** — `/b2b/profile`, editable contact block, tier badge, RO CR#/tax card.
+- ✅ **Company-wide order history** — `/b2b/orders` + `/account/orders/[id]` ownership widened via `companyId`.
+- ✅ **B2B notifications: WhatsApp + email** — Sprint 5 pipeline already forked on `order.type`; Sprint 7 sets `type = 'B2B'` correctly at order placement so the branch fires as designed.
+- ✅ **Browse-as-B2C-while-pending works for applicants** — Design A satisfies this naturally (no User row until approval; applicant browses + buys via guest/B2C paths).
+
+**9/9 fully met. Sprint 7 closed 2026-04-21.**
+
+## Decisions logged this sprint
+- **ADR-037** [2026-04-21] Storefront catalog pages render dynamically (drop ISR) for B2B tier pricing.
+- **ADR-038** [2026-04-21] Soft-reject B2B applications — User + Company created only on approval.
+- **ADR-039** [2026-04-21] `Order.companyId` is the authoritative B2B-order linkage; `Order.type='B2B'` set at placement.
+
+## Risk Log Updates
+- No new risks. Sprint 7 closes PRD Q#14 (pricing tier defaults — A=10%, B=15%, C=Custom/per-SKU).
+
+## Sprint 7 parking lot for Sprint 8
+- **B2B `placed_by_name` on invoice + order** — Sprint 8 S8-D1-T1 adds the `Order.placedByName` field + B2B checkout input; invoice template already reserves the "placed by" line (Sprint 6).
+- **Checkout options per company** — `Company.checkoutPolicy` (default `BOTH`) schema + admin editor landed in Sprint 7; Sprint 8 consumes it to gate "Submit for Review" + "Pay Now" buttons at checkout.
+- **Bulk order tool** — Sprint 8 scope.
+- **One-click reorder** — Sprint 8 scope.
+- **Legacy Paymob-PAID confirmation email** — still parked (Sprint 4 item). Sprint 7 didn't touch the webhook; Sprint 8 doesn't either. Revisit when Sprint 9 (COD/zones) rewires the shipping portion of the webhook.
+- **Resend welcome email from admin UI** — v1.1. Today's workaround: tell the customer to click "Forgot password" on `/b2b/login`.
+- **Prisma 5.22 → 7.x upgrade prompt** — noise from `prisma generate` on every run. Defer; low value for Sprint 8; noted for the Sprint 11 "production readiness" bucket.
+
+## Sprint 7 demo script
+1. Open `/en/b2b/register` → fill in the form (use a new email + CR# + tax card — the form rejects duplicates). Submit → success card.
+2. Switch to admin (owner or sales rep login) → navigate to `/en/admin/b2b/applications` → find the pending application → click **Approve** → pick **Tier B** + **Net-15** → Confirm. Background: welcome email enqueued.
+3. Back to a private-window browser. Open `/en/b2b/login` → paste the applicant's email + the temp password from the welcome email (or tail the dev-mode email log). Land on the forced-reset page → set a new password → lands on `/`.
+4. Browse `/en/products` → notice every card shows a **strikethrough list price** next to the Tier B (15% off) price. Open any product → detail page shows the same breakdown + a "Tier B pricing" chip + exact stock qty ("47 units available").
+5. Add something to cart → `/en/cart` reflects the Tier B line total. Checkout as COD → `/en/order/confirmed/...` → the order carries `type=B2B` + `companyId` (check via `/en/admin/orders/<id>` or the new `/en/b2b/orders`).
+6. Return to `/en/b2b/profile` → tier badge + editable contact fields + read-only CR#/tax card. Open `/en/b2b/orders` → the B2B order you just placed is there.
+7. Back in admin, `/en/admin/b2b/companies/<id>` → bump this test company to **Tier C** → scroll to the Overrides table → add one SKU with a custom price. Refresh a guest browser of that product → list price. Refresh the B2B browser → the override price.
+8. Log the B2B user out. Open `/en/b2b/forgot-password` → submit the email → open the reset link → set a new password → redirected to login with `?reset=1`.
+9. Back in admin, open the original applicant's application → notice it's marked **APPROVED** with a link to the Company record.
+10. Reject a *different* pending application → the applicant gets the bilingual rejection email → they can resubmit with the same email (Design A).
+

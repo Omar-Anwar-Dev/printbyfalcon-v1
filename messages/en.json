@@ -57,6 +57,8 @@
       "orders": "Orders",
       "couriers": "Couriers",
       "inventory": "Inventory",
+      "b2bApplications": "B2B Applications",
+      "b2bCompanies": "B2B Companies",
       "settings": "Settings"
     },
     "common": {
@@ -166,12 +168,82 @@
       "unknown": "Something went wrong processing the image"
     }
   },
+  "b2b": {
+    "register": {
+      "title": "Apply for a business account",
+      "subtitle": "Fill this short form and our team will reach out within 24 hours with your approval and negotiated pricing.",
+      "submit": "Submit application",
+      "sla": "We'll email you within 24 hours. You can keep browsing at standard prices in the meantime.",
+      "alreadyHaveAccount": "Already have a business account?",
+      "loginLink": "Sign in",
+      "section": {
+        "company": "Company details",
+        "contact": "Primary contact & login",
+        "delivery": "Delivery"
+      },
+      "field": {
+        "companyName": "Company name (as on commercial registry)",
+        "crNumber": "Commercial registry #",
+        "taxCardNumber": "Tax card #",
+        "monthlyVolumeEstimate": "Estimated monthly spend (optional)",
+        "monthlyVolumeEstimatePlaceholder": "e.g. 50,000 EGP / month",
+        "contactName": "Primary contact name",
+        "phone": "Phone (WhatsApp)",
+        "email": "Work email",
+        "password": "Password",
+        "passwordHelp": "10+ characters, mix of upper/lower case and digits.",
+        "governorate": "Governorate",
+        "city": "City",
+        "addressLine": "Full address (optional)",
+        "addressLinePlaceholder": "Building, street, landmark"
+      },
+      "success": {
+        "title": "Thanks — we received your application.",
+        "body": "Our team will review your details and email you within 24 hours. While you wait, feel free to browse the catalog and place orders at standard prices.",
+        "another": "Submit another application"
+      }
+    },
+    "signup": {
+      "email_in_use": "This email is already linked to an existing account. Sign in instead, or use a different email.",
+      "cr_in_use": "This commercial registry number is already registered with us. Contact support if you think this is a mistake.",
+      "tax_in_use": "This tax card number is already registered with us. Contact support if you think this is a mistake.",
+      "pending_exists": "We already have a pending application with this email. We'll be in touch soon."
+    },
+    "login": {
+      "noAccountYet": "Don't have a business account yet? Apply here"
+    }
+  },
   "validation": {
     "required": "This field is required",
     "invalid": "Invalid value",
     "invalid_format": "Invalid format",
     "too_short": "Must be at least {min} characters",
     "too_long": "Must be at most {max} characters",
+    "field": {
+      "too_long": "Value is too long"
+    },
+    "b2b": {
+      "company": {
+        "required": "Company name is required"
+      },
+      "cr": {
+        "invalid": "Commercial registry number looks invalid"
+      },
+      "tax": {
+        "invalid": "Tax card number looks invalid"
+      },
+      "governorate": {
+        "required": "Please pick a governorate"
+      },
+      "city": {
+        "required": "City is required"
+      },
+      "reject": {
+        "reason": {
+          "required": "Please give the applicant a clear reason (10+ characters)"
+        }
+      }
+    },
     "phone": {
       "invalid_eg": "Invalid Egyptian mobile number"
     },

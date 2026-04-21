@@ -277,7 +277,7 @@ export function MobileNav({
                 )}
                 <li>
                   <Link
-                    href="/login"
+                    href="/b2b/login"
                     onClick={close}
                     className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:bg-paper-hover hover:text-foreground"
                   >

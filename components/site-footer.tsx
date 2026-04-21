@@ -28,7 +28,11 @@ export async function SiteFooter() {
     { href: '/account', label: t('nav.account') },
     { href: '/account/orders', label: isAr ? 'طلباتي' : 'My orders' },
     { href: '/account/addresses', label: isAr ? 'العناوين' : 'Addresses' },
-    { href: '/login', label: isAr ? 'حساب شركات' : 'Business login' },
+    { href: '/b2b/login', label: isAr ? 'حساب شركات' : 'Business login' },
+    {
+      href: '/b2b/register',
+      label: isAr ? 'تسجيل حساب شركة' : 'Register a business',
+    },
   ];
 
   const supportLinks = [

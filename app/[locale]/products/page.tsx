@@ -2,8 +2,13 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 import { listActiveProducts, type ProductSort } from '@/lib/catalog/queries';
 import { ProductCard } from '@/components/catalog/product-card';
+import { resolveViewerPrices } from '@/lib/pricing/storefront';
 
-export const revalidate = 300; // 5 min ISR per architecture §9.3
+// Sprint 7: catalog pages render dynamically so B2B tier prices show
+// correctly per-viewer. Guest / B2C renders identically fast either way
+// (Postgres hot cache), and B2B is where the per-request rendering earns
+// its keep. Sprint 7 ADR-037.
+export const dynamic = 'force-dynamic';
 
 const SORTS: ProductSort[] = ['newest', 'price-asc', 'price-desc'];
 
@@ -35,6 +40,7 @@ export default async function ProductsPage({
     page,
     sort,
   });
+  const { priceById } = await resolveViewerPrices(items);
 
   const sortLabel = (s: ProductSort) =>
     s === 'newest'
@@ -82,7 +88,11 @@ export default async function ProductsPage({
         <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
           {items.map((p) => (
             <li key={p.id}>
-              <ProductCard product={p} locale={isAr ? 'ar' : 'en'} />
+              <ProductCard
+                product={p}
+                locale={isAr ? 'ar' : 'en'}
+                finalPriceEgp={priceById.get(p.id)}
+              />
             </li>
           ))}
         </ul>
