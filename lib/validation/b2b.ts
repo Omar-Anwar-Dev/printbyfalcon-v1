@@ -51,13 +51,13 @@ export const b2bApplicationSchema = z.object({
     .string()
     .trim()
     .max(200, { message: 'field.too_long' })
-    .optional()
+    .nullish()
     .transform((v) => (v && v.length > 0 ? v : undefined)),
   monthlyVolumeEstimate: z
     .string()
     .trim()
     .max(80, { message: 'field.too_long' })
-    .optional()
+    .nullish()
     .transform((v) => (v && v.length > 0 ? v : undefined)),
 });
 
@@ -69,9 +69,13 @@ export const b2bApplicationApproveSchema = z.object({
   applicationId: z.string().min(1),
   pricingTierCode: z.enum(['A', 'B', 'C']),
   creditTerms: z.enum(['NONE', 'NET_15', 'NET_30', 'CUSTOM']),
+  // `.nullish()` instead of `.optional()` — HTML forms send `null` via
+  // `formData.get()` when the input isn't rendered (our credit-limit field
+  // is conditional on `creditTerms === 'CUSTOM'`). `.optional()` alone
+  // rejects `null`, so the whole form fails with `validation.invalid`.
   creditLimitEgp: z
     .string()
-    .optional()
+    .nullish()
     .transform((v) => {
       if (!v || v.trim() === '') return null;
       const n = Number(v);
@@ -81,7 +85,7 @@ export const b2bApplicationApproveSchema = z.object({
     .string()
     .trim()
     .max(500)
-    .optional()
+    .nullish()
     .transform((v) => (v && v.length > 0 ? v : undefined)),
 });
 
@@ -117,9 +121,10 @@ export const companyUpdateSchema = z.object({
   companyId: z.string().min(1),
   pricingTierCode: z.enum(['A', 'B', 'C']),
   creditTerms: z.enum(['NONE', 'NET_15', 'NET_30', 'CUSTOM']),
+  // Same null-vs-undefined rationale as the approve schema above.
   creditLimitEgp: z
     .string()
-    .optional()
+    .nullish()
     .transform((v) => {
       if (!v || v.trim() === '') return null;
       const n = Number(v);
