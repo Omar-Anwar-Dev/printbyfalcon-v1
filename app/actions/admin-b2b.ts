@@ -130,9 +130,13 @@ export async function approveB2BApplicationAction(
 
   // Double-check collisions that may have appeared between form open and
   // submit (admin could have two tabs / another admin could have approved).
-  const [emailTaken, crTaken, taxTaken] = await Promise.all([
+  const [emailTaken, phoneTaken, crTaken, taxTaken] = await Promise.all([
     prisma.user.findUnique({
       where: { email: application.email },
+      select: { id: true, type: true },
+    }),
+    prisma.user.findUnique({
+      where: { phone: application.phone },
       select: { id: true, type: true },
     }),
     prisma.company.findUnique({
@@ -146,6 +150,16 @@ export async function approveB2BApplicationAction(
   ]);
   if (emailTaken && emailTaken.type !== 'B2C') {
     return { ok: false, errorKey: 'b2b.signup.email_in_use' };
+  }
+  // Phone is `@unique` globally. Only accept a B2C match when it's the same
+  // user we'd upgrade via email match — otherwise approving would try to
+  // write a duplicate phone on a fresh/different User row and Prisma P2002
+  // would bubble up as `common.error`.
+  if (
+    phoneTaken &&
+    (phoneTaken.type !== 'B2C' || phoneTaken.id !== emailTaken?.id)
+  ) {
+    return { ok: false, errorKey: 'b2b.signup.phone_in_use' };
   }
   if (crTaken) return { ok: false, errorKey: 'b2b.signup.cr_in_use' };
   if (taxTaken) return { ok: false, errorKey: 'b2b.signup.tax_in_use' };

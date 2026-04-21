@@ -205,6 +205,7 @@
     },
     "signup": {
       "email_in_use": "This email is already linked to an existing account. Sign in instead, or use a different email.",
+      "phone_in_use": "This phone number is already on another account. Use a different number or contact support if you think this is a mistake.",
       "cr_in_use": "This commercial registry number is already registered with us. Contact support if you think this is a mistake.",
       "tax_in_use": "This tax card number is already registered with us. Contact support if you think this is a mistake.",
       "pending_exists": "We already have a pending application with this email. We'll be in touch soon."
