@@ -11,11 +11,7 @@ import { z } from 'zod';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { toLocalizedIssues } from '@/lib/validation/error-map';
-import {
-  setStoreInfo,
-  type StoreInfo,
-  STORE_INFO_DEFAULT,
-} from '@/lib/settings/store-info';
+import { setStoreInfo, type StoreInfo } from '@/lib/settings/store-info';
 
 const storeInfoSchema: z.ZodType<StoreInfo> = z.object({
   nameAr: z.string().trim().min(1).max(200),
@@ -60,5 +56,3 @@ export async function updateStoreInfoAction(
   revalidatePath('/admin/settings/store', 'page');
   return { ok: true, data: { ok: true } };
 }
-
-export { STORE_INFO_DEFAULT };
