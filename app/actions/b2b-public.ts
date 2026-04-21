@@ -68,12 +68,29 @@ export async function submitB2BApplicationAction(
   // naturally stays free for resubmission — we only block when the email is
   // already bound to a non-B2C User (admin/active B2B login) or when CR#/tax
   // card already belongs to an active Company.
-  const existingUser = await prisma.user.findUnique({
-    where: { email: input.email },
-    select: { id: true, type: true },
-  });
+  const [existingUser, existingPhoneUser] = await Promise.all([
+    prisma.user.findUnique({
+      where: { email: input.email },
+      select: { id: true, type: true },
+    }),
+    prisma.user.findUnique({
+      where: { phone: input.phone },
+      select: { id: true, type: true },
+    }),
+  ]);
   if (existingUser && existingUser.type !== 'B2C') {
     return { ok: false, errorKey: 'b2b.signup.email_in_use' };
+  }
+  // Phone is `@unique` on User, so even a B2C match belonging to a
+  // *different* account would collide on approval. We accept a B2C match
+  // only when email + phone land on the *same* existing user — that's the
+  // supported "B2C shopper upgrades to B2B on approval" path.
+  if (
+    existingPhoneUser &&
+    (existingPhoneUser.type !== 'B2C' ||
+      existingPhoneUser.id !== existingUser?.id)
+  ) {
+    return { ok: false, errorKey: 'b2b.signup.phone_in_use' };
   }
 
   const [crCompany, taxCompany] = await Promise.all([
