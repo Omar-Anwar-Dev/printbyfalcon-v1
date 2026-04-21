@@ -1,10 +1,10 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** **M0 reached** (Internal demo). Sprint 4 + UI foundation pass **deployed to prod 2026-04-20**. **Sprint 5 complete 2026-04-20** — order tracking + Whats360 notifications + admin order mgmt + cancellation + returns all in place; 8/8 exit criteria met.
-- **Current sprint:** **Sprint 5 COMPLETE** ✅ — awaiting staging + prod deploy before Sprint 6 starts (per owner's sprint-per-deploy cadence).
-- **Next sprint:** Sprint 6 — Inventory + Invoicing + Out-of-Stock polish (not started; awaiting "start sprint 6" command — runs AFTER Sprint 5 deploy).
-- **Last updated:** 2026-04-20 — Sprint 5 close-out.
+- **Current milestone:** **M0 reached** (Internal demo). Sprint 4 + UI foundation pass deployed to prod 2026-04-20. **Sprint 5 complete + shipped to staging + prod 2026-04-21** — 8/8 exit criteria met; Whats360 real-WhatsApp-delivery verified on both envs.
+- **Current sprint:** **Sprint 5 COMPLETE + DEPLOYED** ✅ — staging `main@79332f4`, prod `main@79332f4`, both with Whats360 live.
+- **Next sprint:** Sprint 6 — Inventory + Invoicing + Out-of-Stock polish (not started; awaiting "start sprint 6" command).
+- **Last updated:** 2026-04-21 — Sprint 5 prod ship + WhatsApp end-to-end verified.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19).
 
@@ -573,3 +573,45 @@ Mapped to the 8 criteria in `docs/implementation-plan.md` lines 349-357:
 ---
 
 ## Sprint 5 — COMPLETE 2026-04-20
+
+## Sprint 5 — SHIPPED to staging + prod 2026-04-21
+
+**Commits that landed on `main` during ship:**
+- `89d891b` — Sprint 5 (the 55-file bundle, PR #2)
+- `1099f6b` — Whats360 webhook: accept secret from multiple locations (PR #3) — discovered Whats360's single-"Secret" dashboard field doesn't document where the secret arrives in the HTTP request; handler now checks headers + query + body permissively and logs which location matched for future tightening
+- `f0d018e` — Admin orders list 500: function labels can't cross RSC boundary (PR #4) — converted `selected(n)` / `resultSuccess(n)` / `resultPartial(s,f)` function props to `{n}`/`{s}`/`{f}` placeholder strings with client-side `interp()` helper
+- `e384649` — Admin order detail 500: extract `defaultOrderStatusActionLabels` from `'use client'` module (PR #5) — moved label maps + helper to `lib/admin/order-action-labels.ts` so the Server Component rendering the detail page could call the helper without crossing the RSC boundary
+- `8a35ec6` — Executable bit on deploy scripts (PR #6) — `git update-index --chmod=+x` on both `deploy-{production,staging}.sh`; the prod script was stored as 100644 in the index so `bash -lc '/path/to/script.sh'` failed with EACCES on first prod workflow attempt
+
+**Staging ship (2026-04-20):**
+- `.env.staging` updated with Whats360 creds + `NOTIFICATIONS_DEV_MODE=false` + `WHATS360_SANDBOX=true`.
+- Whats360 outbound webhook configured in dashboard → `https://staging.printbyfalcon.com/api/webhooks/whats360` with shared `WHATS360_WEBHOOK_SECRET` in the Secret field.
+- Device `device_mo76dfr1` (scanned to the sales-team phone `+201116527773`) connected + verified via `/api/v1/instances/status`.
+- Full end-to-end exercised: catalog seed (200 SKUs) → COD order `ORD-26-2004-00001` with owner's WhatsApp as contact → admin Mark Handed to Courier (Mylerz + waybill `TEST-001`) → real WhatsApp landed in Arabic on the scanned device → `Notification` row flipped `PENDING → SENT` with `externalMessageId=w360-1776723963419`.
+
+**Prod ship (2026-04-21):**
+- Deploy pipeline surfaced four operational issues, all now fixed and documented as ADRs / progress entries:
+  1. **SSH key was passphrase-protected** — GitHub Actions' `appleboy/ssh-action` couldn't decrypt. Fixed by generating a fresh passphrase-less CI-dedicated ed25519 key on the VPS (`~/.ssh/pbf_gh_ci`), adding its public key to `authorized_keys`, and replacing the `VPS_SSH_KEY` secret on both `staging` and `production` environments.
+  2. **Deploy scripts stored as non-executable in the git index** — staging had worked only because a one-time chmod was applied in Sprint 1 and `git reset --hard` doesn't undo filesystem mode changes; fresh clone would have broken both envs. Fixed by `git update-index --chmod=+x` (commit `8a35ec6`) so mode 100755 is tracked.
+  3. **Bootstrap-loop on the prod x-bit fix** — the workflow invokes the deploy script directly, so the script couldn't run to pull its own x-bit fix. Broken by one-time manual `git pull` on the VPS (propagates mode from git index to filesystem). Future deploys self-maintain the bit via `git reset --hard`.
+  4. **Post-deploy health probe hitting Cloudflare's Bot Fight Mode** — GitHub runner's curl got served a JS challenge page, failing with "Enable JavaScript and cookies." Fixed by moving the health probe inside the SSH action (same commit as this progress update) so the curl originates from the VPS, which isn't bot-flagged.
+- `.env.production` updated with separate Whats360 creds (same token + instance_id, NEW `WHATS360_WEBHOOK_SECRET` — staging's was exposed in chat during setup).
+- Second Whats360 outbound webhook added in dashboard → `https://printbyfalcon.com/api/webhooks/whats360`.
+- Owner admin password reset via direct bcrypt hash + SQL update (Path B from the staging playbook) — the original `OWNER_TEMP_PASSWORD` seeded way back in Sprint 1 no longer matched anything.
+- Full end-to-end exercised on prod: admin `Mark Handed to Courier` on order `ORD-26-1904-00001` (pre-existing in prod DB from M0 demo era) → WhatsApp landed in Arabic on device → `Notification` row `status=SENT`, `externalMessageId=w360-1776733577788`.
+
+**Workflow / runbook changes folded into this ship:**
+- `.github/workflows/deploy-production.yml` — Post-deploy health probe moved inside the SSH action (same commit as this progress entry).
+- `scripts/deploy-production.sh` — no code change, only mode 100755 in git index.
+
+## Sprint 5 ship close-out — parking lot
+
+Items intentionally deferred, captured for Sprint 6+ attention:
+
+- **Whats360 device is the sales-team phone (`+201116527773`)**, not a separate dedicated number as the original PRD / architecture called for. OTP + order notifications + manual support chats all land in the same WhatsApp inbox. Owner accepted this consolidation for MVP; if it becomes confusing post-launch, scan a second phone into Whats360 and flip `WHATS360_INSTANCE_ID`.
+- **Staging webhook secret was exposed in chat** (`45d992175d4d1eb65ffac63e2d4752b7a017f7f2c64443618168c41e60f379ef`). Low severity (staging has no customer data), but rotate at next convenient window: `openssl rand -hex 32` → update `.env.staging` + Whats360 dashboard → restart staging.
+- **Admin dashboard widgets** (Whats360 device status, Notification failure rate, cancellation-queue count) — plan mentions these in S5-D6-T3 / S5-D7-T3 consequences; real home at `/admin` dashboard is Sprint 9 scope. All the data is already in the DB; UI is the only missing piece.
+- **Prod `.env.production` `POSTGRES_PASSWORD` ↔ `DATABASE_URL` sync issue** — identified during the incident post-mortem; still open as Sprint-11 production-readiness sweep (startup-time env consistency check).
+- **Auto-staging workflow succeeded for Sprint 5 merge** — but had there been a schema migration problem, the staging-auto-deploy's health probe has the same Cloudflare Bot Fight Mode issue. Worth replicating the "probe from inside the VPS" pattern on `deploy-staging.yml` too — tiny follow-up.
+
+## Sprint 5 — SHIP CONFIRMED 2026-04-21
