@@ -17,6 +17,9 @@ import {
   CART_RESERVATION_TTL_MINUTES,
   getAvailableQty,
 } from '@/lib/cart/stock';
+import { getOptionalUser } from '@/lib/auth';
+import { getPricingContextForUser } from '@/lib/pricing/context';
+import { resolvePrice } from '@/lib/pricing/resolve';
 
 type ActionOk<T> = { ok: true; data: T };
 type ActionErr = { ok: false; errorKey: string };
@@ -60,6 +63,13 @@ export async function addToCartAction(
     return { ok: false, errorKey: 'cart.insufficient_stock' };
   }
 
+  // Resolve the price for the current user (base for guests/B2C, tier- or
+  // override-adjusted for approved B2B). Snapshotting this value means the
+  // OrderItem eventually sees the price the customer saw at cart-add time.
+  const user = await getOptionalUser();
+  const ctx = await getPricingContextForUser(user);
+  const resolved = resolvePrice(product, ctx);
+
   const result = await prisma.$transaction(async (tx) => {
     const item = existing
       ? await tx.cartItem.update({
@@ -71,7 +81,7 @@ export async function addToCartAction(
             cartId: cart.id,
             productId: product.id,
             qty: parsed.data.qty,
-            unitPriceEgpSnapshot: product.basePriceEgp,
+            unitPriceEgpSnapshot: resolved.finalPriceEgp,
           },
         });
 

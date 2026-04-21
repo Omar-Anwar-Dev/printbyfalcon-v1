@@ -97,6 +97,19 @@ export async function createOrderAction(
   }
 
   const user = await getOptionalUser();
+  // If the viewer is the primary user of an ACTIVE Company, tag the order
+  // B2B + attach the companyId so company-wide order history resolves
+  // against a single column regardless of who inside the company logged in
+  // (single-login-per-company in MVP, but this still keeps the query
+  // forward-compatible with multi-user teams in v1.1).
+  const company =
+    user && user.type === 'B2B'
+      ? await prisma.company.findUnique({
+          where: { primaryUserId: user.id },
+          select: { id: true, status: true },
+        })
+      : null;
+  const isB2BOrder = Boolean(company && company.status === 'ACTIVE');
   const cart = await getOrCreateCart();
   const items = await prisma.cartItem.findMany({
     where: { cartId: cart.id },
@@ -170,8 +183,12 @@ export async function createOrderAction(
       const order = await tx.order.create({
         data: {
           orderNumber,
-          userId: user?.type === 'B2C' ? user.id : null,
-          type: 'B2C',
+          // Attach any signed-in user (B2C or B2B) so account → orders lists
+          // the order. B2B orders also get the companyId for company-wide
+          // history (Sprint 7 S7-D4-T3).
+          userId: user?.type === 'B2C' || user?.type === 'B2B' ? user.id : null,
+          companyId: isB2BOrder ? company!.id : null,
+          type: isB2BOrder ? 'B2B' : 'B2C',
           contactName: parsed.data.contact.name,
           contactPhone: parsed.data.contact.phone,
           contactEmail: toNullable(parsed.data.contact.email),

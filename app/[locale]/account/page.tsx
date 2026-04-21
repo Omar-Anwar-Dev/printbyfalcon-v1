@@ -27,7 +27,11 @@ export default async function AccountPage({
   const { locale } = await params;
   const isAr = locale === 'ar';
   const user = await getOptionalUser();
-  if (!user || user.type !== 'B2C') redirect(`/${locale}/sign-in`);
+  if (!user) redirect(`/${locale}/sign-in`);
+  // B2B users live under their company profile, not the personal account
+  // page; send them there so order history is company-wide by default.
+  if (user.type === 'B2B') redirect(`/${locale}/b2b/profile`);
+  if (user.type !== 'B2C') redirect(`/${locale}`);
 
   const [addresses, orders] = await Promise.all([
     prisma.address.findMany({

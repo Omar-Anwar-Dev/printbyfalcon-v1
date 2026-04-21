@@ -24,7 +24,7 @@ export default async function SignInPage() {
           <B2CSignInFlow />
           <div className="mt-4 text-center text-sm text-muted-foreground">
             <Link
-              href="/login"
+              href="/b2b/login"
               className="underline-offset-2 hover:text-foreground hover:underline"
             >
               {t('auth.b2bTitle')}

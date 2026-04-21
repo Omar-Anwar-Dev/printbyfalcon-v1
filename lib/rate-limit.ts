@@ -52,6 +52,17 @@ export const RATE_LIMIT_RULES = {
     max: 5,
     windowSeconds: 60 * 60,
   },
+  /**
+   * B2B public signup throttle (Sprint 7). Cap at 3 applications per email
+   * per 24 hours so a dropped connection + impatient re-submit doesn't flood
+   * the admin queue, without being so strict that a legitimate retry after
+   * fixing a form error is blocked.
+   */
+  b2bSignup: {
+    name: 'b2b-signup',
+    max: 3,
+    windowSeconds: 24 * 60 * 60,
+  },
 } as const satisfies Record<string, LimitRule>;
 
 export type RateLimitResult = {

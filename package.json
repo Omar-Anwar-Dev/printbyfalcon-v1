@@ -21,6 +21,7 @@
     "prisma:seed": "tsx prisma/seed.ts",
     "seed:catalog": "tsx scripts/seed-catalog.ts",
     "seed:orders": "tsx scripts/seed-orders.ts",
+    "seed:b2b": "tsx scripts/seed-b2b.ts",
     "worker": "tsx worker/index.ts",
     "worker:build": "tsc -p worker/tsconfig.json",
     "worker:start": "node worker/dist/index.js",

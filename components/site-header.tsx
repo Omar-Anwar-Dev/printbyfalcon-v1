@@ -1,5 +1,5 @@
 import { getTranslations } from 'next-intl/server';
-import { ShoppingBag, User, LogIn } from 'lucide-react';
+import { ShoppingBag, User, LogIn, Building2 } from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { CategoryMenu } from '@/components/category-menu';
@@ -156,20 +156,29 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
 
           {user ? (
             <Link
-              href="/account"
+              href={user.type === 'B2B' ? '/b2b/profile' : '/account'}
               className="hidden h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover sm:inline-flex"
             >
               <User className="h-5 w-5" strokeWidth={1.75} aria-hidden />
               <span>{t('nav.account')}</span>
             </Link>
           ) : (
-            <Link
-              href="/sign-in"
-              className="hidden h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover sm:inline-flex"
-            >
-              <LogIn className="h-5 w-5" strokeWidth={1.75} aria-hidden />
-              <span>{t('nav.login')}</span>
-            </Link>
+            <>
+              <Link
+                href="/b2b/register"
+                className="hidden h-10 items-center gap-2 rounded-md border border-input px-3 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover lg:inline-flex"
+              >
+                <Building2 className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+                <span>{isAr ? 'سجّل شركتك' : 'Sign up your company'}</span>
+              </Link>
+              <Link
+                href="/sign-in"
+                className="hidden h-10 items-center gap-2 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover sm:inline-flex"
+              >
+                <LogIn className="h-5 w-5" strokeWidth={1.75} aria-hidden />
+                <span>{t('nav.login')}</span>
+              </Link>
+            </>
           )}
         </div>
       </div>

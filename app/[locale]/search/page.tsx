@@ -9,6 +9,7 @@ import { ProductCard } from '@/components/catalog/product-card';
 import { prisma } from '@/lib/db';
 import { SearchFiltersSidebar } from '@/components/catalog/search-filters-sidebar';
 import { MobileFiltersButton } from '@/components/catalog/mobile-filters-button';
+import { resolveViewerPrices } from '@/lib/pricing/storefront';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,6 +146,7 @@ export default async function SearchPage({
   ]);
 
   const { items, total, totalPages, usedFallback } = result;
+  const { priceById } = await resolveViewerPrices(items);
 
   const sortLabel = (s: SearchSort) =>
     s === 'relevance'
@@ -293,7 +295,11 @@ export default async function SearchPage({
             <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
               {items.map((p) => (
                 <li key={p.id}>
-                  <ProductCard product={p} locale={isAr ? 'ar' : 'en'} />
+                  <ProductCard
+                    product={p}
+                    locale={isAr ? 'ar' : 'en'}
+                    finalPriceEgp={priceById.get(p.id)}
+                  />
                 </li>
               ))}
             </ul>

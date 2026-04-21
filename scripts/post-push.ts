@@ -48,6 +48,41 @@ async function main() {
     WHERE NOT EXISTS (SELECT 1 FROM "Inventory" i WHERE i."productId" = p.id)
   `);
 
+  // Sprint 7 bootstrap: seed the 3 default PricingTier rows. Code is the
+  // natural key (UNIQUE in Prisma), so upsert-by-code is idempotent across
+  // every container restart. Defaults from PRD §5 Feature 2 + kickoff
+  // resolution: A = 10%, B = 15%, C = per-SKU only (no blanket discount).
+  await prisma.pricingTier.upsert({
+    where: { code: 'A' },
+    update: {},
+    create: {
+      code: 'A',
+      nameAr: 'المستوى أ',
+      nameEn: 'Tier A',
+      defaultDiscountPercent: 10,
+    },
+  });
+  await prisma.pricingTier.upsert({
+    where: { code: 'B' },
+    update: {},
+    create: {
+      code: 'B',
+      nameAr: 'المستوى ب',
+      nameEn: 'Tier B',
+      defaultDiscountPercent: 15,
+    },
+  });
+  await prisma.pricingTier.upsert({
+    where: { code: 'C' },
+    update: {},
+    create: {
+      code: 'C',
+      nameAr: 'المستوى ج (أسعار مخصّصة)',
+      nameEn: 'Tier C (Custom)',
+      defaultDiscountPercent: null,
+    },
+  });
+
   // Backfill searchVector for every product. Safe to run every boot — it's a
   // single UPDATE that rewrites identical bytes when nothing changed.
   const rewritten = await prisma.$executeRawUnsafe(`

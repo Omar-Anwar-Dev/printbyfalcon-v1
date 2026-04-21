@@ -42,7 +42,20 @@ export default async function OrderDetailPage({
     },
   });
   if (!order) notFound();
-  if (order.userId !== user.id && user.type !== 'ADMIN') notFound();
+  // Ownership check — B2C sees own orders; B2B sees any order belonging to
+  // their company (shared-login model, ADR-007); ADMIN sees everything.
+  const company =
+    user.type === 'B2B'
+      ? await prisma.company.findUnique({
+          where: { primaryUserId: user.id },
+          select: { id: true },
+        })
+      : null;
+  const ownsOrder =
+    user.type === 'ADMIN' ||
+    order.userId === user.id ||
+    (company != null && order.companyId === company.id);
+  if (!ownsOrder) notFound();
 
   const currentInvoice = await prisma.invoice.findFirst({
     where: { orderId: order.id, isAmended: false },
