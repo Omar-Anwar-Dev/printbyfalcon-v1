@@ -1,11 +1,14 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import {
   createOrderAction,
   submitForReviewOrderAction,
 } from '@/app/actions/checkout';
+import { applyPromoCodeAction } from '@/app/actions/promo';
+import { GOVERNORATE_OPTIONS, governorateLabel } from '@/lib/i18n/governorates';
+import type { Governorate } from '@prisma/client';
 
 type SavedAddress = {
   id: string;
@@ -28,6 +31,42 @@ type B2BProps = {
   tierCode: 'A' | 'B' | 'C';
 };
 
+type CartItemView = {
+  id: string;
+  productId: string;
+  sku: string;
+  nameAr: string;
+  nameEn: string;
+  thumbUrl: string | null;
+  qty: number;
+  unitPriceEgp: number;
+  vatExempt: boolean;
+};
+
+type ZoneInfo = {
+  zoneId: string;
+  zoneCode: string;
+  zoneNameAr: string;
+  zoneNameEn: string;
+  baseRateEgp: number;
+  codEnabled: boolean;
+  freeShippingThresholdB2cEgp: number | null;
+  freeShippingThresholdB2bEgp: number | null;
+};
+
+type CodPolicyView = {
+  enabled: boolean;
+  feeType: 'FIXED' | 'PERCENT';
+  feeValue: number;
+  maxOrderEgp: number;
+};
+
+type AppliedPromo = {
+  code: string;
+  discountEgp: number;
+  type: 'PERCENT' | 'FIXED';
+};
+
 type Props = {
   locale: 'ar' | 'en';
   user: {
@@ -38,37 +77,14 @@ type Props = {
   } | null;
   savedAddresses: SavedAddress[];
   b2b?: B2BProps | null;
+  viewerType: 'B2B' | 'B2C';
+  cartItems: CartItemView[];
+  subtotalEgp: number;
+  shippingByGovernorate: Record<Governorate, ZoneInfo>;
+  globalThresholds: { b2cEgp: number; b2bEgp: number };
+  codPolicy: CodPolicyView;
+  vatRatePercent: number;
 };
-
-const GOVERNORATES: { value: string; ar: string; en: string }[] = [
-  { value: 'CAIRO', ar: 'القاهرة', en: 'Cairo' },
-  { value: 'GIZA', ar: 'الجيزة', en: 'Giza' },
-  { value: 'QALYUBIA', ar: 'القليوبية', en: 'Qalyubia' },
-  { value: 'ALEXANDRIA', ar: 'الإسكندرية', en: 'Alexandria' },
-  { value: 'BEHEIRA', ar: 'البحيرة', en: 'Beheira' },
-  { value: 'DAKAHLIA', ar: 'الدقهلية', en: 'Dakahlia' },
-  { value: 'DAMIETTA', ar: 'دمياط', en: 'Damietta' },
-  { value: 'GHARBIA', ar: 'الغربية', en: 'Gharbia' },
-  { value: 'KAFR_EL_SHEIKH', ar: 'كفر الشيخ', en: 'Kafr El-Sheikh' },
-  { value: 'MENOUFIA', ar: 'المنوفية', en: 'Menoufia' },
-  { value: 'SHARQIA', ar: 'الشرقية', en: 'Sharqia' },
-  { value: 'ISMAILIA', ar: 'الإسماعيلية', en: 'Ismailia' },
-  { value: 'PORT_SAID', ar: 'بورسعيد', en: 'Port Said' },
-  { value: 'SUEZ', ar: 'السويس', en: 'Suez' },
-  { value: 'NORTH_SINAI', ar: 'شمال سيناء', en: 'North Sinai' },
-  { value: 'SOUTH_SINAI', ar: 'جنوب سيناء', en: 'South Sinai' },
-  { value: 'RED_SEA', ar: 'البحر الأحمر', en: 'Red Sea' },
-  { value: 'MATRUH', ar: 'مطروح', en: 'Matruh' },
-  { value: 'NEW_VALLEY', ar: 'الوادي الجديد', en: 'New Valley' },
-  { value: 'BENI_SUEF', ar: 'بني سويف', en: 'Beni Suef' },
-  { value: 'FAYOUM', ar: 'الفيوم', en: 'Fayoum' },
-  { value: 'MINYA', ar: 'المنيا', en: 'Minya' },
-  { value: 'ASYUT', ar: 'أسيوط', en: 'Asyut' },
-  { value: 'SOHAG', ar: 'سوهاج', en: 'Sohag' },
-  { value: 'QENA', ar: 'قنا', en: 'Qena' },
-  { value: 'LUXOR', ar: 'الأقصر', en: 'Luxor' },
-  { value: 'ASWAN', ar: 'أسوان', en: 'Aswan' },
-];
 
 const LABELS = {
   ar: {
@@ -92,6 +108,8 @@ const LABELS = {
     cod: 'الدفع عند الاستلام',
     codDescription: 'ادفع نقدًا عند استلام الطلب من المندوب.',
     cardDescription: 'هنحولك لصفحة Paymob عشان تدفع بالبطاقة بأمان.',
+    codUnavailable: 'الدفع عند الاستلام غير متاح حاليًا لهذه المنطقة.',
+    codOverLimit: 'قيمة الطلب تتجاوز الحد المسموح للدفع عند الاستلام.',
     notes: 'ملاحظات للطلب (اختياري)',
     submit: 'تأكيد الطلب',
     submitting: 'جارٍ المعالجة...',
@@ -110,6 +128,26 @@ const LABELS = {
     submitSfr: 'ارسال الطلب للمراجعة',
     sfrPendingCopy:
       'هنسجّل الطلب بحالة "بانتظار تأكيد المبيعات" ونخليك تعرف بمجرد تأكيده.',
+    summary: 'ملخص الطلب',
+    subtotal: 'الإجمالي قبل الشحن',
+    discount: 'الخصم',
+    shipping: 'الشحن',
+    codFee: 'رسوم الدفع عند الاستلام',
+    vat: 'ضريبة القيمة المضافة (14%)',
+    total: 'الإجمالي',
+    freeShippingAchieved: 'شحن مجاني مُفعَّل!',
+    freeShippingProgress: (remaining: string) =>
+      `أضف بقيمة ${remaining} ج.م لتحصل على شحن مجاني.`,
+    promoCode: 'كود خصم',
+    promoCodePlaceholder: 'أدخل كود الخصم',
+    apply: 'تطبيق',
+    remove: 'إزالة',
+    promoApplied: (code: string, amount: string) =>
+      `تم تطبيق ${code} — خصم ${amount} ج.م`,
+    unknownZone:
+      'هذه المحافظة غير مهيأة للشحن — من فضلك تواصل معنا عبر واتساب.',
+    zoneInfo: (zone: string, rate: string) => `${zone} — ${rate} ج.م`,
+    egp: 'ج.م',
     errors: {
       'cart.empty': 'سلتك فارغة',
       'cart.insufficient_stock':
@@ -122,6 +160,17 @@ const LABELS = {
       'checkout.submit_for_review_not_allowed':
         'هذا الإعداد غير متاح لشركتك — يُرجى استخدام "ادفع الآن".',
       'checkout.b2b_required': 'ده خيار خاص بحسابات B2B المفعَّلة.',
+      'checkout.zone_not_configured':
+        'هذه المحافظة غير مهيأة للشحن — من فضلك تواصل معنا.',
+      'checkout.cod_not_available_for_zone':
+        'الدفع عند الاستلام غير متاح لمحافظتك أو الحد الأقصى تخطى — اختر الدفع بالبطاقة.',
+      'promo.not_found': 'كود الخصم غير صحيح.',
+      'promo.inactive': 'هذا الكود غير مفعّل.',
+      'promo.not_started': 'هذا الكود لم يبدأ سريانه بعد.',
+      'promo.expired': 'هذا الكود انتهى صلاحيته.',
+      'promo.usage_limit_reached': 'تم استنفاد حد استخدام هذا الكود.',
+      'promo.min_order_not_met':
+        'قيمة الطلب أقل من الحد الأدنى لتطبيق هذا الكود.',
       generic: 'حصل خطأ. حاول مرة أخرى.',
     },
   },
@@ -146,6 +195,8 @@ const LABELS = {
     cod: 'Cash on delivery',
     codDescription: 'Pay cash when our courier delivers the order.',
     cardDescription: "We'll redirect you to Paymob to pay securely.",
+    codUnavailable: 'Cash on delivery is unavailable for this area right now.',
+    codOverLimit: 'Order value exceeds the COD maximum.',
     notes: 'Order notes (optional)',
     submit: 'Place order',
     submitting: 'Processing…',
@@ -165,6 +216,26 @@ const LABELS = {
     submitSfr: 'Submit for Review',
     sfrPendingCopy:
       "We'll place the order in Pending Confirmation and notify you as soon as it's confirmed.",
+    summary: 'Order summary',
+    subtotal: 'Subtotal',
+    discount: 'Discount',
+    shipping: 'Shipping',
+    codFee: 'COD fee',
+    vat: 'VAT (14%)',
+    total: 'Total',
+    freeShippingAchieved: 'Free shipping unlocked!',
+    freeShippingProgress: (remaining: string) =>
+      `Add ${remaining} EGP more for free shipping.`,
+    promoCode: 'Promo code',
+    promoCodePlaceholder: 'Enter promo code',
+    apply: 'Apply',
+    remove: 'Remove',
+    promoApplied: (code: string, amount: string) =>
+      `${code} applied — ${amount} EGP off`,
+    unknownZone:
+      "This governorate isn't configured for shipping — please contact us on WhatsApp.",
+    zoneInfo: (zone: string, rate: string) => `${zone} — ${rate} EGP`,
+    egp: 'EGP',
     errors: {
       'cart.empty': 'Your cart is empty.',
       'cart.insufficient_stock':
@@ -178,23 +249,51 @@ const LABELS = {
         'Submit-for-Review is not enabled for your company — please use Pay Now.',
       'checkout.b2b_required':
         'This option is only available to active B2B accounts.',
+      'checkout.zone_not_configured':
+        "We don't ship to this governorate yet — please contact us.",
+      'checkout.cod_not_available_for_zone':
+        "Cash on delivery isn't available for your area or exceeds the limit — please pay by card.",
+      'promo.not_found': 'Promo code not found.',
+      'promo.inactive': 'This promo code is inactive.',
+      'promo.not_started': 'This promo code is not active yet.',
+      'promo.expired': 'This promo code has expired.',
+      'promo.usage_limit_reached': 'This promo code has reached its limit.',
+      'promo.min_order_not_met':
+        "Order subtotal doesn't meet this code's minimum.",
       generic: 'Something went wrong — please try again.',
     },
   },
 };
 
-export function CheckoutForm({ locale, user, savedAddresses, b2b }: Props) {
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+function fmt(n: number, locale: 'ar' | 'en'): string {
+  return n.toLocaleString(locale === 'ar' ? 'ar-EG' : 'en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+}
+
+export function CheckoutForm({
+  locale,
+  user,
+  savedAddresses,
+  b2b,
+  viewerType,
+  cartItems,
+  subtotalEgp,
+  shippingByGovernorate,
+  globalThresholds,
+  codPolicy,
+  vatRatePercent,
+}: Props) {
   const labels = LABELS[locale];
   const router = useRouter();
   const isAr = locale === 'ar';
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // Default submission mode:
-  //   - B2B with only SFR allowed → sfr
-  //   - B2B with only Pay Now allowed → payNow
-  //   - B2B with BOTH → payNow (PRD preference: "default for new B2B accounts")
-  //   - B2C / guest → payNow (only option)
   const defaultMode: 'payNow' | 'sfr' =
     b2b && !b2b.allowPayNow && b2b.allowSubmitForReview ? 'sfr' : 'payNow';
   const [checkoutMode, setCheckoutMode] = useState<'payNow' | 'sfr'>(
@@ -203,7 +302,6 @@ export function CheckoutForm({ locale, user, savedAddresses, b2b }: Props) {
   const [placedByName, setPlacedByName] = useState('');
   const [poReference, setPoReference] = useState('');
 
-  // Saved-address selector: null = "use new address below"
   const [selectedAddressId, setSelectedAddressId] = useState<string | null>(
     savedAddresses.find((a) => a.isDefault)?.id ??
       savedAddresses[0]?.id ??
@@ -231,6 +329,133 @@ export function CheckoutForm({ locale, user, savedAddresses, b2b }: Props) {
   const [paymentMethod, setPaymentMethod] = useState<'PAYMOB_CARD' | 'COD'>(
     'COD',
   );
+
+  // Sprint 9 — promo code UI state.
+  const [promoInput, setPromoInput] = useState('');
+  const [appliedPromo, setAppliedPromo] = useState<AppliedPromo | null>(null);
+  const [promoError, setPromoError] = useState<string | null>(null);
+  const [promoPending, startPromoTransition] = useTransition();
+
+  // Active address governorate drives zone-based shipping / COD availability.
+  const activeGovernorate: string = selectedAddress
+    ? selectedAddress.governorate
+    : governorate;
+
+  const zoneInfo = activeGovernorate
+    ? shippingByGovernorate[activeGovernorate as Governorate]
+    : undefined;
+
+  const totals = useMemo(() => {
+    const subtotal = round2(subtotalEgp);
+    const promoDiscount = appliedPromo ? round2(appliedPromo.discountEgp) : 0;
+
+    if (!zoneInfo) {
+      return {
+        subtotal,
+        shipping: 0,
+        codFee: 0,
+        discount: promoDiscount,
+        vat: 0,
+        total: round2(subtotal - promoDiscount),
+        freeShipped: false,
+        freeShipThreshold: 0,
+        codAvailable: false,
+      };
+    }
+
+    const thresholdOverride =
+      viewerType === 'B2B'
+        ? zoneInfo.freeShippingThresholdB2bEgp
+        : zoneInfo.freeShippingThresholdB2cEgp;
+    const threshold =
+      thresholdOverride !== null
+        ? thresholdOverride
+        : viewerType === 'B2B'
+          ? globalThresholds.b2bEgp
+          : globalThresholds.b2cEgp;
+    const freeShipped = subtotal >= threshold;
+    const shipping = freeShipped ? 0 : zoneInfo.baseRateEgp;
+
+    const codAvailable =
+      zoneInfo.codEnabled &&
+      codPolicy.enabled &&
+      subtotal <= codPolicy.maxOrderEgp;
+    const willApplyCod =
+      paymentMethod === 'COD' && codAvailable && checkoutMode === 'payNow';
+    const codFee = willApplyCod
+      ? codPolicy.feeType === 'FIXED'
+        ? round2(codPolicy.feeValue)
+        : round2((subtotal * codPolicy.feeValue) / 100)
+      : 0;
+
+    // VAT per-line with promo-discount proration (matches server math).
+    let vat = 0;
+    if (subtotal > 0 && vatRatePercent > 0) {
+      for (const item of cartItems) {
+        if (item.vatExempt) continue;
+        const lineTotal = item.unitPriceEgp * item.qty;
+        const promoShare =
+          promoDiscount > 0 ? promoDiscount * (lineTotal / subtotal) : 0;
+        const taxableLineTotal = Math.max(0, lineTotal - promoShare);
+        vat += (taxableLineTotal * vatRatePercent) / 100;
+      }
+    }
+    vat = round2(vat);
+
+    const total = round2(subtotal + shipping + codFee + vat - promoDiscount);
+
+    return {
+      subtotal,
+      shipping,
+      codFee,
+      discount: promoDiscount,
+      vat,
+      total,
+      freeShipped,
+      freeShipThreshold: threshold,
+      codAvailable,
+    };
+  }, [
+    appliedPromo,
+    cartItems,
+    checkoutMode,
+    codPolicy,
+    globalThresholds,
+    paymentMethod,
+    subtotalEgp,
+    vatRatePercent,
+    viewerType,
+    zoneInfo,
+  ]);
+
+  // If COD becomes unavailable (user picked a Sinai address), silently flip
+  // the picker to PAYMOB_CARD so the summary stays consistent.
+  if (paymentMethod === 'COD' && !totals.codAvailable && zoneInfo) {
+    // Defer the setState to the next tick to avoid "setState during render".
+    setTimeout(() => setPaymentMethod('PAYMOB_CARD'), 0);
+  }
+
+  function onApplyPromo() {
+    setPromoError(null);
+    const trimmed = promoInput.trim();
+    if (!trimmed) return;
+    startPromoTransition(async () => {
+      const r = await applyPromoCodeAction({ code: trimmed });
+      if (!r.ok) {
+        const key = r.errorKey as keyof typeof labels.errors;
+        setPromoError(labels.errors[key] ?? labels.errors.generic);
+        return;
+      }
+      setAppliedPromo(r.data);
+      setPromoInput(r.data.code);
+    });
+  }
+
+  function onRemovePromo() {
+    setAppliedPromo(null);
+    setPromoInput('');
+    setPromoError(null);
+  }
 
   function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -260,7 +485,6 @@ export function CheckoutForm({ locale, user, savedAddresses, b2b }: Props) {
           notes: addressNotes,
         };
 
-    // B2B Submit-for-Review branch: separate server action, placed_by required.
     if (b2b && checkoutMode === 'sfr') {
       if (!placedByName.trim()) {
         setError(labels.placedByRequired);
@@ -279,6 +503,7 @@ export function CheckoutForm({ locale, user, savedAddresses, b2b }: Props) {
           placedByName: placedByName.trim(),
           poReference,
           customerNotes,
+          promoCode: appliedPromo?.code ?? '',
         });
         if (!res.ok) {
           const key = res.errorKey as keyof typeof labels.errors;
@@ -304,13 +529,13 @@ export function CheckoutForm({ locale, user, savedAddresses, b2b }: Props) {
         customerNotes,
         placedByName: b2b ? placedByName : '',
         poReference: b2b ? poReference : '',
+        promoCode: appliedPromo?.code ?? '',
       });
       if (!res.ok) {
         const key = res.errorKey as keyof typeof labels.errors;
         setError(labels.errors[key] ?? labels.errors.generic);
         return;
       }
-      // Paymob card flow → redirect outbound; COD / dev-stub → internal route.
       const target = res.data.redirectUrl;
       if (target.startsWith('http')) {
         window.location.href = target;
@@ -320,101 +545,120 @@ export function CheckoutForm({ locale, user, savedAddresses, b2b }: Props) {
     });
   }
 
-  return (
-    <form onSubmit={onSubmit} className="space-y-6">
-      <section className="space-y-3 rounded-md border bg-background p-4">
-        <h2 className="text-base font-semibold">{labels.contact}</h2>
-        <div className="grid gap-3 md:grid-cols-2">
-          <label className="space-y-1 text-sm">
-            <span>{labels.name}</span>
-            <input
-              required
-              value={contactName}
-              onChange={(e) => setContactName(e.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2"
-            />
-          </label>
-          <label className="space-y-1 text-sm">
-            <span>{labels.phone}</span>
-            <input
-              required
-              type="tel"
-              inputMode="tel"
-              value={contactPhone}
-              onChange={(e) => setContactPhone(e.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2"
-            />
-          </label>
-          <label className="space-y-1 text-sm md:col-span-2">
-            <span>{labels.email}</span>
-            <input
-              type="email"
-              value={contactEmail ?? ''}
-              onChange={(e) => setContactEmail(e.target.value)}
-              className="w-full rounded-md border bg-background px-3 py-2"
-            />
-          </label>
+  const summary = (
+    <aside className="space-y-3 rounded-md border bg-background p-4 md:sticky md:top-4 md:self-start">
+      <h2 className="text-base font-semibold">{labels.summary}</h2>
+      <ul className="space-y-2 text-sm">
+        {cartItems.map((i) => (
+          <li key={i.id} className="flex items-center gap-2">
+            {i.thumbUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={i.thumbUrl}
+                alt=""
+                className="h-10 w-10 shrink-0 rounded object-cover"
+              />
+            ) : (
+              <div className="h-10 w-10 shrink-0 rounded bg-muted" />
+            )}
+            <span className="min-w-0 flex-1 truncate">
+              {isAr ? i.nameAr : i.nameEn} × {i.qty}
+            </span>
+            <span className="shrink-0 font-medium">
+              {fmt(i.unitPriceEgp * i.qty, locale)} {labels.egp}
+            </span>
+          </li>
+        ))}
+      </ul>
+      <dl className="space-y-1 border-t pt-3 text-sm">
+        <div className="flex justify-between">
+          <dt className="text-muted-foreground">{labels.subtotal}</dt>
+          <dd>
+            {fmt(totals.subtotal, locale)} {labels.egp}
+          </dd>
         </div>
-      </section>
-
-      <section className="space-y-3 rounded-md border bg-background p-4">
-        <h2 className="text-base font-semibold">{labels.shippingAddress}</h2>
-
-        {savedAddresses.length > 0 ? (
-          <div className="space-y-2">
-            <p className="text-sm font-medium">{labels.savedAddresses}</p>
-            <ul className="space-y-2">
-              {savedAddresses.map((a) => (
-                <li key={a.id}>
-                  <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-                    <input
-                      type="radio"
-                      name="savedAddress"
-                      className="mt-1"
-                      checked={selectedAddressId === a.id}
-                      onChange={() => setSelectedAddressId(a.id)}
-                    />
-                    <span>
-                      <span className="font-medium">{a.recipientName}</span>
-                      <span className="block text-muted-foreground">
-                        {a.phone}
-                      </span>
-                      <span className="block">
-                        {a.street}
-                        {a.building ? `, ${a.building}` : ''}
-                        {a.apartment ? `, ${a.apartment}` : ''}
-                      </span>
-                      <span className="block text-muted-foreground">
-                        {a.city}
-                        {a.area ? ` — ${a.area}` : ''} — {a.governorate}
-                      </span>
-                    </span>
-                  </label>
-                </li>
-              ))}
-              <li>
-                <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed p-3 text-sm">
-                  <input
-                    type="radio"
-                    name="savedAddress"
-                    checked={selectedAddressId === null}
-                    onChange={() => setSelectedAddressId(null)}
-                  />
-                  <span>{labels.useNewAddress}</span>
-                </label>
-              </li>
-            </ul>
+        {totals.discount > 0 ? (
+          <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+            <dt>{labels.discount}</dt>
+            <dd>
+              − {fmt(totals.discount, locale)} {labels.egp}
+            </dd>
           </div>
         ) : null}
+        <div className="flex justify-between text-muted-foreground">
+          <dt>{labels.shipping}</dt>
+          <dd>
+            {zoneInfo ? (
+              totals.freeShipped ? (
+                <span className="text-emerald-700 dark:text-emerald-400">
+                  {labels.freeShippingAchieved}
+                </span>
+              ) : (
+                <>
+                  {fmt(totals.shipping, locale)} {labels.egp}
+                </>
+              )
+            ) : (
+              '—'
+            )}
+          </dd>
+        </div>
+        {totals.codFee > 0 ? (
+          <div className="flex justify-between text-muted-foreground">
+            <dt>{labels.codFee}</dt>
+            <dd>
+              {fmt(totals.codFee, locale)} {labels.egp}
+            </dd>
+          </div>
+        ) : null}
+        {totals.vat > 0 ? (
+          <div className="flex justify-between text-muted-foreground">
+            <dt>{labels.vat}</dt>
+            <dd>
+              {fmt(totals.vat, locale)} {labels.egp}
+            </dd>
+          </div>
+        ) : null}
+        <div className="mt-2 flex justify-between border-t pt-2 font-semibold">
+          <dt>{labels.total}</dt>
+          <dd>
+            {fmt(totals.total, locale)} {labels.egp}
+          </dd>
+        </div>
+      </dl>
+      {zoneInfo && !totals.freeShipped && totals.freeShipThreshold > 0 ? (
+        <p className="text-xs text-muted-foreground">
+          {labels.freeShippingProgress(
+            fmt(
+              Math.max(0, totals.freeShipThreshold - totals.subtotal),
+              locale,
+            ),
+          )}
+        </p>
+      ) : null}
+      {zoneInfo ? (
+        <p className="text-xs text-muted-foreground">
+          {labels.zoneInfo(
+            isAr ? zoneInfo.zoneNameAr : zoneInfo.zoneNameEn,
+            fmt(zoneInfo.baseRateEgp, locale),
+          )}
+        </p>
+      ) : null}
+    </aside>
+  );
 
-        {selectedAddressId === null ? (
+  return (
+    <>
+      <form onSubmit={onSubmit} className="space-y-6">
+        <section className="space-y-3 rounded-md border bg-background p-4">
+          <h2 className="text-base font-semibold">{labels.contact}</h2>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm">
-              <span>{labels.recipient}</span>
+              <span>{labels.name}</span>
               <input
                 required
-                value={recipientName}
-                onChange={(e) => setRecipientName(e.target.value)}
+                value={contactName}
+                onChange={(e) => setContactName(e.target.value)}
                 className="w-full rounded-md border bg-background px-3 py-2"
               />
             </label>
@@ -424,235 +668,383 @@ export function CheckoutForm({ locale, user, savedAddresses, b2b }: Props) {
                 required
                 type="tel"
                 inputMode="tel"
-                value={addrPhone}
-                onChange={(e) => setAddrPhone(e.target.value)}
+                value={contactPhone}
+                onChange={(e) => setContactPhone(e.target.value)}
                 className="w-full rounded-md border bg-background px-3 py-2"
               />
             </label>
             <label className="space-y-1 text-sm md:col-span-2">
-              <span>{labels.governorate}</span>
-              <select
-                required
-                value={governorate}
-                onChange={(e) => setGovernorate(e.target.value)}
+              <span>{labels.email}</span>
+              <input
+                type="email"
+                value={contactEmail ?? ''}
+                onChange={(e) => setContactEmail(e.target.value)}
                 className="w-full rounded-md border bg-background px-3 py-2"
-              >
-                <option value="">{labels.selectGov}</option>
-                {GOVERNORATES.map((g) => (
-                  <option key={g.value} value={g.value}>
-                    {isAr ? g.ar : g.en}
-                  </option>
+              />
+            </label>
+          </div>
+        </section>
+
+        <section className="space-y-3 rounded-md border bg-background p-4">
+          <h2 className="text-base font-semibold">{labels.shippingAddress}</h2>
+
+          {savedAddresses.length > 0 ? (
+            <div className="space-y-2">
+              <p className="text-sm font-medium">{labels.savedAddresses}</p>
+              <ul className="space-y-2">
+                {savedAddresses.map((a) => (
+                  <li key={a.id}>
+                    <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+                      <input
+                        type="radio"
+                        name="savedAddress"
+                        className="mt-1"
+                        checked={selectedAddressId === a.id}
+                        onChange={() => setSelectedAddressId(a.id)}
+                      />
+                      <span>
+                        <span className="font-medium">{a.recipientName}</span>
+                        <span className="block text-muted-foreground">
+                          {a.phone}
+                        </span>
+                        <span className="block">
+                          {a.street}
+                          {a.building ? `, ${a.building}` : ''}
+                          {a.apartment ? `, ${a.apartment}` : ''}
+                        </span>
+                        <span className="block text-muted-foreground">
+                          {a.city}
+                          {a.area ? ` — ${a.area}` : ''} —{' '}
+                          {governorateLabel(a.governorate, locale)}
+                        </span>
+                      </span>
+                    </label>
+                  </li>
                 ))}
-              </select>
-            </label>
-            <label className="space-y-1 text-sm">
-              <span>{labels.city}</span>
+                <li>
+                  <label className="flex cursor-pointer items-center gap-3 rounded-md border border-dashed p-3 text-sm">
+                    <input
+                      type="radio"
+                      name="savedAddress"
+                      checked={selectedAddressId === null}
+                      onChange={() => setSelectedAddressId(null)}
+                    />
+                    <span>{labels.useNewAddress}</span>
+                  </label>
+                </li>
+              </ul>
+            </div>
+          ) : null}
+
+          {selectedAddressId === null ? (
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span>{labels.recipient}</span>
+                <input
+                  required
+                  value={recipientName}
+                  onChange={(e) => setRecipientName(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>{labels.phone}</span>
+                <input
+                  required
+                  type="tel"
+                  inputMode="tel"
+                  value={addrPhone}
+                  onChange={(e) => setAddrPhone(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm md:col-span-2">
+                <span>{labels.governorate}</span>
+                <select
+                  required
+                  value={governorate}
+                  onChange={(e) => setGovernorate(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                >
+                  <option value="">{labels.selectGov}</option>
+                  {GOVERNORATE_OPTIONS.map((g) => (
+                    <option key={g.value} value={g.value}>
+                      {isAr ? g.labelAr : g.labelEn}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>{labels.city}</span>
+                <input
+                  required
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>{labels.area}</span>
+                <input
+                  value={area}
+                  onChange={(e) => setArea(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm md:col-span-2">
+                <span>{labels.street}</span>
+                <input
+                  required
+                  value={street}
+                  onChange={(e) => setStreet(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>{labels.building}</span>
+                <input
+                  value={building}
+                  onChange={(e) => setBuilding(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>{labels.apartment}</span>
+                <input
+                  value={apartment}
+                  onChange={(e) => setApartment(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+              </label>
+              <label className="space-y-1 text-sm md:col-span-2">
+                <span>{labels.addressNotes}</span>
+                <textarea
+                  value={addressNotes}
+                  onChange={(e) => setAddressNotes(e.target.value)}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                  rows={2}
+                />
+              </label>
+            </div>
+          ) : null}
+
+          {activeGovernorate && !zoneInfo ? (
+            <p className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+              {labels.unknownZone}
+            </p>
+          ) : null}
+        </section>
+
+        {b2b ? (
+          <section className="space-y-3 rounded-md border bg-background p-4">
+            <h2 className="text-base font-semibold">{labels.b2bIdentity}</h2>
+            <p className="text-xs text-muted-foreground">
+              {b2b.companyName} · Tier {b2b.tierCode}
+            </p>
+            <div className="grid gap-3 md:grid-cols-2">
+              <label className="space-y-1 text-sm">
+                <span>
+                  {labels.placedByLabel}
+                  {checkoutMode === 'sfr' ? (
+                    <span className="text-destructive"> *</span>
+                  ) : null}
+                </span>
+                <input
+                  value={placedByName}
+                  onChange={(e) => setPlacedByName(e.target.value)}
+                  maxLength={80}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                  required={checkoutMode === 'sfr'}
+                />
+                <span className="block text-xs text-muted-foreground">
+                  {labels.placedByHelp}
+                </span>
+              </label>
+              <label className="space-y-1 text-sm">
+                <span>{labels.poReferenceLabel}</span>
+                <input
+                  value={poReference}
+                  onChange={(e) => setPoReference(e.target.value)}
+                  maxLength={40}
+                  className="w-full rounded-md border bg-background px-3 py-2"
+                />
+                <span className="block text-xs text-muted-foreground">
+                  {labels.poReferenceHelp}
+                </span>
+              </label>
+            </div>
+          </section>
+        ) : null}
+
+        {b2b && b2b.allowPayNow && b2b.allowSubmitForReview ? (
+          <section className="space-y-3 rounded-md border bg-background p-4">
+            <h2 className="text-base font-semibold">
+              {labels.checkoutModeTitle}
+            </h2>
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
               <input
-                required
-                value={city}
-                onChange={(e) => setCity(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2"
+                type="radio"
+                name="checkoutMode"
+                value="payNow"
+                className="mt-1"
+                checked={checkoutMode === 'payNow'}
+                onChange={() => setCheckoutMode('payNow')}
               />
+              <span>
+                <span className="font-medium">{labels.payNowLabel}</span>
+                <span className="block text-muted-foreground">
+                  {labels.payNowHelp}
+                </span>
+              </span>
             </label>
-            <label className="space-y-1 text-sm">
-              <span>{labels.area}</span>
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
               <input
-                value={area}
-                onChange={(e) => setArea(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2"
+                type="radio"
+                name="checkoutMode"
+                value="sfr"
+                className="mt-1"
+                checked={checkoutMode === 'sfr'}
+                onChange={() => setCheckoutMode('sfr')}
               />
+              <span>
+                <span className="font-medium">
+                  {labels.submitForReviewLabel}
+                </span>
+                <span className="block text-muted-foreground">
+                  {labels.submitForReviewHelp}
+                </span>
+              </span>
             </label>
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span>{labels.street}</span>
+          </section>
+        ) : null}
+
+        {checkoutMode === 'payNow' ? (
+          <section className="space-y-3 rounded-md border bg-background p-4">
+            <h2 className="text-base font-semibold">{labels.payment}</h2>
+            {totals.codAvailable ? (
+              <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+                <input
+                  type="radio"
+                  name="payment"
+                  value="COD"
+                  className="mt-1"
+                  checked={paymentMethod === 'COD'}
+                  onChange={() => setPaymentMethod('COD')}
+                />
+                <span>
+                  <span className="font-medium">{labels.cod}</span>
+                  <span className="block text-muted-foreground">
+                    {labels.codDescription}
+                  </span>
+                </span>
+              </label>
+            ) : (
+              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                <span className="font-medium">{labels.cod}</span>
+                <span className="block">
+                  {zoneInfo && totals.subtotal > codPolicy.maxOrderEgp
+                    ? labels.codOverLimit
+                    : labels.codUnavailable}
+                </span>
+              </div>
+            )}
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
               <input
-                required
-                value={street}
-                onChange={(e) => setStreet(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2"
+                type="radio"
+                name="payment"
+                value="PAYMOB_CARD"
+                className="mt-1"
+                checked={paymentMethod === 'PAYMOB_CARD'}
+                onChange={() => setPaymentMethod('PAYMOB_CARD')}
               />
+              <span>
+                <span className="font-medium">{labels.card}</span>
+                <span className="block text-muted-foreground">
+                  {labels.cardDescription}
+                </span>
+              </span>
             </label>
-            <label className="space-y-1 text-sm">
-              <span>{labels.building}</span>
+          </section>
+        ) : (
+          <section className="space-y-2 rounded-md border border-accent/40 bg-accent/5 p-4 text-sm">
+            <p className="font-medium">{labels.submitForReviewLabel}</p>
+            <p className="text-muted-foreground">{labels.sfrPendingCopy}</p>
+          </section>
+        )}
+
+        <section className="space-y-2 rounded-md border bg-background p-4">
+          <h2 className="text-base font-semibold">{labels.promoCode}</h2>
+          {appliedPromo ? (
+            <div className="flex items-center justify-between rounded-md border border-emerald-400/40 bg-emerald-50 p-3 text-sm dark:bg-emerald-950/20">
+              <span className="font-medium text-emerald-800 dark:text-emerald-300">
+                {labels.promoApplied(
+                  appliedPromo.code,
+                  fmt(appliedPromo.discountEgp, locale),
+                )}
+              </span>
+              <button
+                type="button"
+                onClick={onRemovePromo}
+                className="text-xs font-medium text-emerald-900 underline dark:text-emerald-300"
+              >
+                {labels.remove}
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-stretch gap-2">
               <input
-                value={building}
-                onChange={(e) => setBuilding(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2"
+                value={promoInput}
+                onChange={(e) => setPromoInput(e.target.value.toUpperCase())}
+                placeholder={labels.promoCodePlaceholder}
+                maxLength={40}
+                className="flex-1 rounded-md border bg-background px-3 py-2 text-sm"
               />
-            </label>
-            <label className="space-y-1 text-sm">
-              <span>{labels.apartment}</span>
-              <input
-                value={apartment}
-                onChange={(e) => setApartment(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2"
-              />
-            </label>
-            <label className="space-y-1 text-sm md:col-span-2">
-              <span>{labels.addressNotes}</span>
-              <textarea
-                value={addressNotes}
-                onChange={(e) => setAddressNotes(e.target.value)}
-                className="w-full rounded-md border bg-background px-3 py-2"
-                rows={2}
-              />
-            </label>
+              <button
+                type="button"
+                onClick={onApplyPromo}
+                disabled={promoPending || !promoInput.trim()}
+                className="rounded-md border bg-primary px-4 text-sm font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+              >
+                {labels.apply}
+              </button>
+            </div>
+          )}
+          {promoError ? (
+            <p className="text-xs text-destructive">{promoError}</p>
+          ) : null}
+        </section>
+
+        <section className="space-y-2 rounded-md border bg-background p-4">
+          <label className="space-y-1 text-sm">
+            <span>{labels.notes}</span>
+            <textarea
+              value={customerNotes}
+              onChange={(e) => setCustomerNotes(e.target.value)}
+              rows={2}
+              className="w-full rounded-md border bg-background px-3 py-2"
+            />
+          </label>
+        </section>
+
+        {error ? (
+          <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
+            {error}
           </div>
         ) : null}
-      </section>
 
-      {b2b ? (
-        <section className="space-y-3 rounded-md border bg-background p-4">
-          <h2 className="text-base font-semibold">{labels.b2bIdentity}</h2>
-          <p className="text-xs text-muted-foreground">
-            {b2b.companyName} · Tier {b2b.tierCode}
-          </p>
-          <div className="grid gap-3 md:grid-cols-2">
-            <label className="space-y-1 text-sm">
-              <span>
-                {labels.placedByLabel}
-                {checkoutMode === 'sfr' ? (
-                  <span className="text-destructive"> *</span>
-                ) : null}
-              </span>
-              <input
-                value={placedByName}
-                onChange={(e) => setPlacedByName(e.target.value)}
-                maxLength={80}
-                className="w-full rounded-md border bg-background px-3 py-2"
-                required={checkoutMode === 'sfr'}
-              />
-              <span className="block text-xs text-muted-foreground">
-                {labels.placedByHelp}
-              </span>
-            </label>
-            <label className="space-y-1 text-sm">
-              <span>{labels.poReferenceLabel}</span>
-              <input
-                value={poReference}
-                onChange={(e) => setPoReference(e.target.value)}
-                maxLength={40}
-                className="w-full rounded-md border bg-background px-3 py-2"
-              />
-              <span className="block text-xs text-muted-foreground">
-                {labels.poReferenceHelp}
-              </span>
-            </label>
-          </div>
-        </section>
-      ) : null}
-
-      {b2b && b2b.allowPayNow && b2b.allowSubmitForReview ? (
-        <section className="space-y-3 rounded-md border bg-background p-4">
-          <h2 className="text-base font-semibold">
-            {labels.checkoutModeTitle}
-          </h2>
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-            <input
-              type="radio"
-              name="checkoutMode"
-              value="payNow"
-              className="mt-1"
-              checked={checkoutMode === 'payNow'}
-              onChange={() => setCheckoutMode('payNow')}
-            />
-            <span>
-              <span className="font-medium">{labels.payNowLabel}</span>
-              <span className="block text-muted-foreground">
-                {labels.payNowHelp}
-              </span>
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-            <input
-              type="radio"
-              name="checkoutMode"
-              value="sfr"
-              className="mt-1"
-              checked={checkoutMode === 'sfr'}
-              onChange={() => setCheckoutMode('sfr')}
-            />
-            <span>
-              <span className="font-medium">{labels.submitForReviewLabel}</span>
-              <span className="block text-muted-foreground">
-                {labels.submitForReviewHelp}
-              </span>
-            </span>
-          </label>
-        </section>
-      ) : null}
-
-      {checkoutMode === 'payNow' ? (
-        <section className="space-y-3 rounded-md border bg-background p-4">
-          <h2 className="text-base font-semibold">{labels.payment}</h2>
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-            <input
-              type="radio"
-              name="payment"
-              value="COD"
-              className="mt-1"
-              checked={paymentMethod === 'COD'}
-              onChange={() => setPaymentMethod('COD')}
-            />
-            <span>
-              <span className="font-medium">{labels.cod}</span>
-              <span className="block text-muted-foreground">
-                {labels.codDescription}
-              </span>
-            </span>
-          </label>
-          <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-            <input
-              type="radio"
-              name="payment"
-              value="PAYMOB_CARD"
-              className="mt-1"
-              checked={paymentMethod === 'PAYMOB_CARD'}
-              onChange={() => setPaymentMethod('PAYMOB_CARD')}
-            />
-            <span>
-              <span className="font-medium">{labels.card}</span>
-              <span className="block text-muted-foreground">
-                {labels.cardDescription}
-              </span>
-            </span>
-          </label>
-        </section>
-      ) : (
-        <section className="space-y-2 rounded-md border border-accent/40 bg-accent/5 p-4 text-sm">
-          <p className="font-medium">{labels.submitForReviewLabel}</p>
-          <p className="text-muted-foreground">{labels.sfrPendingCopy}</p>
-        </section>
-      )}
-
-      <section className="space-y-2 rounded-md border bg-background p-4">
-        <label className="space-y-1 text-sm">
-          <span>{labels.notes}</span>
-          <textarea
-            value={customerNotes}
-            onChange={(e) => setCustomerNotes(e.target.value)}
-            rows={2}
-            className="w-full rounded-md border bg-background px-3 py-2"
-          />
-        </label>
-      </section>
-
-      {error ? (
-        <div className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </div>
-      ) : null}
-
-      <button
-        type="submit"
-        disabled={pending}
-        className="w-full rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
-      >
-        {pending
-          ? labels.submitting
-          : checkoutMode === 'sfr'
-            ? labels.submitSfr
-            : labels.submit}
-      </button>
-    </form>
+        <button
+          type="submit"
+          disabled={pending || (activeGovernorate !== '' && !zoneInfo)}
+          className="w-full rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
+        >
+          {pending
+            ? labels.submitting
+            : checkoutMode === 'sfr'
+              ? labels.submitSfr
+              : labels.submit}
+        </button>
+      </form>
+      {summary}
+    </>
   );
 }

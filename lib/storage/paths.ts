@@ -57,6 +57,23 @@ export function productImageDir(productId: string): string {
 }
 
 /**
+ * Brand assets (Sprint 9 S9-D6-T1) — store logo for invoice header + future
+ * favicon. Flat directory, single filename per asset, served by Nginx at
+ * `/storage/brand/<filename>.webp`.
+ */
+export function brandAssetDir(): string {
+  return path.join(storageRoot(), 'brand');
+}
+
+export function brandAssetDiskPath(filename: string): string {
+  return path.join(brandAssetDir(), filename);
+}
+
+export function brandAssetUrl(filename: string): string {
+  return `${STORAGE_URL_PREFIX}/brand/${filename}`;
+}
+
+/**
  * Resolve a public URL path (e.g. "products/abc/thumb-xyz.webp") to an absolute
  * disk path, with traversal protection. Returns null if the requested path
  * escapes STORAGE_ROOT or doesn't start with "products/".
@@ -65,9 +82,14 @@ export function safeResolveStoragePath(publicPath: string): string | null {
   const normalized = path.posix.normalize(publicPath).replace(/^\/+/, '');
   if (normalized.startsWith('..') || normalized.includes('\0')) return null;
 
-  // Only expose products/ subtree publicly. Invoices (future) get a separate
-  // gate with auth checks.
-  if (!normalized.startsWith('products/')) return null;
+  // Only expose products/ and brand/ subtrees publicly. Invoices (future)
+  // get a separate gate with auth checks.
+  if (
+    !normalized.startsWith('products/') &&
+    !normalized.startsWith('brand/')
+  ) {
+    return null;
+  }
 
   const root = storageRoot();
   const abs = path.resolve(root, normalized);

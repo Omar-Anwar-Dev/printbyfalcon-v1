@@ -5,7 +5,11 @@ import { getOptionalUser } from '@/lib/auth';
 import { getActiveCart } from '@/lib/cart/cart';
 import { getB2BCheckoutContext } from '@/lib/b2b/checkout-context';
 import { productImageUrl } from '@/lib/storage/paths';
+import { getFreeShipThresholds } from '@/lib/settings/shipping';
+import { getCodPolicy } from '@/lib/settings/cod';
+import { getVatRate } from '@/lib/settings/vat';
 import { CheckoutForm } from '@/components/checkout/checkout-form';
+import type { Governorate } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,6 +47,7 @@ export default async function CheckoutPage({
               slug: true,
               nameAr: true,
               nameEn: true,
+              vatExempt: true,
               images: {
                 orderBy: { position: 'asc' },
                 take: 1,
@@ -61,13 +66,74 @@ export default async function CheckoutPage({
   const user = await getOptionalUser();
   const isB2C = user?.type === 'B2C';
   const b2bCtx = await getB2BCheckoutContext();
+  const viewerType: 'B2B' | 'B2C' = b2bCtx ? 'B2B' : 'B2C';
 
-  const addresses = isB2C
-    ? await prisma.address.findMany({
-        where: { userId: user.id },
-        orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
-      })
-    : [];
+  const [addresses, governorateZones, thresholds, codPolicy, vat] =
+    await Promise.all([
+      isB2C
+        ? prisma.address.findMany({
+            where: { userId: user.id },
+            orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+          })
+        : Promise.resolve([]),
+      prisma.governorateZone.findMany({
+        select: {
+          governorate: true,
+          zone: {
+            select: {
+              id: true,
+              code: true,
+              nameAr: true,
+              nameEn: true,
+              baseRateEgp: true,
+              freeShippingThresholdB2cEgp: true,
+              freeShippingThresholdB2bEgp: true,
+              codEnabled: true,
+            },
+          },
+        },
+      }),
+      getFreeShipThresholds(),
+      getCodPolicy(),
+      getVatRate(),
+    ]);
+
+  // Build a Governorate → zone-info map for the form. If a governorate has
+  // no mapping (shouldn't happen post-seed), the form shows a "contact us"
+  // fallback and blocks submission.
+  const shippingByGovernorate = Object.fromEntries(
+    governorateZones.map((gz) => [
+      gz.governorate,
+      {
+        zoneId: gz.zone.id,
+        zoneCode: gz.zone.code,
+        zoneNameAr: gz.zone.nameAr,
+        zoneNameEn: gz.zone.nameEn,
+        baseRateEgp: Number(gz.zone.baseRateEgp),
+        codEnabled: gz.zone.codEnabled,
+        freeShippingThresholdB2cEgp:
+          gz.zone.freeShippingThresholdB2cEgp !== null
+            ? Number(gz.zone.freeShippingThresholdB2cEgp)
+            : null,
+        freeShippingThresholdB2bEgp:
+          gz.zone.freeShippingThresholdB2bEgp !== null
+            ? Number(gz.zone.freeShippingThresholdB2bEgp)
+            : null,
+      },
+    ]),
+  ) as Record<
+    Governorate,
+    {
+      zoneId: string;
+      zoneCode: string;
+      zoneNameAr: string;
+      zoneNameEn: string;
+      baseRateEgp: number;
+      codEnabled: boolean;
+      freeShippingThresholdB2cEgp: number | null;
+      freeShippingThresholdB2bEgp: number | null;
+    }
+  >;
 
   const subtotal = items.reduce(
     (acc, i) => acc + Number(i.unitPriceEgpSnapshot) * i.qty,
@@ -117,68 +183,30 @@ export default async function CheckoutPage({
                 }
               : null
           }
+          viewerType={viewerType}
+          cartItems={items.map((i) => ({
+            id: i.id,
+            productId: i.product.id,
+            sku: i.product.sku,
+            nameAr: i.product.nameAr,
+            nameEn: i.product.nameEn,
+            thumbUrl: i.product.images[0]
+              ? productImageUrl(
+                  i.product.id,
+                  'thumb',
+                  i.product.images[0].filename,
+                )
+              : null,
+            qty: i.qty,
+            unitPriceEgp: Number(i.unitPriceEgpSnapshot),
+            vatExempt: i.product.vatExempt,
+          }))}
+          subtotalEgp={subtotal}
+          shippingByGovernorate={shippingByGovernorate}
+          globalThresholds={thresholds}
+          codPolicy={codPolicy}
+          vatRatePercent={vat.percent}
         />
-        <aside className="space-y-3 rounded-md border bg-background p-4">
-          <h2 className="text-base font-semibold">
-            {isAr ? 'ملخص الطلب' : 'Order summary'}
-          </h2>
-          <ul className="space-y-2 text-sm">
-            {items.map((i) => (
-              <li key={i.id} className="flex items-center gap-2">
-                {i.product.images[0] ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img
-                    src={productImageUrl(
-                      i.product.id,
-                      'thumb',
-                      i.product.images[0].filename,
-                    )}
-                    alt=""
-                    className="h-10 w-10 shrink-0 rounded object-cover"
-                  />
-                ) : (
-                  <div className="h-10 w-10 shrink-0 rounded bg-muted" />
-                )}
-                <span className="min-w-0 flex-1 truncate">
-                  {isAr ? i.product.nameAr : i.product.nameEn} × {i.qty}
-                </span>
-                <span className="shrink-0 font-medium">
-                  {(Number(i.unitPriceEgpSnapshot) * i.qty).toLocaleString(
-                    isAr ? 'ar-EG' : 'en-US',
-                  )}{' '}
-                  {isAr ? 'ج.م' : 'EGP'}
-                </span>
-              </li>
-            ))}
-          </ul>
-          <dl className="space-y-1 border-t pt-3 text-sm">
-            <div className="flex justify-between">
-              <dt className="text-muted-foreground">
-                {isAr ? 'الإجمالي قبل الضريبة' : 'Subtotal'}
-              </dt>
-              <dd>
-                {subtotal.toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
-                {isAr ? 'ج.م' : 'EGP'}
-              </dd>
-            </div>
-            <div className="flex justify-between text-muted-foreground">
-              <dt>{isAr ? 'الشحن' : 'Shipping'}</dt>
-              <dd>{isAr ? 'مجاني (مؤقتًا)' : 'Free (placeholder)'}</dd>
-            </div>
-            <div className="flex justify-between font-semibold">
-              <dt>{isAr ? 'الإجمالي' : 'Total'}</dt>
-              <dd>
-                {subtotal.toLocaleString(isAr ? 'ar-EG' : 'en-US')}{' '}
-                {isAr ? 'ج.م' : 'EGP'}
-              </dd>
-            </div>
-          </dl>
-          <p className="text-xs italic text-muted-foreground">
-            {isAr
-              ? 'الشحن والضريبة يُحسبان على التفصيل في Sprint 9.'
-              : 'Shipping + VAT breakout land in Sprint 9.'}
-          </p>
-        </aside>
       </div>
     </div>
   );

@@ -15,8 +15,43 @@ export default async function AdminSettingsIndex({
       href: '/admin/settings/store',
       title: isAr ? 'بيانات المتجر والفاتورة' : 'Store & invoice info',
       desc: isAr
-        ? 'الاسم التجاري، السجل التجاري، البطاقة الضريبية، العنوان والهاتف — تُطبع على الفواتير.'
-        : 'Company name, commercial registry, tax card, address, phone — printed on invoices.',
+        ? 'الاسم التجاري، الشعار، السجل التجاري، البطاقة الضريبية، العنوان، الهاتف — تُطبع على الفواتير.'
+        : 'Company name, logo, commercial registry, tax card, address, phone — printed on invoices.',
+    },
+    {
+      href: '/admin/settings/shipping',
+      title: isAr ? 'الشحن والمحافظات' : 'Shipping & governorates',
+      desc: isAr
+        ? 'أسعار الشحن لكل منطقة، حدود الشحن المجاني، وربط المحافظات بالمناطق.'
+        : 'Per-zone shipping rates, free-shipping thresholds, governorate-to-zone mapping.',
+    },
+    {
+      href: '/admin/settings/cod',
+      title: isAr ? 'الدفع عند الاستلام' : 'Cash on delivery',
+      desc: isAr
+        ? 'تفعيل الدفع عند الاستلام، الرسوم، الحد الأقصى للطلب، والتوفر حسب المنطقة.'
+        : 'COD enable/disable, fee, max order value, per-zone availability.',
+    },
+    {
+      href: '/admin/settings/vat',
+      title: isAr ? 'ضريبة القيمة المضافة' : 'VAT',
+      desc: isAr
+        ? 'نسبة الضريبة الافتراضية (14%) والمنتجات المُعفاة.'
+        : 'Default VAT rate (14%) and tax-exempt product list.',
+    },
+    {
+      href: '/admin/settings/promo-codes',
+      title: isAr ? 'أكواد الخصم' : 'Promo codes',
+      desc: isAr
+        ? 'إنشاء وإدارة أكواد الخصم المستخدمة عند إتمام الطلب.'
+        : 'Create and manage discount codes applied at checkout.',
+    },
+    {
+      href: '/admin/couriers',
+      title: isAr ? 'شركاء التوصيل' : 'Courier partners',
+      desc: isAr
+        ? 'قائمة شركات التوصيل المستخدمة عند تسليم الطلبات للمندوبين.'
+        : 'Courier partner list used on order hand-off.',
     },
     {
       href: '/admin/settings/inventory',

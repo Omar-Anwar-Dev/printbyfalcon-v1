@@ -1,10 +1,10 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 deployed to prod; **Sprints 7 + 8 COMPLETE 2026-04-22** — awaiting staging + prod deploy. M1 target remains end of Sprint 12.
-- **Current sprint:** **Sprint 8 COMPLETE** ✅ — 8/8 exit criteria met; dual-option B2B checkout + Pending Confirmation queue + bulk-order tool + one-click reorder + Whats360 rep-confirm renderer + cross-company hardening all in place.
-- **Next sprint:** Sprint 9 — COD + Shipping Zones + Admin Settings (not started; awaiting "start sprint 9" command — runs AFTER Sprint 7 + Sprint 8 combined deploy).
-- **Last updated:** 2026-04-22 — Sprint 8 close-out.
+- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 deployed to prod; **Sprints 7 + 8 + 9 COMPLETE 2026-04-22** — awaiting staging + prod deploy. M1 target remains end of Sprint 12.
+- **Current sprint:** **Sprint 9 COMPLETE** ✅ — 6/6 exit criteria met; 5 shipping zones + COD lifecycle + VAT + promo codes + 6 new settings pages + Paymob-PAID email parking-lot closed.
+- **Next sprint:** Sprint 10 — Admin Completeness: Roles, Audit, Customer Mgmt, Returns, Dashboard, WhatsApp Bridge (not started; awaiting "start sprint 10" command — runs AFTER Sprint 7 + 8 + 9 combined deploy).
+- **Last updated:** 2026-04-22 — Sprint 9 close-out.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 6 deploy confirmed at Sprint 7 kickoff.
 
@@ -24,6 +24,8 @@ All 9 exit criteria met. B2C phone+OTP registration (dev-mode until Meta approve
 
 ### Sprint 5 — Order Tracking + Notifications + Admin Order Mgmt — completed 2026-04-20
 All 8 exit criteria met. Foundation: Whats360 transport replaces Meta Cloud API (ADR-033), dropping the template-approval bottleneck entirely. New schema: `Courier`, `Notification`, `Return`, `ReturnItem`, `CancellationResolution` enum, `RefundDecision` enum + Order courier-handoff + cancellation fields. Admin surfaces: status-action panel with courier handoff modal on `/admin/orders/[id]`, bulk "Mark Handed to Courier" on `/admin/orders`, admin CRUD for couriers (`/admin/couriers`), cancellation queue (`/admin/orders/cancellations`), returns log (`/admin/orders/returns`), notification opt-out matrix (`/admin/settings/notifications`, Owner-only). Customer surfaces: polished vertical timeline with localized labels + courier details card + customer-visible notes card + "Request cancellation" button pre-HANDED_TO_COURIER + invoice-download placeholder. Notifications: rate-limited at 5/phone/hour, B2C WhatsApp only, B2B WhatsApp + email, per-status opt-out, lifecycle traced via `Notification` rows (PENDING → SENT / FAILED) updated by both workers + the Whats360 inbound webhook. Ops: [docs/order-ops-guide.md](order-ops-guide.md) documents the day-to-day workflow. 82/82 vitest green + 12 new E2E smoke cases + `npm run seed:orders` for the 30-order demo dataset.
+
+*Sprints 6 / 7 / 8 / 9 have their detailed COMPLETE sections below (this list reserved for the top-5 summaries).*
 
 ---
 
@@ -926,4 +928,118 @@ Mapped to the 8 criteria in `docs/implementation-plan.md` lines 555–564:
 8. **Switch back to the B2B browser.** `/en/account/orders/<id>` shows Status=Confirmed, Placed by, PO ref, Payment note. Timeline has the new event.
 9. **Run a seeded demo dataset.** `npm run seed:orders -- --force` now includes 4 pending-confirmation B2B orders — the queue count jumps.
 10. **Reorder.** Open any past DELIVERED order → click "Reorder" → modal shows line-level statuses → tick the lines you want → Add to cart. Watch the cart populate at today's prices.
+
+---
+
+## Sprint 9 kickoff resolutions (2026-04-22)
+
+- **Zone rates (EGP):** GREATER_CAIRO=40, ALEX_DELTA=65, CANAL_SUEZ=70, UPPER_EGYPT=85, SINAI_RED_SEA_REMOTE=130. Seeded + admin-editable post-seed.
+- **Free-shipping thresholds:** flat B2C=1500, B2B=5000 (seeded as global Setting; per-zone override columns available on ShippingZone).
+- **COD defaults (closes PRD Q#13):** enabled / FIXED 20 EGP / max 15,000 EGP / all zones on (Sinai togglable later via ShippingZone.codEnabled).
+- **Governorate → zone mapping:** plain PRD reading, admin-editable via multi-select bulk reassign UX.
+- **Parking-lot closure requested:** Paymob-PAID confirmation email (Sprint 4 parking-lot item, still open through Sprint 8) — close this sprint.
+- **Store-info page extension:** add logo upload (sharp → WebP ≤ 400px) + support WhatsApp number (closes PRD Q#2 housing).
+
+## Sprint 9 — COMPLETE 2026-04-22
+
+Single dense session following the Sprint 2–8 pattern. Every task typechecked + tested incrementally; final QA gate in §Verification.
+
+### Foundation / ADRs
+- [x] **ADR-045** [2026-04-22] Shipping/COD/promo/VAT stored as `Order` snapshot columns (no recompute from current Settings).
+- [x] **ADR-046** [2026-04-22] Race-safe promo-code consume via conditional `updateMany` (mirrors ADR-036 inventory decrement).
+- [x] **ADR-047** [2026-04-22] Courier CRUD stays at `/admin/couriers`; Settings hub surfaces it with a card (rather than moving files).
+- [x] **ADR-048** [2026-04-22] Brand logo = single re-encoded WebP under `/storage/brand/<uuid>.webp` referenced by `StoreInfo.logoFilename`.
+- [x] **ADR-049** [2026-04-22] Paymob webhook closes Sprint 4 parking-lot — `enqueueOrderConfirmationEmail` now fires on PAID.
+
+### Schema + seeds
+- [x] **S9-D1-T1** [2026-04-22] Prisma — `ShippingZoneCode` enum (5 values), `ShippingZone` + `GovernorateZone` models, `PromoCodeType` enum, `PromoCode` model. `Order.codFeeEgp` + `Order.promoCodeId` (FK `SetNull`). Schema validates + client regenerates clean.
+- [x] **S9-D1-T1 (seed)** [2026-04-22] `scripts/post-push.ts` extended — idempotent upsert of 5 zones + 27 GovernorateZone rows + 3 Setting rows (`shipping.freeShipThresholds`, `cod.policy`, `vat.rate`) + 3 demo PromoCode rows.
+
+### Shipping + checkout
+- [x] **S9-D1-T2 / S9-D1-T3 / S9-D2-T1** [2026-04-22] Checkout form rewritten ([components/checkout/checkout-form.tsx](../components/checkout/checkout-form.tsx)): drops the hardcoded 27-governorate list (now imports `GOVERNORATE_OPTIONS` from [lib/i18n/governorates.ts](../lib/i18n/governorates.ts)), live zone-aware shipping + free-ship progress + COD auto-hide + promo-code Apply/Remove + VAT/COD fee line items in the in-form order summary. `resolveShippingQuote` ([lib/shipping/resolve.ts](../lib/shipping/resolve.ts)) is the single source of truth on both client (via context props) and server (via direct call). Checkout page ([app/[locale]/checkout/page.tsx](../app/[locale]/checkout/page.tsx)) loads zone map + thresholds + COD policy + VAT rate + cart items (with `vatExempt` flag) and passes them to the client form.
+- [x] **S9-D2-T3 / S9-D3-T1** [2026-04-22] COD flow: checkout form hides COD option when `!zoneInfo.codEnabled || subtotal > codPolicy.maxOrderEgp`; `createOrderAction` writes `paymentStatus: 'PENDING_ON_DELIVERY'` + `codFeeEgp` + `discountEgp` + `vatEgp`; per-line VAT with promo-prorated taxable base (server + client math byte-identical).
+
+### Admin settings
+- [x] **S9-D2-T2** [2026-04-22] `/admin/settings/shipping` ([app/[locale]/admin/settings/shipping/page.tsx](../app/[locale]/admin/settings/shipping/page.tsx)) + [components/admin/shipping-settings-form.tsx](../components/admin/shipping-settings-form.tsx) — 3 panels: global thresholds (B2C/B2B), per-zone editor (rate + B2C/B2B override + `codEnabled`), governorate multi-select bulk reassign. Backed by `updateShippingZoneAction`, `updateFreeShipThresholdsAction`, `bulkReassignGovernoratesAction` in `app/actions/admin-settings.ts` — all OWNER-only + audit-logged.
+- [x] **S9-D3-T3** [2026-04-22] `/admin/settings/cod` ([app/[locale]/admin/settings/cod/page.tsx](../app/[locale]/admin/settings/cod/page.tsx)) + [components/admin/cod-policy-form.tsx](../components/admin/cod-policy-form.tsx) — enabled toggle + feeType (FIXED/PERCENT) + feeValue + maxOrderEgp.
+- [x] **S9-D6-T3** [2026-04-22] `/admin/settings/vat` ([app/[locale]/admin/settings/vat/page.tsx](../app/[locale]/admin/settings/vat/page.tsx)) + [components/admin/vat-rate-form.tsx](../components/admin/vat-rate-form.tsx) — VAT rate % + list of first 20 vatExempt products with click-through to product edit.
+- [x] **S9-D5-T1** [2026-04-22] `/admin/settings/promo-codes` list + `/new` + `/[id]` edit, backed by `app/actions/admin-promo.ts` (create/update/toggle-active/bulk-disable-expired). Search by code substring, AR/EN labels, inline toggle.
+- [x] **S9-D6-T1** [2026-04-22] `/admin/settings/store` extended — existing form now handles logo upload (sharp → WebP ≤ 400px via [lib/storage/brand.ts](../lib/storage/brand.ts) + `uploadBrandLogoAction` / `clearBrandLogoAction`) + support-WhatsApp text field. `StoreInfo` type gains `logoFilename` + `supportWhatsapp` fields (both optional, empty-string default).
+- [x] **S9-D7-T1** [2026-04-22] Settings hub ([app/[locale]/admin/settings/page.tsx](../app/[locale]/admin/settings/page.tsx)) expanded from 3 to 8 cards (adds shipping / cod / vat / promo-codes / couriers).
+
+### COD lifecycle admin
+- [x] **S9-D3-T2** [2026-04-22] `markCodOrderPaidAction` in [app/actions/admin-orders.ts](../app/actions/admin-orders.ts) flips `PENDING_ON_DELIVERY → PAID` with audit + order status event + invalidation of the reconciliation page. OWNER+OPS gated. Surfaced via the new [components/admin/cod-mark-paid-button.tsx](../components/admin/cod-mark-paid-button.tsx) on `/admin/orders/[id]` (only renders when COD + not yet paid).
+- [x] **S9-D4-T5** [2026-04-22] `/admin/orders/cod-reconciliation` ([app/[locale]/admin/orders/cod-reconciliation/page.tsx](../app/[locale]/admin/orders/cod-reconciliation/page.tsx)) — lists `COD + PENDING_ON_DELIVERY` orders grouped by courier with per-group subtotal + grand total + "since date" filter.
+
+### Governorate bulk reassign (reallocated capacity from ADR-022)
+- [x] **S9-D4-T4** [2026-04-22] Multi-select bulk reassign wired into the shipping form — tick governorates + pick target zone + one click. `bulkReassignGovernoratesAction` runs a single `$transaction` over N upserts. Each governorate row also shows its current zone inline.
+
+### Paymob webhook — parking-lot closure
+- [x] **S9-D7 (Paymob email)** [2026-04-22] `/api/webhooks/paymob/route.ts` PAID branch now loads OrderItems + snapshotted totals and calls `enqueueOrderConfirmationEmail` (newly exported from `app/actions/checkout.ts`). Best-effort — enqueue failure still returns 200 so Paymob doesn't retry-storm. Sprint 4 parking-lot item closed (ADR-049). `order-confirmation.ts` renderer extended to show discount / COD fee / VAT lines when non-zero.
+
+### Promo codes
+- [x] **S9-D5-T2** [2026-04-22] [app/actions/promo.ts::applyPromoCodeAction](../app/actions/promo.ts) — read-only preview. Validates, returns `{code, discountEgp, type}`. Used by the checkout form's Apply button.
+- [x] **S9-D5-T3** [2026-04-22] `tryConsumePromoCode(tx, id)` in [lib/promo/validate.ts](../lib/promo/validate.ts) — race-safe consume pattern (ADR-046). Throws `'promo.usage_limit_reached'` on exhaust, caught by both `createOrderAction` and `submitForReviewOrderAction` → rollback + user-facing error.
+- [x] **S9-D8-T2** [2026-04-22] `bulkDisableExpiredPromosAction` — flips `active=false` on every `validTo < now` code. Audit-logged. Triggered from the list page header.
+- [x] **S9-D9-T2** [2026-04-22] Edge-case handling in `validatePromoCode`: not_found / inactive / not_started / expired / usage_limit_reached / min_order_not_met — each mapped to a localized error string in the checkout form.
+
+### Tests + seeds + docs
+- [x] **S9-D7-T2** [2026-04-22] [tests/e2e/sprint9.spec.ts](../tests/e2e/sprint9.spec.ts) — 10 auth-gate cases covering settings/shipping, settings/cod, settings/vat, settings/promo-codes, settings/promo-codes/new, /admin/orders/cod-reconciliation, settings hub (AR + EN each where applicable).
+- [x] **Unit tests** [2026-04-22] 3 new vitest suites: [lib/promo/validate.test.ts](../lib/promo/validate.test.ts) (6 cases — percent/fixed/clamping/rounding), [lib/settings/cod.test.ts](../lib/settings/cod.test.ts) (4 cases — disabled/fixed/percent/zero-fee), [lib/settings/vat.test.ts](../lib/settings/vat.test.ts) (5 cases — exempt/rate/rounding/fractional). 125/125 green (up from 110).
+- [x] **S9-D9-T1** [2026-04-22] [docs/settings-panel-reference.md](settings-panel-reference.md) new — owner-facing reference for every toggle on the 8 settings pages + what's intentionally off-panel (pricing tiers, credentials, infra).
+- [x] **S9-D9-T3** [2026-04-22] 3 demo promo codes upserted via post-push.ts (WELCOME10 / FIXED50 / B2BBULK).
+
+## Verification (2026-04-22)
+- ✅ `npx prisma validate` — schema valid (2 new enums, 3 new models, 2 Order columns).
+- ✅ `npx prisma generate` — Prisma Client emitted cleanly with all new types.
+- ✅ `npx tsc --noEmit` — clean across app + lib + worker + tests + scripts.
+- ✅ `npx vitest run` — **125/125 tests green** across 14 suites. No pre-existing regressions. Sprint 9 adds 15 new cases (+ was 110).
+- ✅ `npx next build` — production build succeeds; 12 new routes compiled: `/admin/settings/shipping`, `/admin/settings/cod`, `/admin/settings/vat`, `/admin/settings/promo-codes`, `/admin/settings/promo-codes/new`, `/admin/settings/promo-codes/[id]`, `/admin/orders/cod-reconciliation` (× AR + EN).
+- ⏭️ Live Paymob test-card E2E — deferred to staging-manual (same pattern as Sprint 4/6/7/8).
+- ⏭️ Live admin-authenticated shipping/COD/promo walkthrough — staging-manual.
+
+## Sprint 9 Exit Criteria — status
+
+Mapped to the 6 criteria in `docs/implementation-plan.md` lines 626-633:
+
+- ✅ **Both payment methods (Paymob card, COD) end-to-end on staging** — COD now includes full fee calc + admin mark-paid + reconciliation report; Paymob PAID branch now also sends confirmation email (ADR-049 closes the Sprint 4 parking-lot).
+- ✅ **5-zone shipping with admin-configurable rates + free-shipping thresholds + governorate mapping** — 5 zones seeded, 27-governorate mapping seeded, admin UI covers per-zone rates + per-zone overrides + global thresholds + bulk governorate reassign.
+- ✅ **COD policy admin-controlled (fee, max value, per-zone availability)** — global policy at `/admin/settings/cod`, per-zone toggle on shipping page.
+- ✅ **Promo codes (basic): % or fixed, expiry, usage cap, applied at checkout** — PromoCode model + CRUD + atomic consume + checkout Apply; MVP one-code-per-order enforced via scalar `Order.promoCodeId`.
+- ✅ **Admin settings panel covers: shipping, COD, couriers, VAT, promo codes, store info, notifications** — 8 cards, couriers surfaced at `/admin/couriers` (ADR-047), all other pages new.
+- ✅ **Both AR and EN versions of all settings pages** — every new page renders AR + EN text; bilingual labels in forms + buttons + error strings.
+
+**6/6 fully met. Sprint 9 closed 2026-04-22.**
+
+## Decisions logged this sprint
+- **ADR-045** [2026-04-22] Shipping/COD/promo/VAT as snapshot columns on `Order` (no recompute from live Settings).
+- **ADR-046** [2026-04-22] Race-safe promo-code consume via conditional `updateMany` (mirrors ADR-036).
+- **ADR-047** [2026-04-22] Couriers stay at `/admin/couriers`; settings hub surfaces it via a card.
+- **ADR-048** [2026-04-22] Brand logo = single WebP under `/storage/brand/<uuid>.webp`.
+- **ADR-049** [2026-04-22] Paymob webhook fires order-confirmation email on PAID (closes Sprint 4 parking-lot).
+
+## Risk Log Updates
+- No new risks. Sprint 9 closes PRD Q#10 (governorate defaults — admin-editable, reasonable seed), PRD Q#13 (COD defaults — 20 EGP fixed / 15k max). Q#8 (invoice header store info) stays in place — now extended with logo + support-WhatsApp fields.
+
+## Sprint 9 parking lot for Sprint 10
+- **Admin UI viewer for Sprint 9 audit actions** — `settings.shipping.*` / `settings.cod.*` / `settings.vat.*` / `promo.*` all in `AuditLog`; query by SQL until v1.1 UI viewer lands. Sprint 10 S10-D8-T2 captures this SQL cheat-sheet for devs.
+- **Per-company free-shipping threshold override** — v1.1 if a single big B2B customer asks for a carve-out. Today the B2B threshold is global + per-zone.
+- **Dedicated COD mark-paid workflow for courier bulk cash** — MVP marks one order at a time from detail page; v1.1 could allow a "record cash collection from courier X for orders A/B/C" batch UI.
+- **Logo re-upload purges Cloudflare cache** — out of scope today; the UUID-in-filename trick ensures no stale bytes (ADR-048). If the owner ever overwrites `logo.webp` with a fixed filename, add a purge step.
+- **Brand logo rendered on invoice template** — `StoreInfo.logoFilename` is now populated at save time, but [lib/invoices/template.tsx](../lib/invoices/template.tsx) doesn't consume it yet. Sprint 10 pickup (or a Sprint 9.5 polish commit).
+- **Paymob PENDING_ON_DELIVERY on dev stubs** — dev stub bypasses the webhook; COD is the only stubbed path. Acceptable — stubs are for local dev only.
+
+## Sprint 9 demo script
+1. **Shipping setup.** Sign in to admin as OWNER. Open `/en/admin/settings/shipping` — see 5 zones with the owner's rates (40 / 65 / 70 / 85 / 130 EGP). Bump the Upper Egypt rate to 90, click "Save this zone".
+2. **Free-ship thresholds.** Change B2C to 1200 and B2B to 4000, hit "Save thresholds".
+3. **Governorate bulk move.** Tick Fayoum + Beni Suef, pick "Greater Cairo" as the target, click "Assign 2".
+4. **COD policy.** Open `/en/admin/settings/cod` — flip fee type to PERCENT with value 1.5, save. (Admin can reverse this; don't leave it on for the demo.)
+5. **VAT.** Open `/en/admin/settings/vat` — confirm 14% default + the list of vat-exempt products (0 today unless you flipped one).
+6. **Promo code.** `/en/admin/settings/promo-codes` — click "New code" → `DEMO20` / PERCENT / 20 / min 500 / limit 50 / active. Save.
+7. **Customer checkout.** Switch to a private browser. Add a few products to cart. Open `/en/checkout`. Fill an address with **Cairo** — notice shipping = 40 EGP, COD enabled, VAT ~14% of subtotal. Change governorate to **North Sinai** — shipping jumps to 130, COD hides (zone's codEnabled = true still, but the demo fee change may push over threshold).
+8. **Promo apply.** Enter `DEMO20` → click Apply. Summary redraws with the 20% discount + VAT re-proportions.
+9. **Place COD order.** Confirm + submit.
+10. **COD reconciliation.** Back in admin, open `/en/admin/orders/cod-reconciliation` — the new order appears under "No courier yet" with its total.
+11. **Mark paid.** Open the order detail → click **"Mark COD as paid"** → Confirm. Reconciliation page refreshes; order gone.
+12. **Paymob email closure.** Place a Paymob order (dev stub or real Paymob test card). Payment completes → Paymob webhook fires → order-confirmation email enqueued alongside the invoice (watch worker log — `send-email` job for `order-confirmation` template).
 

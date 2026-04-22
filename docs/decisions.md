@@ -1002,3 +1002,109 @@ Status: Accepted
 - Cancellations from PENDING_CONFIRMATION still go through `updateOrderStatusAction` (correct inventory release path). `confirmB2BOrderAction` never handles cancellation.
 - Admin order detail page gate widened to `['OWNER', 'OPS', 'SALES_REP']`; per-action authz remains server-side enforced.
 
+---
+
+## ADR-045: Shipping-zone + COD-fee + promo-discount stored on `Order` as snapshot columns
+
+**Date:** 2026-04-22 (Sprint 9 S9-D1-T1 / S9-D3-T1 / S9-D5-T1)
+
+**Status:** Accepted
+
+**Context:**
+- Sprint 9 introduces `ShippingZone` (5 rows) and `Setting` rows for COD policy + VAT + free-shipping thresholds. These are all admin-editable at any time, so a resolved price at order-placement time is effectively a lookup-result that can drift from "current values" a week later.
+- Orders already snapshot `subtotalEgp / shippingEgp / discountEgp / vatEgp / totalEgp`. Sprint 9 adds `codFeeEgp` + `promoCodeId` (FK with `onDelete: SetNull`).
+- Alternative would be computing each part on-the-fly from a snapshotted `{zoneCode, codPolicy, vatRate, promoDiscountPercent}` JSON blob and re-rendering totals in the invoice template.
+
+**Decision:**
+- Store every EGP amount as its own column on `Order`. Invoice template + customer-facing views read the columns directly; nothing recomputes.
+- `promoCodeId` is a scalar FK (not a JSON snapshot) so admin can run `orders WHERE promo_code_id = X` for usage reporting. `onDelete: SetNull` means deleting a promo code in admin doesn't cascade-break historical orders.
+
+**Consequences:**
+- Six EGP columns on `Order` now: `subtotalEgp / shippingEgp / codFeeEgp / discountEgp / vatEgp / totalEgp`. Invoice template shows each on its own line when > 0.
+- Changing the COD fee or VAT rate in admin affects new orders only. Past orders keep their original amounts.
+- Shipping address is already snapshotted via `addressSnapshot` JSON — zone name isn't stored separately because it's derivable from `addressSnapshot.governorate` + the (live) GovernorateZone table, and admin reshuffling governorates mid-flight is rare + recoverable via AuditLog.
+
+---
+
+## ADR-046: Race-safe promo-code consumption mirrors ADR-036 inventory pattern
+
+**Date:** 2026-04-22 (Sprint 9 S9-D5-T3)
+
+**Status:** Accepted
+
+**Context:**
+- PromoCode has `usageLimit` (optional total cap) and `usedCount`. Concurrent checkout attempts must not allow `usedCount > usageLimit`. Naïve `findUnique → compare → update` introduces a TOCTOU race — two callers both see `usedCount = 99` against `usageLimit = 100`, both bump to 100, one should have failed.
+- Sprint 6 (ADR-036) solved the same shape for inventory decrement using a conditional `updateMany` + `count === 0` rollback.
+
+**Decision:**
+- `tryConsumePromoCode(tx, id)` issues `prisma.promoCode.updateMany({ where: { id, usedCount: { lt: usageLimit } }, data: { usedCount: { increment: 1 } } })`. If `hit.count === 0`, we raced another order to the last slot — throw `'promo.usage_limit_reached'` and let the order-creation transaction roll back.
+- Unlimited codes (usageLimit = null) skip the guard since they never exhaust.
+- Called inside `$transaction` so a rollback undoes both the increment and the partial order.
+
+**Consequences:**
+- Matches the mental model already established by ADR-036 — one pattern for "conditional atomic increment/decrement with race-safe rollback" across the codebase.
+- A mid-flight exhaust returns the user to the checkout form with `'promo.usage_limit_reached'` — they can retry without the code.
+- Preview action (`applyPromoCodeAction`) does NOT consume — purely read-only validation. Real consumption is inside the order transaction.
+
+---
+
+## ADR-047: Courier CRUD stays at `/admin/couriers`; Settings hub surfaces it
+
+**Date:** 2026-04-22 (Sprint 9 S9-D4-T3)
+
+**Status:** Accepted
+
+**Context:**
+- Sprint 9 plan calls for `/admin/settings/couriers` as part of the admin settings panel. Sprint 5 built the existing CRUD at `/admin/couriers` + three sub-pages (`new`, `[id]`) + nav link.
+- Two options: (a) move the three pages under `/admin/settings/couriers/*` + add a redirect; (b) keep them put and add a card to the settings hub that links there.
+
+**Decision:**
+- (b). The URL surface is already bookmarked + linked from `components/admin/admin-nav.tsx`. Adding a hub card preserves those bookmarks and surfaces the page from the correct mental location without moving files.
+
+**Consequences:**
+- PRD / plan reference to `/admin/settings/couriers` is satisfied by the hub card. A future URL reorg can redirect `/admin/couriers → /admin/settings/couriers` cleanly; no callers today require it.
+- Nav still has the top-level "Couriers" link (handy for ops team). Settings hub also lists it (handy for owner configuring everything in one place).
+
+---
+
+## ADR-048: Brand logo stored as a single re-encoded WebP under `/storage/brand/`
+
+**Date:** 2026-04-22 (Sprint 9 S9-D6-T1)
+
+**Status:** Accepted
+
+**Context:**
+- PRD §5 Feature 7 requires a company logo on every invoice. Existing image pipeline (`lib/storage/images.ts`) handles product images → 3 sizes (thumb/medium/original). A logo is simpler: one size, tiny (≤ 400px), referenced by filename in `StoreInfo.logoFilename`.
+- Alternative: store the logo as a binary blob in a Setting row. Rejected — `Setting.value` is JSON; base64'd logo would bloat request/response and complicate CDN caching.
+
+**Decision:**
+- Add `lib/storage/brand.ts::processBrandLogo(buffer)` — sharp re-encode to WebP, long edge ≤ 400px, written to `{STORAGE_ROOT}/brand/logo-{uuid}.webp`. Filename stored in `Setting store.info.logoFilename` (ADR-034 pattern).
+- Served by Nginx at `/storage/brand/<filename>.webp` (same path rule as product images, now `safeResolveStoragePath` allows `brand/` subtree).
+- UUID-in-filename is cache-busting by design: the admin sees the new logo on invoices immediately even behind Cloudflare Free's edge cache.
+- Old logo file is best-effort deleted on replacement; failure is non-fatal (leaves orphan bytes until a future cleanup).
+
+**Consequences:**
+- `safeResolveStoragePath` now accepts `products/` OR `brand/`. No new auth gate — brand logo is public (as required by invoice rendering + public storefront header).
+- Logo upload uses FormData + Server Action (same pattern as product images).
+- Disk cost: ~15 KB per upload × a few uploads ever. Negligible.
+
+---
+
+## ADR-049: Close Sprint 4 parking-lot — Paymob webhook now fires the order-confirmation email on PAID
+
+**Date:** 2026-04-22 (Sprint 9 parking-lot closure)
+
+**Status:** Accepted
+
+**Context:**
+- Sprint 4 added `enqueueOrderConfirmationEmail` but only called it from `createOrderAction` for COD. Paymob card customers never received the "thanks for your order" email. Invoice PDF was sent (Sprint 6), but it was the only communication, which feels abrupt.
+- Parking-lot item tracked from Sprint 4 through Sprints 5 / 6 / 7 / 8. Sprint 9 is the first sprint to touch the Paymob webhook (adding `codFeeEgp` readback for invoice totals).
+
+**Decision:**
+- Add a best-effort call from the Paymob webhook's success branch: read the Order's snapshotted totals, enqueue `enqueueOrderConfirmationEmail` with the Paymob payment method label. Webhook still returns 200 on enqueue failure so Paymob doesn't retry-storm us.
+
+**Consequences:**
+- Paymob card customers now see (a) confirmation email, (b) invoice PDF, (c) order status page — same surface as COD.
+- Duplicate email risk is minimal: the webhook only fires on successful PAID transition, and the webhook is idempotent (`paymobTransactionId` unique + duplicate-check short-circuit).
+- Parking-lot item closed. Future Paymob dev stub / sandbox runs that don't emit a webhook still leave the customer without this email — acceptable for dev mode.
+

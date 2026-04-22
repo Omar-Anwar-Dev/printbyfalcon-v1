@@ -29,7 +29,13 @@
       "Bash(DATABASE_URL=postgresql://pbf:pbf@localhost:5432/pbf SESSION_SECRET=dev-secret-32b INVOICE_URL_SECRET=dev-invoice-secret npx next build)",
       "Bash(cp D:/PrintByFalcon/docs/progress.md D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/docs/progress.md)",
       "Bash(cp D:/PrintByFalcon/docs/decisions.md D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/docs/decisions.md)",
-      "Bash(cp D:/PrintByFalcon/docs/inventory-ops-guide.md D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/docs/inventory-ops-guide.md)"
+      "Bash(cp D:/PrintByFalcon/docs/inventory-ops-guide.md D:/PrintByFalcon/.claude/worktrees/inspiring-ellis-fdd4cb/docs/inventory-ops-guide.md)",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" npx prisma validate)",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" npx prisma generate)",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" npx tsc --noEmit)",
+      "Bash(echo \"Exit: $?\")",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" npx vitest run)",
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" PAYMOB_API_KEY=dev PAYMOB_HMAC_SECRET=dev PAYMOB_INTEGRATION_ID_CARD=1 PAYMOB_INTEGRATION_ID_FAWRY=2 PAYMOB_IFRAME_ID=1 APP_URL=http://localhost:3000 WHATS360_TOKEN=dev WHATS360_INSTANCE_ID=dev WHATS360_WEBHOOK_SECRET=dev NEXTAUTH_SECRET=devsecretdevsecretdevsecretdevsecret INVOICE_URL_SECRET=devsecretdevsecretdevsecretdevsecret npx next build)"
     ]
   }
 }
