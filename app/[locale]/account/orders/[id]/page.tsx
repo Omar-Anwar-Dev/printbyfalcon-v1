@@ -99,7 +99,9 @@ export default async function OrderDetailPage({
   const reorderLabels = {
     reorderCta: isAr ? 'أعِد الطلب' : 'Reorder',
     loading: isAr ? 'جارٍ التحميل...' : 'Loading…',
-    modalTitle: (n: string) => (isAr ? `إعادة طلب ${n}` : `Reorder ${n}`),
+    modalTitleTemplate: isAr
+      ? `إعادة طلب {orderNumber}`
+      : `Reorder {orderNumber}`,
     body: isAr
       ? 'راجع الأصناف — هنضيف المتاح منها للسلة بالأسعار الحالية.'
       : "Review the lines — available items will be added at today's prices.",
@@ -117,10 +119,9 @@ export default async function OrderDetailPage({
     addCta: isAr ? 'أضف للسلة' : 'Add to cart',
     adding: isAr ? 'جارٍ الإضافة...' : 'Adding…',
     cancel: isAr ? 'إلغاء' : 'Cancel',
-    successLine: (n: number) =>
-      isAr
-        ? `تمت إضافة ${n} صنف — فتح السلة الآن.`
-        : `${n} item${n === 1 ? '' : 's'} added — open your cart.`,
+    successLineTemplate: isAr
+      ? `تمت إضافة {count} صنف — فتح السلة الآن.`
+      : `{count} items added — open your cart.`,
     nothingToAdd: isAr
       ? 'مفيش أصناف متاحة للإضافة.'
       : 'No items available to add.',

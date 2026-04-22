@@ -90,7 +90,8 @@ type Labels = {
   remove: string;
   skippedHeader: string;
   skippedReasons: Record<string, string>;
-  successToast: (count: number) => string;
+  /** Template with `{count}` placeholder — functions can't cross the server→client boundary. */
+  successToastTemplate: string;
   tooManyRows: string;
 };
 
@@ -514,7 +515,7 @@ export function BulkOrderTable({
 
       {successCount !== null && successCount > 0 ? (
         <div className="mt-3 rounded-md border border-green-500/40 bg-green-50 px-3 py-2 text-sm text-green-900">
-          {labels.successToast(successCount)}
+          {labels.successToastTemplate.replace('{count}', String(successCount))}
         </div>
       ) : null}
 

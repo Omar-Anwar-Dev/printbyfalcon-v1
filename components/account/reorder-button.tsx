@@ -33,7 +33,8 @@ type Preview = {
 type Labels = {
   reorderCta: string;
   loading: string;
-  modalTitle: (orderNumber: string) => string;
+  /** Template with `{orderNumber}` placeholder. */
+  modalTitleTemplate: string;
   body: string;
   statusLabels: {
     available: string;
@@ -49,7 +50,8 @@ type Labels = {
   addCta: string;
   adding: string;
   cancel: string;
-  successLine: (count: number) => string;
+  /** Template with `{count}` placeholder. */
+  successLineTemplate: string;
   nothingToAdd: string;
   errorGeneric: string;
   archivedHeader: string;
@@ -133,7 +135,12 @@ export function ReorderButton({
         setResult(labels.nothingToAdd);
         return;
       }
-      setResult(labels.successLine(res.data.added.length));
+      setResult(
+        labels.successLineTemplate.replace(
+          '{count}',
+          String(res.data.added.length),
+        ),
+      );
       router.refresh();
     });
   }
@@ -171,7 +178,10 @@ export function ReorderButton({
               <>
                 <header className="mb-4">
                   <h2 className="text-lg font-semibold">
-                    {labels.modalTitle(preview.orderNumber)}
+                    {labels.modalTitleTemplate.replace(
+                      '{orderNumber}',
+                      preview.orderNumber,
+                    )}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {labels.body}
