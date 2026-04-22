@@ -329,7 +329,7 @@ export async function requestB2BPasswordResetAction(
   });
 
   const baseUrl =
-    process.env.APP_BASE_URL?.replace(/\/$/, '') ?? 'https://printbyfalcon.com';
+    process.env.APP_URL?.replace(/\/+$/, '') ?? 'https://printbyfalcon.com';
   const locale: 'ar' | 'en' =
     (user.languagePref?.toLowerCase() as 'ar' | 'en' | undefined) ?? 'ar';
   const resetUrl = `${baseUrl}/${locale}/b2b/reset-password?token=${encodeURIComponent(rawToken)}`;
