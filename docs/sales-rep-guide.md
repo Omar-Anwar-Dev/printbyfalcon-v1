@@ -123,10 +123,59 @@ Tier C's demo company gets one per-SKU override on whichever product sorts first
 
 ---
 
+## 8. Sprint 8 additions — Pending Confirmation queue (Submit-for-Review)
+
+Starting Sprint 8 there's a second sales-rep queue: **`/admin/b2b/pending-confirmation`**. B2B customers can now place orders via *"Submit for Review"* at checkout instead of paying immediately; every such order lands in this queue awaiting your confirmation.
+
+### Workflow — 5 minutes per order
+
+1. **Open the queue.** The admin home widget shows the live count and flags the oldest waiting order in red if it's over 24h. Click through to `/admin/b2b/pending-confirmation` — oldest orders float to the top.
+2. **Open the order.** Click "Open order" on any row. You land on `/admin/orders/<id>` with a prominent **"Confirm B2B order (sales rep)"** panel at the top.
+3. **Agree terms with the customer.** Out-of-band — phone, WhatsApp, email, whatever fits. Agree on:
+   - Payment method (PO, bank transfer, credit terms, etc.)
+   - Delivery window expectations
+   - Any pricing/qty adjustments (if substantial, re-issue — don't silently edit the order)
+4. **Type the agreed arrangement into "Payment method / terms note".** Free text, printed verbatim on the invoice + surfaced in the customer's WhatsApp confirmation. Good examples: `"PO #A12 — Net-15"`, `"Bank transfer received 2026-07-28"`, `"Cash on delivery at headquarters"`.
+5. **(Optional) "Customer note"** — anything you want appended to the customer's confirmation WhatsApp.
+6. **Click "Confirm order."** Behind the scenes:
+   - Order flips from `PENDING_CONFIRMATION` → `CONFIRMED`.
+   - `confirmedAt` is stamped and `paymentMethodNote` is stored.
+   - Invoice is generated (react-pdf, Arabic, using the agreed terms note on the payment line).
+   - Customer WhatsApp + email go out (B2B = both channels).
+   - Audit log entry: `b2b.order.confirm`.
+7. **Hand off to ops.** Once confirmed, the order joins the normal ops queue — they pick it up for courier handoff.
+
+### Inventory is held from placement
+
+Customers who submit for review don't "lock" stock by paying — our code does it for them. The moment they click Submit, the requested qty moves from available → reserved. This means:
+- You don't need to rush — the units are held.
+- A customer who disappears keeps their stock tied up until you cancel the order (use the **Cancel** button on `/admin/orders/<id>` — it automatically releases the reservation).
+- Watch the queue for orders >24h old — they're probably abandoned.
+
+### What you DON'T do
+
+- Don't use **Confirm** on OPS' status-actions panel for B2B Submit-for-Review orders. That path doesn't capture the payment-method note and uses the generic renderer. The dedicated panel is the canonical path; we intentionally hide the generic Confirm button when the order is `PENDING_CONFIRMATION` + B2B.
+- Don't modify the order lines directly. If qty/SKU needs to change, cancel and re-issue. (We don't have per-order editing for MVP.)
+
+### Audit trail
+
+```sql
+SELECT "createdAt", "action", "entityId", "before", "after"
+FROM "AuditLog"
+WHERE "action" = 'b2b.order.confirm'
+ORDER BY "createdAt" DESC
+LIMIT 20;
+```
+
+Every confirmation records actor, paymentMethodNote, and rep's customer note. No UI yet — SQL is the trail.
+
+---
+
 ## Appendix — Related documentation
 
 - **Pricing resolution internals:** [lib/pricing/resolve.ts](../lib/pricing/resolve.ts) — the 3-path resolver (override → tier → base).
 - **Approval action internals:** [app/actions/admin-b2b.ts](../app/actions/admin-b2b.ts) — atomic user + company creation on approval.
+- **Sprint 8 confirm action:** [app/actions/admin-orders.ts](../app/actions/admin-orders.ts) — `confirmB2BOrderAction`.
 - **B2B architecture reference:** [docs/architecture.md](architecture.md) §5.3 "Pricing & B2B".
 - **ADR-005:** split auth flows (WhatsApp OTP for B2C, email+password for B2B).
 - **ADR-007:** one shared login per company in MVP.

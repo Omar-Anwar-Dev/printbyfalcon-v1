@@ -32,13 +32,20 @@ import { prisma } from '@/lib/db';
 import { getOptionalUser } from '@/lib/auth';
 import { getOrCreateCart } from '@/lib/cart/cart';
 import { getAvailableQtyMap } from '@/lib/cart/stock';
+import { getB2BCheckoutContext } from '@/lib/b2b/checkout-context';
+import { notifySalesRepsOfPendingOrder } from '@/lib/b2b/sales-rep-notify';
 import { generateOrderNumber } from '@/lib/order/order-number';
 import { createPaymentKey } from '@/lib/payments/paymob';
 import { enqueueJob } from '@/lib/queue';
 import { renderOrderConfirmationEmail } from '@/lib/email/order-confirmation';
+import { renderB2bPendingReview } from '@/lib/whatsapp-templates';
 import { ensureInvoiceForOrder } from '@/lib/invoices/ensure';
 import { sendInvoiceToCustomer } from '@/lib/invoices/delivery';
 import { logger } from '@/lib/logger';
+
+// SLA window for the B2B "we'll contact you within N hours" copy. Kept as a
+// constant rather than a DB setting for MVP — change by PR, not ops UI.
+const B2B_SFR_SLA_HOURS = 24;
 
 type ActionOk<T> = { ok: true; data: T };
 type ActionErr = {
@@ -73,6 +80,10 @@ const checkoutSchema = z.object({
   }),
   paymentMethod: z.enum(['PAYMOB_CARD', 'COD']),
   customerNotes: z.string().trim().max(500).optional().or(z.literal('')),
+  // Sprint 8 — optional for B2B Pay Now (same friction as B2C per kickoff).
+  // Required for Submit-for-Review (see submitForReviewSchema below).
+  placedByName: z.string().trim().max(80).optional().or(z.literal('')),
+  poReference: z.string().trim().max(40).optional().or(z.literal('')),
 });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
@@ -102,14 +113,12 @@ export async function createOrderAction(
   // against a single column regardless of who inside the company logged in
   // (single-login-per-company in MVP, but this still keeps the query
   // forward-compatible with multi-user teams in v1.1).
-  const company =
-    user && user.type === 'B2B'
-      ? await prisma.company.findUnique({
-          where: { primaryUserId: user.id },
-          select: { id: true, status: true },
-        })
-      : null;
-  const isB2BOrder = Boolean(company && company.status === 'ACTIVE');
+  const b2bCtx = await getB2BCheckoutContext();
+  const isB2BOrder = b2bCtx !== null;
+  // Block Pay Now path when the company is SFR-only.
+  if (isB2BOrder && !b2bCtx!.allowPayNow) {
+    return { ok: false, errorKey: 'checkout.pay_now_not_allowed' };
+  }
   const cart = await getOrCreateCart();
   const items = await prisma.cartItem.findMany({
     where: { cartId: cart.id },
@@ -187,7 +196,7 @@ export async function createOrderAction(
           // the order. B2B orders also get the companyId for company-wide
           // history (Sprint 7 S7-D4-T3).
           userId: user?.type === 'B2C' || user?.type === 'B2B' ? user.id : null,
-          companyId: isB2BOrder ? company!.id : null,
+          companyId: isB2BOrder ? b2bCtx!.companyId : null,
           type: isB2BOrder ? 'B2B' : 'B2C',
           contactName: parsed.data.contact.name,
           contactPhone: parsed.data.contact.phone,
@@ -203,6 +212,12 @@ export async function createOrderAction(
           vatEgp: vat,
           totalEgp: total,
           customerNotes: toNullable(parsed.data.customerNotes),
+          // Sprint 8: B2B attribution fields. Pay-Now B2B keeps them optional
+          // (PRD "same friction as B2C"); ignored on B2C orders.
+          placedByName: isB2BOrder
+            ? toNullable(parsed.data.placedByName)
+            : null,
+          poReference: isB2BOrder ? toNullable(parsed.data.poReference) : null,
           confirmedAt: new Date(),
         },
       });
@@ -476,3 +491,294 @@ async function enqueueOrderConfirmationEmail(payload: {
 }
 
 export { enqueueOrderConfirmationEmail };
+
+// ---------------------------------------------------------------------------
+// Sprint 8 — B2B Submit-for-Review path (architecture §4 Flow B).
+//
+// Differences from createOrderAction:
+//   - Requires an ACTIVE B2B Company whose checkoutPolicy permits SFR.
+//   - Requires a non-empty `placedByName` (mandatory per PRD Feature 4).
+//   - Order starts in `PENDING_CONFIRMATION` (paymentMethod=SUBMIT_FOR_REVIEW).
+//   - Inventory is firm-held (ORDER reservation + race-safe decrement) from
+//     placement, matching the Sprint-4 pattern + architecture Flow B step 5.
+//     A subsequent CANCELLED transition releases via the Sprint-5 state
+//     machine without special-casing this path.
+//   - No Paymob, no invoice on placement — invoice lands when the sales rep
+//     clicks "Confirm" in Sprint 8 S8-D2-T2.
+//   - Enqueues customer WhatsApp "pending review" + fan-out sales-rep email.
+// ---------------------------------------------------------------------------
+
+const submitForReviewSchema = z.object({
+  contact: z.object({
+    name: z.string().trim().min(2).max(80),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^\+?[0-9]{9,15}$/, 'validation.phone.invalid_eg'),
+    email: z.string().trim().email().optional().or(z.literal('')),
+  }),
+  address: z.object({
+    recipientName: z.string().trim().min(2).max(80),
+    phone: z
+      .string()
+      .trim()
+      .regex(/^\+?[0-9]{9,15}$/, 'validation.phone.invalid_eg'),
+    governorate: z.nativeEnum(Governorate),
+    city: z.string().trim().min(1).max(80),
+    area: z.string().trim().max(80).optional().or(z.literal('')),
+    street: z.string().trim().min(1).max(160),
+    building: z.string().trim().max(40).optional().or(z.literal('')),
+    apartment: z.string().trim().max(40).optional().or(z.literal('')),
+    notes: z.string().trim().max(280).optional().or(z.literal('')),
+  }),
+  // placedByName mandatory on this path.
+  placedByName: z.string().trim().min(2).max(80),
+  poReference: z.string().trim().max(40).optional().or(z.literal('')),
+  customerNotes: z.string().trim().max(500).optional().or(z.literal('')),
+});
+
+export type SubmitForReviewInput = z.infer<typeof submitForReviewSchema>;
+
+type SubmitForReviewSuccess = {
+  orderId: string;
+  orderNumber: string;
+  redirectUrl: string;
+};
+
+export async function submitForReviewOrderAction(
+  input: SubmitForReviewInput,
+): Promise<ActionResult<SubmitForReviewSuccess>> {
+  const parsed = submitForReviewSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false, errorKey: 'validation.invalid' };
+  }
+
+  const b2bCtx = await getB2BCheckoutContext();
+  if (!b2bCtx) {
+    return { ok: false, errorKey: 'checkout.b2b_required' };
+  }
+  if (!b2bCtx.allowSubmitForReview) {
+    return { ok: false, errorKey: 'checkout.submit_for_review_not_allowed' };
+  }
+
+  const cart = await getOrCreateCart();
+  const items = await prisma.cartItem.findMany({
+    where: { cartId: cart.id },
+    include: {
+      product: {
+        select: {
+          id: true,
+          sku: true,
+          nameAr: true,
+          nameEn: true,
+          basePriceEgp: true,
+          vatExempt: true,
+          status: true,
+        },
+      },
+    },
+  });
+  if (items.length === 0) return { ok: false, errorKey: 'cart.empty' };
+  const inactive = items.find((i) => i.product.status !== 'ACTIVE');
+  if (inactive) return { ok: false, errorKey: 'cart.item_unavailable' };
+
+  const reservationRefIds = items.map((i) => i.id);
+  const availability = await getAvailableQtyMap(
+    items.map((i) => i.product.id),
+    reservationRefIds,
+  );
+  for (const i of items) {
+    const avail = availability.get(i.product.id) ?? 0;
+    if (avail < i.qty) {
+      return { ok: false, errorKey: 'cart.insufficient_stock' };
+    }
+  }
+
+  const subtotal = items.reduce(
+    (acc, i) => acc + Number(i.unitPriceEgpSnapshot) * i.qty,
+    0,
+  );
+  const shipping = 0;
+  const discount = 0;
+  const vat = 0;
+  const total = subtotal + shipping - discount + vat;
+
+  const addressSnapshot = {
+    recipientName: parsed.data.address.recipientName,
+    phone: parsed.data.address.phone,
+    governorate: parsed.data.address.governorate,
+    city: parsed.data.address.city,
+    area: toNullable(parsed.data.address.area),
+    street: parsed.data.address.street,
+    building: toNullable(parsed.data.address.building),
+    apartment: toNullable(parsed.data.address.apartment),
+    notes: toNullable(parsed.data.address.notes),
+  };
+
+  let result;
+  try {
+    result = await prisma.$transaction(async (tx) => {
+      const orderNumber = await generateOrderNumber(tx);
+
+      const order = await tx.order.create({
+        data: {
+          orderNumber,
+          userId: b2bCtx.userId,
+          companyId: b2bCtx.companyId,
+          type: 'B2B',
+          contactName: parsed.data.contact.name,
+          contactPhone: parsed.data.contact.phone,
+          contactEmail: toNullable(parsed.data.contact.email),
+          addressSnapshot: addressSnapshot as never,
+          status: 'PENDING_CONFIRMATION',
+          paymentMethod: 'SUBMIT_FOR_REVIEW',
+          paymentStatus: 'PENDING',
+          subtotalEgp: subtotal,
+          shippingEgp: shipping,
+          discountEgp: discount,
+          vatEgp: vat,
+          totalEgp: total,
+          customerNotes: toNullable(parsed.data.customerNotes),
+          placedByName: parsed.data.placedByName,
+          poReference: toNullable(parsed.data.poReference),
+          // confirmedAt stays null until the sales rep confirms in Day 2.
+        },
+      });
+
+      await tx.orderItem.createMany({
+        data: items.map((i) => ({
+          orderId: order.id,
+          productId: i.product.id,
+          skuSnapshot: i.product.sku,
+          nameArSnapshot: i.product.nameAr,
+          nameEnSnapshot: i.product.nameEn,
+          qty: i.qty,
+          unitPriceEgp: i.unitPriceEgpSnapshot,
+          lineTotalEgp: Number(i.unitPriceEgpSnapshot) * i.qty,
+        })),
+      });
+
+      const orderItems = await tx.orderItem.findMany({
+        where: { orderId: order.id },
+        select: { id: true, productId: true, qty: true },
+      });
+
+      // Firm hold — convert CART reservations to ORDER reservations.
+      await tx.inventoryReservation.deleteMany({
+        where: { refId: { in: reservationRefIds }, type: 'CART' },
+      });
+      await tx.inventoryReservation.createMany({
+        data: orderItems
+          .filter((oi) => oi.productId)
+          .map((oi) => ({
+            type: 'ORDER' as const,
+            productId: oi.productId!,
+            refId: oi.id,
+            qty: oi.qty,
+            expiresAt: null,
+          })),
+      });
+
+      // Race-safe decrement (ADR-036).
+      for (const oi of orderItems) {
+        if (!oi.productId) continue;
+        const { count } = await tx.inventory.updateMany({
+          where: { productId: oi.productId, currentQty: { gte: oi.qty } },
+          data: { currentQty: { decrement: oi.qty } },
+        });
+        if (count === 0) {
+          throw new Error('cart.insufficient_stock');
+        }
+        await tx.inventoryMovement.create({
+          data: {
+            productId: oi.productId,
+            type: 'SALE',
+            qtyDelta: -oi.qty,
+            refId: order.id,
+            actorId: b2bCtx.userId,
+          },
+        });
+      }
+
+      await tx.orderStatusEvent.create({
+        data: {
+          orderId: order.id,
+          status: 'PENDING_CONFIRMATION',
+          actorId: b2bCtx.userId,
+          note: 'B2B Submit-for-Review placed',
+        },
+      });
+      await tx.auditLog.create({
+        data: {
+          actorId: b2bCtx.userId,
+          action: 'order.submit_for_review',
+          entityType: 'Order',
+          entityId: order.id,
+          after: {
+            orderNumber,
+            totalEgp: total,
+            companyId: b2bCtx.companyId,
+            placedByName: parsed.data.placedByName,
+          } as never,
+        },
+      });
+
+      await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
+
+      return { order, orderNumber };
+    });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (msg === 'cart.insufficient_stock') {
+      return { ok: false, errorKey: 'cart.insufficient_stock' };
+    }
+    logger.error({ err: msg }, 'order.submit_for_review.transaction_failed');
+    return { ok: false, errorKey: 'order.create_failed' };
+  }
+
+  // Customer WhatsApp — "pending review, we'll contact you within N hours."
+  try {
+    await enqueueJob('send-whatsapp', {
+      phone: parsed.data.contact.phone,
+      body: renderB2bPendingReview(
+        {
+          orderNumber: result.orderNumber,
+          slaHours: B2B_SFR_SLA_HOURS,
+        },
+        'ar',
+      ),
+    });
+  } catch (err) {
+    logger.error(
+      { err: (err as Error).message, orderId: result.order.id },
+      'order.sfr.whatsapp_enqueue_failed',
+    );
+  }
+
+  // Sales-rep fan-out email. Best-effort.
+  try {
+    await notifySalesRepsOfPendingOrder({
+      orderId: result.order.id,
+      orderNumber: result.orderNumber,
+      companyNameAr: b2bCtx.companyNameAr,
+      companyNameEn: b2bCtx.companyNameEn,
+      placedByName: parsed.data.placedByName,
+      totalEgp: total,
+    });
+  } catch (err) {
+    logger.error(
+      { err: (err as Error).message, orderId: result.order.id },
+      'order.sfr.sales_rep_notify_failed',
+    );
+  }
+
+  revalidatePath('/', 'layout');
+  return {
+    ok: true,
+    data: {
+      orderId: result.order.id,
+      orderNumber: result.orderNumber,
+      redirectUrl: `/order/confirmed/${result.order.id}`,
+    },
+  };
+}

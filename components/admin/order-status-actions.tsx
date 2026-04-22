@@ -53,6 +53,7 @@ export function OrderStatusActions({
   currentStatus,
   couriers,
   zoneDefaultEtaDays,
+  hiddenTransitions,
   labels,
 }: {
   orderId: string;
@@ -61,6 +62,11 @@ export function OrderStatusActions({
   /// Default "expected delivery" offset from today (days). Falls back to +3.
   /// Sprint 9 wires real per-zone values; until then 3 days is the global default.
   zoneDefaultEtaDays?: number;
+  /// Transitions to omit from the button row. Sprint 8: when a B2B order is
+  /// PENDING_CONFIRMATION we route the CONFIRMED button to the dedicated
+  /// B2BConfirmPanel (captures paymentMethodNote) instead of the generic
+  /// status action (which doesn't).
+  hiddenTransitions?: OrderStatus[];
   labels: Labels;
 }) {
   const router = useRouter();
@@ -80,7 +86,9 @@ export function OrderStatusActions({
   );
   const [handoffNote, setHandoffNote] = useState('');
 
-  const validTransitions = ORDER_STATUS_TRANSITIONS[currentStatus];
+  const validTransitions = ORDER_STATUS_TRANSITIONS[currentStatus].filter(
+    (t) => !hiddenTransitions?.includes(t),
+  );
 
   const resetAndClose = () => {
     setDialog(null);

@@ -193,6 +193,135 @@ export async function removeCartItemAction(
   return { ok: true, data: null };
 }
 
+/**
+ * Sprint 8 S8-D4-T3 — bulk "Add All to Cart" from the B2B bulk-order table.
+ *
+ * Each row is added via the same logic as `addToCartAction` (including qty
+ * stacking on top of existing cart lines and reservation upsert). We loop in
+ * a single transaction so a partial failure rolls the whole batch back —
+ * avoiding a confusing "5 of 10 added" state that would be hard to reconcile.
+ *
+ * Input cap 50 lines to match bulk-order UI cap. Skipped productIds (inactive
+ * / not-found) are returned in the response so the client can flag them.
+ */
+const bulkAddSchema = z.object({
+  rows: z
+    .array(
+      z.object({
+        productId: z.string().min(1),
+        qty: z.number().int().positive().max(99),
+      }),
+    )
+    .min(1)
+    .max(50),
+});
+
+export async function addBulkToCartAction(
+  input: z.infer<typeof bulkAddSchema>,
+): Promise<
+  ActionResult<{
+    added: Array<{ productId: string; qty: number }>;
+    skipped: Array<{ productId: string; reason: string }>;
+  }>
+> {
+  const parsed = bulkAddSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, errorKey: 'validation.invalid' };
+
+  const user = await getOptionalUser();
+  const ctx = await getPricingContextForUser(user);
+  const cart = await getOrCreateCart();
+
+  // De-dupe + sum qty across rows that target the same productId so we don't
+  // issue two separate "addToCart" operations for the same SKU.
+  const merged = new Map<string, number>();
+  for (const r of parsed.data.rows) {
+    merged.set(r.productId, (merged.get(r.productId) ?? 0) + r.qty);
+  }
+
+  const productIds = Array.from(merged.keys());
+  const products = await prisma.product.findMany({
+    where: { id: { in: productIds }, status: 'ACTIVE' },
+  });
+  const productMap = new Map(products.map((p) => [p.id, p]));
+
+  const added: Array<{ productId: string; qty: number }> = [];
+  const skipped: Array<{ productId: string; reason: string }> = [];
+
+  try {
+    await prisma.$transaction(async (tx) => {
+      for (const [productId, qty] of merged.entries()) {
+        const product = productMap.get(productId);
+        if (!product) {
+          skipped.push({ productId, reason: 'product.not_found_or_inactive' });
+          continue;
+        }
+
+        const existing = await tx.cartItem.findUnique({
+          where: { cartId_productId: { cartId: cart.id, productId } },
+        });
+        const nextQty = (existing?.qty ?? 0) + qty;
+
+        // Stock guard excluding own CART hold (reused from addToCartAction).
+        const available = await getAvailableQty(
+          productId,
+          existing?.id ?? null,
+        );
+        if (available < nextQty) {
+          skipped.push({ productId, reason: 'cart.insufficient_stock' });
+          continue;
+        }
+
+        const resolved = resolvePrice(product, ctx);
+
+        const item = existing
+          ? await tx.cartItem.update({
+              where: { id: existing.id },
+              data: { qty: nextQty },
+            })
+          : await tx.cartItem.create({
+              data: {
+                cartId: cart.id,
+                productId,
+                qty,
+                unitPriceEgpSnapshot: resolved.finalPriceEgp,
+              },
+            });
+
+        const existingRes = await tx.inventoryReservation.findFirst({
+          where: { refId: item.id, type: 'CART' },
+        });
+        if (existingRes) {
+          await tx.inventoryReservation.update({
+            where: { id: existingRes.id },
+            data: { qty: item.qty, expiresAt: reservationExpiresAt() },
+          });
+        } else {
+          await tx.inventoryReservation.create({
+            data: {
+              type: 'CART',
+              productId,
+              refId: item.id,
+              qty: item.qty,
+              expiresAt: reservationExpiresAt(),
+            },
+          });
+        }
+
+        added.push({ productId, qty: item.qty });
+      }
+    });
+  } catch (err) {
+    return {
+      ok: false,
+      errorKey:
+        err instanceof Error && err.message ? err.message : 'cart.bulk_failed',
+    };
+  }
+
+  revalidatePath('/', 'layout');
+  return { ok: true, data: { added, skipped } };
+}
+
 export async function clearCartAction(): Promise<ActionResult<null>> {
   const cart = await getOrCreateCart();
   const items = await prisma.cartItem.findMany({

@@ -8,6 +8,7 @@ import {
   type OrderStatusKey,
 } from '@/lib/whatsapp-templates';
 import { CancelOrderButton } from '@/components/account/cancel-order-button';
+import { ReorderButton } from '@/components/account/reorder-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -95,16 +96,57 @@ export default async function OrderDetailPage({
     notes: string | null;
   };
 
+  const reorderLabels = {
+    reorderCta: isAr ? 'أعِد الطلب' : 'Reorder',
+    loading: isAr ? 'جارٍ التحميل...' : 'Loading…',
+    modalTitle: (n: string) => (isAr ? `إعادة طلب ${n}` : `Reorder ${n}`),
+    body: isAr
+      ? 'راجع الأصناف — هنضيف المتاح منها للسلة بالأسعار الحالية.'
+      : "Review the lines — available items will be added at today's prices.",
+    statusLabels: {
+      available: isAr ? 'متوفر' : 'Available',
+      partial: isAr ? 'كمية محدودة' : 'Limited stock',
+      out_of_stock: isAr ? 'نفد' : 'Out of stock',
+      archived: isAr ? 'مؤرشف / غير متوفر' : 'Archived / unavailable',
+    },
+    includeColumn: isAr ? 'ضم' : 'Add',
+    productColumn: isAr ? 'المنتج' : 'Product',
+    statusColumn: isAr ? 'الحالة' : 'Status',
+    qtyColumn: isAr ? 'الكمية' : 'Qty',
+    priceColumn: isAr ? 'السعر' : 'Price',
+    addCta: isAr ? 'أضف للسلة' : 'Add to cart',
+    adding: isAr ? 'جارٍ الإضافة...' : 'Adding…',
+    cancel: isAr ? 'إلغاء' : 'Cancel',
+    successLine: (n: number) =>
+      isAr
+        ? `تمت إضافة ${n} صنف — فتح السلة الآن.`
+        : `${n} item${n === 1 ? '' : 's'} added — open your cart.`,
+    nothingToAdd: isAr
+      ? 'مفيش أصناف متاحة للإضافة.'
+      : 'No items available to add.',
+    errorGeneric: isAr
+      ? 'حصل خطأ أثناء تحميل الطلب.'
+      : 'Something went wrong loading this order.',
+    archivedHeader: isAr ? 'أصناف مؤرشفة' : 'Archived items',
+  };
+
   return (
     <div className="container max-w-3xl py-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">
-          {isAr ? 'تفاصيل الطلب' : 'Order details'}
-        </h1>
-        <p className="mt-1 font-mono text-sm">{order.orderNumber}</p>
-        <p className="text-xs text-muted-foreground">
-          {new Date(order.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}
-        </p>
+      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-semibold">
+            {isAr ? 'تفاصيل الطلب' : 'Order details'}
+          </h1>
+          <p className="mt-1 font-mono text-sm">{order.orderNumber}</p>
+          <p className="text-xs text-muted-foreground">
+            {new Date(order.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}
+          </p>
+        </div>
+        <ReorderButton
+          orderId={order.id}
+          locale={isAr ? 'ar' : 'en'}
+          labels={reorderLabels}
+        />
       </header>
 
       <section className="mb-6 grid gap-3 rounded-md border bg-background p-4 text-sm md:grid-cols-3">
@@ -128,6 +170,30 @@ export default async function OrderDetailPage({
           </dt>
           <dd className="font-medium">{order.paymentStatus}</dd>
         </div>
+        {order.placedByName ? (
+          <div>
+            <dt className="text-xs text-muted-foreground">
+              {isAr ? 'وضعه' : 'Placed by'}
+            </dt>
+            <dd className="font-medium">{order.placedByName}</dd>
+          </div>
+        ) : null}
+        {order.poReference ? (
+          <div>
+            <dt className="text-xs text-muted-foreground">
+              {isAr ? 'رقم أمر الشراء' : 'PO reference'}
+            </dt>
+            <dd className="font-mono text-sm">{order.poReference}</dd>
+          </div>
+        ) : null}
+        {order.paymentMethodNote ? (
+          <div className="md:col-span-3">
+            <dt className="text-xs text-muted-foreground">
+              {isAr ? 'ملاحظة الدفع' : 'Payment note'}
+            </dt>
+            <dd className="font-medium">{order.paymentMethodNote}</dd>
+          </div>
+        ) : null}
       </section>
 
       {courierName || order.waybill || order.expectedDeliveryDate ? (

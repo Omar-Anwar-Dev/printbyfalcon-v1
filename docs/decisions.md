@@ -892,3 +892,113 @@ Status: Accepted
 - Forward-compatible with v1.1 multi-user teams — a second User under the same Company places an order, `companyId` is set consistently, history shows both.
 - One more nullable FK to maintain; trivial migration since `null` is the correct value for all existing (B2C-only) orders.
 
+---
+
+## ADR-040: `placedByName` required only on Submit-for-Review, optional on B2B Pay Now
+
+**Date:** 2026-04-22 (Sprint 8 S8-D1-T1)
+
+**Status:** Accepted
+
+**Context:**
+- Plan S8-D1-T1 says "checkout for B2B users requires this free-text field"; PRD Feature 4 says "mandatory at B2B checkout."
+- At kickoff the founder said "I want the payment process to be as standard as B2C." Mandatory placed_by on B2B Pay Now adds friction that the B2C path doesn't have.
+
+**Decision:**
+- `Order.placedByName String?` — nullable.
+- **B2B Submit-for-Review**: required server-side (rejects on empty), client-marked with a red asterisk.
+- **B2B Pay Now**: optional input; if filled, surfaces on invoice + order-history rows + admin detail exactly like SFR orders.
+- **B2C + guest**: field never rendered; server action ignores it if sent.
+
+**Alternatives considered:**
+- **Always required on B2B** — explicit per PRD but adds friction to Pay Now. Rejected.
+- **Never required** — loses the audit value for SFR. Rejected.
+
+**Consequences:**
+- PRD Feature 4 "mandatory at B2B checkout" is softened per this ADR. PRD will be amended at Sprint 9 kickoff.
+- Invoice template omits the line when null (already supported).
+- Sales reps confirming SFR orders always see `placedByName` — closes team-level attribution for the high-value path.
+
+---
+
+## ADR-041: `Order.paymentMethodNote` free-text field instead of expanding `PaymentMethod` enum
+
+**Date:** 2026-04-22 (Sprint 8 S8-D2-T2)
+
+**Status:** Accepted
+
+**Context:**
+- Plan S8-D2-T2 says the sales rep "sets payment method" on confirm (dropdown: PO, transfer, etc.).
+- Options: (a) keep `PaymentMethod.SUBMIT_FOR_REVIEW` + add a free-text `Order.paymentMethodNote`, or (b) expand the enum with `BANK_TRANSFER`, `PURCHASE_ORDER`, likely more (`CHEQUE`, `CREDIT_LINE`, ...).
+
+**Decision:**
+- Go with (a). Added `Order.paymentMethodNote String?`. Captured in the dedicated B2B Confirm panel; surfaces on invoice, admin order detail, customer order page, rep-confirm WhatsApp/email bodies.
+
+**Alternatives considered:**
+- **(b) Enum expansion** — cleaner for filtering/metrics but forces a schema migration + UI dropdown update for every new arrangement. The long tail of B2B payment arrangements is genuinely long.
+
+**Consequences:**
+- No structured "orders paid via PO vs bank transfer" report. If needed later, parse/classify `paymentMethodNote` into a derived column.
+- `PaymentMethod.SUBMIT_FOR_REVIEW` means "payment lives outside Paymob/COD" rather than "awaiting rep." The status transition PENDING_CONFIRMATION → CONFIRMED signals "payment agreed."
+- Invoice uses the existing enum label for "method" + prints `paymentMethodNote` as a second "Note" line.
+- Easy to reverse: can normalize common notes into an enum later and keep the column as the human-readable detail.
+
+---
+
+## ADR-042: Sales rep fan-out (OWNER + SALES_REP list) instead of per-Company assigned rep
+
+**Date:** 2026-04-22 (Sprint 8 S8-D1-T3)
+
+**Status:** Accepted
+
+**Context:**
+- New SFR orders need a sales-rep alert. Options: (a) every OWNER + SALES_REP admin with a populated email, (b) a single "assigned rep" field on Company + route to them.
+
+**Decision:**
+- Go with (a). Reuses the Sprint 6 low-stock digest pattern. One `send-email` job per recipient so a single bounced mailbox doesn't drop the fan-out.
+- Deferred "assigned rep" to v1.1 per PRD. When it lands: if assigned, notify that user; else fall back to fan-out.
+
+**Consequences:**
+- At MVP scale (<5 reps) the fan-out is fine. At scale it'll get noisy — that's when v1.1 lands.
+- Recipient list is `prisma.user.findMany({ type: 'ADMIN', status: 'ACTIVE', adminRole: { in: ['OWNER', 'SALES_REP'] }, email: { not: null } })`. A rep removed from the admin roster stops getting alerts immediately.
+- Recipient locale honoured (`User.languagePref`); email renderer has AR + EN variants.
+
+---
+
+## ADR-043: Reorder re-resolves prices at re-add time (not historical snapshot)
+
+**Date:** 2026-04-22 (Sprint 8 S8-D5-T1)
+
+**Status:** Accepted
+
+**Context:**
+- PRD Feature 4 says reorder "adds available items at current prices." Reading (a) historical snapshot from `OrderItem.unitPriceEgp`, reading (b) today's resolved price.
+
+**Decision:**
+- Go with (b). `reorderAction` calls `resolvePrice(product, ctx)` for every line. CartItem snapshot gets the current final price.
+
+**Consequences:**
+- Reorder preview modal surfaces today's prices so the customer can see what they're getting before confirm.
+- Archived products flagged as "archived / unavailable" — can't be re-added, shown for reference.
+- If a per-SKU override was deleted since the original order, the customer pays the current resolved price (likely tier-default). This is correct — overrides represent current negotiated arrangements, not historical ones.
+
+---
+
+## ADR-044: Dedicated `confirmB2BOrderAction` instead of widening `updateOrderStatusAction`
+
+**Date:** 2026-04-22 (Sprint 8 S8-D2-T2)
+
+**Status:** Accepted
+
+**Context:**
+- Sprint 5's `updateOrderStatusAction` is the OPS canonical path for every status transition. Gated OWNER+OPS. Sprint 8's B2B Confirm is functionally a PENDING_CONFIRMATION → CONFIRMED transition but needs: SALES_REP access, `paymentMethodNote` capture, dedicated Whats360 renderer, invoice generation.
+- Options: (a) widen `updateOrderStatusAction` to accept SALES_REP + optional paymentMethodNote + B2B-specific renderer branch, or (b) add a parallel `confirmB2BOrderAction` + hide the generic Confirm button via `hiddenTransitions` prop.
+
+**Decision:**
+- Go with (b). Kept `updateOrderStatusAction` focused on OPS' lifecycle; added `confirmB2BOrderAction` for the sales-rep path. UI hides the generic Confirm for B2B+PENDING_CONFIRMATION orders.
+
+**Consequences:**
+- Some duplication in notification + invoice dispatch. Acceptable — diverges meaningfully (dedicated Whats360 renderer, unconditional invoice send).
+- Cancellations from PENDING_CONFIRMATION still go through `updateOrderStatusAction` (correct inventory release path). `confirmB2BOrderAction` never handles cancellation.
+- Admin order detail page gate widened to `['OWNER', 'OPS', 'SALES_REP']`; per-action authz remains server-side enforced.
+

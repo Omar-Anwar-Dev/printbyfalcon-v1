@@ -2,9 +2,11 @@ import type { Metadata } from 'next';
 import { Link } from '@/lib/i18n/routing';
 import { prisma } from '@/lib/db';
 import { getActiveCart } from '@/lib/cart/cart';
+import { getB2BCheckoutContext } from '@/lib/b2b/checkout-context';
 import { productImageUrl } from '@/lib/storage/paths';
 import { formatEgp } from '@/lib/catalog/price';
 import { CartItemRow } from '@/components/cart/cart-item-row';
+import { ReorderButton } from '@/components/account/reorder-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,17 +68,7 @@ export default async function CartPage({
       </h1>
 
       {items.length === 0 ? (
-        <div className="rounded-md border bg-background p-8 text-center">
-          <p className="mb-4 text-lg">
-            {isAr ? 'سلتك فارغة' : 'Your cart is empty'}
-          </p>
-          <Link
-            href="/products"
-            className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-          >
-            {isAr ? 'تسوق المنتجات' : 'Browse products'}
-          </Link>
-        </div>
+        <EmptyCart locale={isAr ? 'ar' : 'en'} />
       ) : (
         <div className="grid gap-6 md:grid-cols-[1fr_320px]">
           <ul className="space-y-3">
@@ -131,6 +123,122 @@ export default async function CartPage({
           </aside>
         </div>
       )}
+    </div>
+  );
+}
+
+/**
+ * Sprint 8 S8-D7-T1 — B2B-aware empty cart state. If the caller is an ACTIVE
+ * B2B user with past orders, show the 3 most recent with one-click reorder.
+ * B2C / guests / applicants get the standard "Browse products" fallback.
+ */
+async function EmptyCart({ locale }: { locale: 'ar' | 'en' }) {
+  const isAr = locale === 'ar';
+  const b2b = await getB2BCheckoutContext();
+
+  const recent = b2b
+    ? await prisma.order.findMany({
+        where: { companyId: b2b.companyId },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+        select: {
+          id: true,
+          orderNumber: true,
+          createdAt: true,
+          totalEgp: true,
+          _count: { select: { items: true } },
+        },
+      })
+    : [];
+
+  const baseLabels = {
+    reorderCta: isAr ? 'أعِد' : 'Reorder',
+    loading: isAr ? 'جارٍ...' : 'Loading…',
+    modalTitle: (n: string) => (isAr ? `إعادة طلب ${n}` : `Reorder ${n}`),
+    body: isAr
+      ? 'راجع الأصناف — هنضيف المتاح بالأسعار الحالية.'
+      : 'Review lines — available items added at current prices.',
+    statusLabels: {
+      available: isAr ? 'متوفر' : 'Available',
+      partial: isAr ? 'محدود' : 'Limited',
+      out_of_stock: isAr ? 'نفد' : 'Out of stock',
+      archived: isAr ? 'مؤرشف' : 'Archived',
+    },
+    includeColumn: isAr ? 'ضم' : 'Add',
+    productColumn: isAr ? 'المنتج' : 'Product',
+    statusColumn: isAr ? 'الحالة' : 'Status',
+    qtyColumn: isAr ? 'الكمية' : 'Qty',
+    priceColumn: isAr ? 'السعر' : 'Price',
+    addCta: isAr ? 'أضف للسلة' : 'Add to cart',
+    adding: isAr ? 'جارٍ...' : 'Adding…',
+    cancel: isAr ? 'إلغاء' : 'Cancel',
+    successLine: (n: number) =>
+      isAr ? `أضيف ${n} صنف — افتح السلة.` : `${n} added — open cart.`,
+    nothingToAdd: isAr ? 'مفيش أصناف متاحة.' : 'Nothing available.',
+    errorGeneric: isAr ? 'حصل خطأ.' : 'Something went wrong.',
+    archivedHeader: isAr ? 'مؤرشف' : 'Archived',
+  };
+
+  return (
+    <div className="rounded-md border bg-background p-8 text-center">
+      <p className="mb-4 text-lg">
+        {isAr ? 'سلتك فارغة' : 'Your cart is empty'}
+      </p>
+
+      {b2b && recent.length > 0 ? (
+        <div className="mb-6 text-start">
+          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
+            {isAr ? 'أعِد طلبًا سابقًا' : 'Reorder a recent order'}
+          </h2>
+          <ul className="space-y-2">
+            {recent.map((o) => (
+              <li
+                key={o.id}
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2"
+              >
+                <div className="flex-1 text-sm">
+                  <Link
+                    href={`/account/orders/${o.id}`}
+                    className="font-mono font-medium hover:underline"
+                  >
+                    {o.orderNumber}
+                  </Link>
+                  <span className="ms-2 text-xs text-muted-foreground">
+                    {new Date(o.createdAt).toLocaleDateString(
+                      isAr ? 'ar-EG' : 'en-US',
+                    )}{' '}
+                    · {o._count.items} {isAr ? 'أصناف' : 'items'} ·{' '}
+                    {formatEgp(o.totalEgp.toString(), locale)}
+                  </span>
+                </div>
+                <ReorderButton
+                  orderId={o.id}
+                  locale={locale}
+                  compact
+                  labels={baseLabels}
+                />
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+
+      <div className="flex flex-wrap justify-center gap-2">
+        <Link
+          href="/products"
+          className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+        >
+          {isAr ? 'تسوق المنتجات' : 'Browse products'}
+        </Link>
+        {b2b ? (
+          <Link
+            href="/b2b/bulk-order"
+            className="inline-block rounded-md border bg-background px-4 py-2 text-sm hover:bg-muted"
+          >
+            {isAr ? 'طلب مُجمَّع' : 'Bulk order'}
+          </Link>
+        ) : null}
+      </div>
     </div>
   );
 }

@@ -58,6 +58,7 @@
       "couriers": "Couriers",
       "inventory": "Inventory",
       "b2bApplications": "B2B Applications",
+      "b2bPendingConfirmation": "Pending Confirmation",
       "b2bCompanies": "B2B Companies",
       "settings": "Settings"
     },

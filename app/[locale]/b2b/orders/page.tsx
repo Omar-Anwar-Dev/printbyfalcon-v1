@@ -7,6 +7,7 @@ import {
   ORDER_STATUS_LABELS,
   type OrderStatusKey,
 } from '@/lib/whatsapp-templates';
+import { ReorderButton } from '@/components/account/reorder-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,8 @@ export default async function B2BOrdersPage({ params, searchParams }: Props) {
         totalEgp: true,
         createdAt: true,
         contactName: true,
+        placedByName: true,
+        poReference: true,
       },
     }),
     prisma.order.count({ where }),
@@ -99,11 +102,15 @@ export default async function B2BOrdersPage({ params, searchParams }: Props) {
                     {isAr ? 'مقدّم الطلب' : 'Placed by'}
                   </th>
                   <th className="px-3 py-2 text-start">
+                    {isAr ? 'رقم PO' : 'PO'}
+                  </th>
+                  <th className="px-3 py-2 text-start">
                     {isAr ? 'الحالة' : 'Status'}
                   </th>
                   <th className="px-3 py-2 text-end">
                     {isAr ? 'الإجمالي' : 'Total'}
                   </th>
+                  <th className="w-24 px-3 py-2"></th>
                 </tr>
               </thead>
               <tbody>
@@ -122,12 +129,58 @@ export default async function B2BOrdersPage({ params, searchParams }: Props) {
                         isAr ? 'ar-EG' : 'en-US',
                       )}
                     </td>
-                    <td className="px-3 py-2">{o.contactName}</td>
+                    <td className="px-3 py-2">
+                      {o.placedByName ?? o.contactName}
+                    </td>
+                    <td className="px-3 py-2 font-mono text-xs text-muted-foreground">
+                      {o.poReference ?? '—'}
+                    </td>
                     <td className="px-3 py-2">
                       {ORDER_STATUS_LABELS[o.status as OrderStatusKey][locale]}
                     </td>
                     <td className="px-3 py-2 text-end font-mono">
                       {formatEgp(o.totalEgp.toString(), locale)}
+                    </td>
+                    <td className="px-3 py-2 text-end">
+                      <ReorderButton
+                        orderId={o.id}
+                        locale={locale}
+                        compact
+                        labels={{
+                          reorderCta: isAr ? 'أعِد' : 'Reorder',
+                          loading: isAr ? 'جارٍ...' : 'Loading…',
+                          modalTitle: (n) =>
+                            isAr ? `إعادة طلب ${n}` : `Reorder ${n}`,
+                          body: isAr
+                            ? 'راجع الأصناف — هنضيف المتاح بالأسعار الحالية.'
+                            : 'Review lines — available items added at current prices.',
+                          statusLabels: {
+                            available: isAr ? 'متوفر' : 'Available',
+                            partial: isAr ? 'محدود' : 'Limited',
+                            out_of_stock: isAr ? 'نفد' : 'Out of stock',
+                            archived: isAr ? 'مؤرشف' : 'Archived',
+                          },
+                          includeColumn: isAr ? 'ضم' : 'Add',
+                          productColumn: isAr ? 'المنتج' : 'Product',
+                          statusColumn: isAr ? 'الحالة' : 'Status',
+                          qtyColumn: isAr ? 'الكمية' : 'Qty',
+                          priceColumn: isAr ? 'السعر' : 'Price',
+                          addCta: isAr ? 'أضف للسلة' : 'Add to cart',
+                          adding: isAr ? 'جارٍ...' : 'Adding…',
+                          cancel: isAr ? 'إلغاء' : 'Cancel',
+                          successLine: (n) =>
+                            isAr
+                              ? `أضيف ${n} صنف — افتح السلة.`
+                              : `${n} added — open cart.`,
+                          nothingToAdd: isAr
+                            ? 'مفيش أصناف متاحة.'
+                            : 'Nothing available.',
+                          errorGeneric: isAr
+                            ? 'حصل خطأ.'
+                            : 'Something went wrong.',
+                          archivedHeader: isAr ? 'مؤرشف' : 'Archived',
+                        }}
+                      />
                     </td>
                   </tr>
                 ))}

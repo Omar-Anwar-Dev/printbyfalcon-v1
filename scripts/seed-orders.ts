@@ -103,6 +103,15 @@ const STATUS_MIX: StatusSpec[] = [
     paymentMethod: 'COD',
     daysAgo: [6, 12],
   },
+  // Sprint 8 S8-D8-T3 — B2B Submit-for-Review orders waiting for a sales rep
+  // to confirm. Placed by a plausible name + a PO reference on half of them.
+  {
+    status: 'PENDING_CONFIRMATION',
+    count: 4,
+    paymentStatus: 'PENDING',
+    paymentMethod: 'SUBMIT_FOR_REVIEW',
+    daysAgo: [0, 2],
+  },
 ];
 
 const DEMO_NAMES = [
@@ -241,10 +250,20 @@ async function main() {
         notes: null,
       };
 
+      // Sprint 8 S8-D8-T3: SFR demo orders are always B2B + always carry a
+      // placedByName; half carry a PO reference. Other demo orders split 20%
+      // B2B 80% B2C.
+      const isSfr = spec.paymentMethod === 'SUBMIT_FOR_REVIEW';
+      const orderType: 'B2C' | 'B2B' = isSfr
+        ? 'B2B'
+        : rng() < 0.2
+          ? 'B2B'
+          : 'B2C';
+
       const order = await prisma.order.create({
         data: {
           orderNumber,
-          type: rng() < 0.2 ? 'B2B' : 'B2C',
+          type: orderType,
           contactName: name,
           contactPhone: phone,
           contactEmail:
@@ -260,7 +279,7 @@ async function main() {
           vatEgp: 0,
           totalEgp: total,
           paymobTransactionId:
-            spec.paymentMethod !== 'COD'
+            spec.paymentMethod !== 'COD' && !isSfr
               ? `demo-${randomUUID().slice(0, 16)}`
               : null,
           createdAt,
@@ -269,6 +288,11 @@ async function main() {
           deliveredAt:
             spec.status === 'DELIVERED' || spec.status === 'RETURNED'
               ? new Date(createdAt.getTime() + 2 * 24 * 60 * 60 * 1000)
+              : null,
+          placedByName: isSfr ? pick(DEMO_NAMES, rng) : null,
+          poReference:
+            isSfr && rng() < 0.5
+              ? `PO-${Math.floor(1000 + rng() * 9000)}`
               : null,
           internalNotes: `${DEMO_TAG} seeded ${new Date().toISOString()}`,
           items: { create: items },
