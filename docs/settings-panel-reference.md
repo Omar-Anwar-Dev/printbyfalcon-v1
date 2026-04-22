@@ -118,6 +118,7 @@ supported.
 | Type | `PERCENT` (1–100) or `FIXED` (EGP). |
 | Value | Percent points or EGP amount per `type`. |
 | Min order | Optional subtotal floor. Orders below this can't apply the code. |
+| **Max discount (EGP)** | Optional absolute ceiling on the computed discount. **Essential for PERCENT codes** — "10% off, max 150 EGP" stops the code from giving 2,895 EGP off a 28k order. Empty = no cap. |
 | Usage limit | Total uses across all customers. Empty = unlimited. Atomic counter — race-safe. |
 | Valid from / to | Optional date window. Leave blank for no restriction. |
 | Active | Soft toggle (keeps the row + history). |
@@ -128,10 +129,12 @@ supported.
   row whose `validTo < now`. Idempotent. Audit-logged.
 - Per-row toggle-active button.
 
-**Seeded demo codes** (from `npm run seed:orders` / post-push):
-- `WELCOME10` — 10% off, min 300 EGP, unlimited.
+**Seeded demo codes** (from post-push):
+- `WELCOME10` — 10% off, min 300 EGP, **max discount 150 EGP**, unlimited.
 - `FIXED50` — 50 EGP off, min 500 EGP, 100-use cap.
-- `B2BBULK` — 5% off, min 2,000 EGP, unlimited (B2B-friendly threshold).
+- `B2BBULK` — 5% off, min 2,000 EGP, **max discount 500 EGP**, unlimited.
+
+> **Migration note (post-Sprint 9 hotfix):** existing environments that seeded `WELCOME10` / `B2BBULK` before the cap was added won't auto-gain it on redeploy (`update: {}` in the upsert preserves admin edits). Open each code in `/admin/settings/promo-codes` and set `Max discount` manually after the fix deploys.
 
 ---
 

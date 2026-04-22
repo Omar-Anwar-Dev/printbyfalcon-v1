@@ -263,7 +263,8 @@ async function main() {
   }
 
   // Sprint 9 S9-D9-T3 — seed 3 demo promo codes across types. Idempotent by
-  // unique `code`. Exercised in the demo script + e2e smoke suite.
+  // unique `code`. `update: {}` preserves admin edits to value / cap / limit,
+  // so changes made via the admin UI survive redeploys.
   await prisma.promoCode.upsert({
     where: { code: 'WELCOME10' },
     update: {},
@@ -272,6 +273,9 @@ async function main() {
       type: 'PERCENT',
       value: 10,
       minOrderEgp: 300,
+      // Cap for percent-based discount — 10% on a 28k order = 2,895 ج.م
+      // which is absurd for a "welcome" promo. 150 EGP is the ceiling.
+      maxDiscountEgp: 150,
       usageLimit: null, // unlimited
       active: true,
     },
@@ -284,6 +288,7 @@ async function main() {
       type: 'FIXED',
       value: 50,
       minOrderEgp: 500,
+      maxDiscountEgp: null, // redundant for FIXED
       usageLimit: 100,
       active: true,
     },
@@ -296,6 +301,10 @@ async function main() {
       type: 'PERCENT',
       value: 5,
       minOrderEgp: 2000,
+      // B2B orders are bigger by nature — cap at 500 EGP so a massive
+      // corporate order doesn't ride the promo for thousands off. Owner
+      // tunes later via admin UI.
+      maxDiscountEgp: 500,
       usageLimit: null,
       active: true,
     },

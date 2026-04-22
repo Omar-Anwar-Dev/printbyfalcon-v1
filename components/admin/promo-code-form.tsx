@@ -14,6 +14,8 @@ type Initial = {
   type: 'PERCENT' | 'FIXED';
   value: number;
   minOrderEgp: number | null;
+  /// Sprint 9 fix — optional EGP ceiling on the computed discount.
+  maxDiscountEgp: number | null;
   usageLimit: number | null;
   validFrom: string;
   validTo: string;
@@ -25,6 +27,7 @@ const EMPTY: Initial = {
   type: 'PERCENT',
   value: 10,
   minOrderEgp: null,
+  maxDiscountEgp: null,
   usageLimit: null,
   validFrom: '',
   validTo: '',
@@ -77,6 +80,7 @@ export function PromoCodeForm({
         type: state.type,
         value: state.value,
         minOrderEgp: state.minOrderEgp,
+        maxDiscountEgp: state.maxDiscountEgp,
         usageLimit: state.usageLimit,
         validFrom: state.validFrom || undefined,
         validTo: state.validTo || undefined,
@@ -195,6 +199,28 @@ export function PromoCodeForm({
             }
             className="w-full rounded-md border bg-background px-3 py-2"
           />
+        </label>
+        <label className="space-y-1 text-sm">
+          <span>{isAr ? 'الحد الأقصى للخصم (ج.م)' : 'Max discount (EGP)'}</span>
+          <input
+            type="number"
+            min={0}
+            value={state.maxDiscountEgp ?? ''}
+            placeholder={isAr ? 'بلا سقف' : 'no cap'}
+            onChange={(e) =>
+              setState({
+                ...state,
+                maxDiscountEgp:
+                  e.target.value === '' ? null : Number(e.target.value),
+              })
+            }
+            className="w-full rounded-md border bg-background px-3 py-2"
+          />
+          <span className="block text-xs text-muted-foreground">
+            {isAr
+              ? 'مفيد للكودات النسبة المئوية لتفادي خصومات ضخمة على الطلبات الكبيرة.'
+              : 'Useful for PERCENT codes — caps the discount EGP on large orders.'}
+          </span>
         </label>
         <label className="space-y-1 text-sm">
           <span>{isAr ? 'حد الاستخدام' : 'Usage limit'}</span>

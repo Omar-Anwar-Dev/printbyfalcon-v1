@@ -37,6 +37,8 @@ export default async function EditPromoCodePage({
           value: Number(row.value),
           minOrderEgp:
             row.minOrderEgp !== null ? Number(row.minOrderEgp) : null,
+          maxDiscountEgp:
+            row.maxDiscountEgp !== null ? Number(row.maxDiscountEgp) : null,
           usageLimit: row.usageLimit,
           validFrom: row.validFrom?.toISOString() ?? '',
           validTo: row.validTo?.toISOString() ?? '',
