@@ -21,6 +21,10 @@ type RenderInput = {
   items: Item[];
   subtotalEgp: string;
   shippingEgp: string;
+  /// Sprint 9: optional additional totals. Rendered when non-zero.
+  codFeeEgp?: string;
+  discountEgp?: string;
+  vatEgp?: string;
   totalEgp: string;
   orderUrl: string;
 };
@@ -73,15 +77,32 @@ export function renderOrderConfirmationEmail(input: RenderInput): {
     isAr
       ? `الإجمالي قبل الشحن: ${input.subtotalEgp} ج.م`
       : `Subtotal: ${input.subtotalEgp} EGP`,
+    input.discountEgp
+      ? isAr
+        ? `الخصم: -${input.discountEgp} ج.م`
+        : `Discount: -${input.discountEgp} EGP`
+      : null,
     isAr
       ? `الشحن: ${input.shippingEgp} ج.م`
       : `Shipping: ${input.shippingEgp} EGP`,
+    input.codFeeEgp
+      ? isAr
+        ? `رسوم الدفع عند الاستلام: ${input.codFeeEgp} ج.م`
+        : `COD fee: ${input.codFeeEgp} EGP`
+      : null,
+    input.vatEgp
+      ? isAr
+        ? `ضريبة القيمة المضافة: ${input.vatEgp} ج.م`
+        : `VAT: ${input.vatEgp} EGP`
+      : null,
     isAr ? `الإجمالي: ${input.totalEgp} ج.م` : `Total: ${input.totalEgp} EGP`,
     '',
     isAr
       ? `تابع حالة الطلب: ${input.orderUrl}`
       : `Track your order: ${input.orderUrl}`,
-  ].join('\n');
+  ]
+    .filter((line): line is string => line !== null)
+    .join('\n');
 
   const rows = input.items
     .map((i) => {

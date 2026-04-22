@@ -1,33 +1,39 @@
 'use server';
 
 /**
- * Checkout — createOrder Server Action.
+ * Checkout — createOrder + submitForReview Server Actions.
  *
- * Transaction shape:
+ * Sprint 9 rewrite: shipping/VAT/COD fee/promo-code discount are now all
+ * computed from authoritative server-side sources (ShippingZone rows, COD
+ * policy Setting, VAT rate Setting, PromoCode row). The client-side form
+ * shows a preview built from the same inputs and re-computed identically;
+ * the server is the only one writing to the Order row, so the preview is
+ * just a UX nicety — never trusted.
+ *
+ * Transaction shape (unchanged from Sprint 4 except for the extra Sprint 9
+ * writes):
  *  1. Validate payload (zod).
- *  2. Re-check stock for every line item against Inventory + active
- *     reservations (excluding the caller's own CART reservations — those
- *     are about to become ORDER reservations).
- *  3. Inside a single DB transaction:
- *       a. Allocate order number via OrderDailySequence.
- *       b. Create Order + OrderItem rows.
- *       c. Delete CART reservations for this cart's items.
- *       d. Create ORDER reservations (expiresAt=null; firm hold).
- *       e. Decrement Inventory.currentQty per item.
- *       f. Insert InventoryMovement(type=SALE) per item.
- *       g. Insert OrderStatusEvent(status=CONFIRMED).
- *       h. AuditLog entry.
- *       i. Empty the cart.
- *  4. For Paymob card: call Paymob API → return iframeUrl for redirect.
- *  5. For COD: return internal confirmation URL.
- *
- * The cart can represent either a signed-in B2C user or a guest; in either
- * case we accept inline contact fields (name/phone/email) and address fields
- * so guest checkout needs zero Account rows.
+ *  2. Resolve shipping quote (zone + free-ship + COD availability).
+ *  3. Validate promo code (if any).
+ *  4. Re-check stock excluding this cart's own CART reservations.
+ *  5. Inside a single DB transaction:
+ *       a. Allocate order number.
+ *       b. Create Order + OrderItem rows (with snapshotted subtotal /
+ *          shipping / codFee / discount / vat / total).
+ *       c. Atomically consume the promo code (rollback if exhausted).
+ *       d. Convert CART reservations → ORDER reservations.
+ *       e. Race-safe inventory decrement (ADR-036).
+ *       f. InventoryMovement + OrderStatusEvent + AuditLog.
+ *       g. Empty the cart.
+ *  6. For Paymob card: call Paymob with the full total (includes shipping
+ *     + COD fee + VAT − discount) → return iframeUrl.
+ *  7. For COD: enqueue the localized confirmation email (parked-item fix
+ *     per Sprint 4 — Sprint 9 also mirrors this to the Paymob webhook on
+ *     PAID so card customers get the email too).
  */
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { Governorate, PaymentMethod } from '@prisma/client';
+import { Governorate, PaymentMethod, type Prisma } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getOptionalUser } from '@/lib/auth';
 import { getOrCreateCart } from '@/lib/cart/cart';
@@ -41,10 +47,12 @@ import { renderOrderConfirmationEmail } from '@/lib/email/order-confirmation';
 import { renderB2bPendingReview } from '@/lib/whatsapp-templates';
 import { ensureInvoiceForOrder } from '@/lib/invoices/ensure';
 import { sendInvoiceToCustomer } from '@/lib/invoices/delivery';
+import { resolveShippingQuote } from '@/lib/shipping/resolve';
+import { getVatRate, computeLineVat } from '@/lib/settings/vat';
+import { validatePromoCode, tryConsumePromoCode } from '@/lib/promo/validate';
 import { logger } from '@/lib/logger';
 
-// SLA window for the B2B "we'll contact you within N hours" copy. Kept as a
-// constant rather than a DB setting for MVP — change by PR, not ops UI.
+// SLA window for the B2B "we'll contact you within N hours" copy.
 const B2B_SFR_SLA_HOURS = 24;
 
 type ActionOk<T> = { ok: true; data: T };
@@ -55,6 +63,21 @@ type ActionErr = {
 };
 type ActionResult<T> = ActionOk<T> | ActionErr;
 
+const addressSchema = z.object({
+  recipientName: z.string().trim().min(2).max(80),
+  phone: z
+    .string()
+    .trim()
+    .regex(/^\+?[0-9]{9,15}$/, 'validation.phone.invalid_eg'),
+  governorate: z.nativeEnum(Governorate),
+  city: z.string().trim().min(1).max(80),
+  area: z.string().trim().max(80).optional().or(z.literal('')),
+  street: z.string().trim().min(1).max(160),
+  building: z.string().trim().max(40).optional().or(z.literal('')),
+  apartment: z.string().trim().max(40).optional().or(z.literal('')),
+  notes: z.string().trim().max(280).optional().or(z.literal('')),
+});
+
 const checkoutSchema = z.object({
   contact: z.object({
     name: z.string().trim().min(2).max(80),
@@ -64,26 +87,14 @@ const checkoutSchema = z.object({
       .regex(/^\+?[0-9]{9,15}$/, 'validation.phone.invalid_eg'),
     email: z.string().trim().email().optional().or(z.literal('')),
   }),
-  address: z.object({
-    recipientName: z.string().trim().min(2).max(80),
-    phone: z
-      .string()
-      .trim()
-      .regex(/^\+?[0-9]{9,15}$/, 'validation.phone.invalid_eg'),
-    governorate: z.nativeEnum(Governorate),
-    city: z.string().trim().min(1).max(80),
-    area: z.string().trim().max(80).optional().or(z.literal('')),
-    street: z.string().trim().min(1).max(160),
-    building: z.string().trim().max(40).optional().or(z.literal('')),
-    apartment: z.string().trim().max(40).optional().or(z.literal('')),
-    notes: z.string().trim().max(280).optional().or(z.literal('')),
-  }),
+  address: addressSchema,
   paymentMethod: z.enum(['PAYMOB_CARD', 'COD']),
   customerNotes: z.string().trim().max(500).optional().or(z.literal('')),
-  // Sprint 8 — optional for B2B Pay Now (same friction as B2C per kickoff).
-  // Required for Submit-for-Review (see submitForReviewSchema below).
   placedByName: z.string().trim().max(80).optional().or(z.literal('')),
   poReference: z.string().trim().max(40).optional().or(z.literal('')),
+  /// Sprint 9: optional promo code applied at checkout. Validated server-side
+  /// AND consumed atomically inside the order-creation transaction.
+  promoCode: z.string().trim().max(40).optional().or(z.literal('')),
 });
 
 export type CheckoutInput = z.infer<typeof checkoutSchema>;
@@ -99,6 +110,10 @@ function toNullable<T extends string | undefined>(v: T): string | null {
   return v && v.trim().length > 0 ? v.trim() : null;
 }
 
+function roundEgp(n: number): number {
+  return Math.round(n * 100) / 100;
+}
+
 export async function createOrderAction(
   input: CheckoutInput,
 ): Promise<ActionResult<CreateOrderSuccess>> {
@@ -108,17 +123,12 @@ export async function createOrderAction(
   }
 
   const user = await getOptionalUser();
-  // If the viewer is the primary user of an ACTIVE Company, tag the order
-  // B2B + attach the companyId so company-wide order history resolves
-  // against a single column regardless of who inside the company logged in
-  // (single-login-per-company in MVP, but this still keeps the query
-  // forward-compatible with multi-user teams in v1.1).
   const b2bCtx = await getB2BCheckoutContext();
   const isB2BOrder = b2bCtx !== null;
-  // Block Pay Now path when the company is SFR-only.
   if (isB2BOrder && !b2bCtx!.allowPayNow) {
     return { ok: false, errorKey: 'checkout.pay_now_not_allowed' };
   }
+
   const cart = await getOrCreateCart();
   const items = await prisma.cartItem.findMany({
     where: { cartId: cart.id },
@@ -140,8 +150,7 @@ export async function createOrderAction(
   const inactive = items.find((i) => i.product.status !== 'ACTIVE');
   if (inactive) return { ok: false, errorKey: 'cart.item_unavailable' };
 
-  // Re-validate stock excluding the caller's own CART reservations (about to
-  // be converted into ORDER reservations).
+  // Re-validate stock excluding the caller's own CART reservations.
   const reservationRefIds = items.map((i) => i.id);
   const availability = await getAvailableQtyMap(
     items.map((i) => i.product.id),
@@ -154,17 +163,65 @@ export async function createOrderAction(
     }
   }
 
-  // Totals. VAT isn't charged until §9 shipping/settings lands; Sprint 4
-  // totals subtotal straight into total, shipping=0, VAT=0. Sprint 9 wires
-  // zone-based shipping + 14% VAT breakout per PRD §5 Feature 3.
-  const subtotal = items.reduce(
-    (acc, i) => acc + Number(i.unitPriceEgpSnapshot) * i.qty,
-    0,
+  const subtotal = roundEgp(
+    items.reduce((acc, i) => acc + Number(i.unitPriceEgpSnapshot) * i.qty, 0),
   );
-  const shipping = 0;
-  const discount = 0;
-  const vat = 0;
-  const total = subtotal + shipping - discount + vat;
+
+  // Sprint 9: resolve shipping + COD availability + COD fee in one call.
+  const quote = await resolveShippingQuote({
+    governorate: parsed.data.address.governorate,
+    subtotalEgp: subtotal,
+    viewer: isB2BOrder ? 'B2B' : 'B2C',
+    method: parsed.data.paymentMethod === 'COD' ? 'COD' : undefined,
+  });
+  if (quote.unknownZone) {
+    return { ok: false, errorKey: 'checkout.zone_not_configured' };
+  }
+  if (parsed.data.paymentMethod === 'COD' && !quote.codAvailable) {
+    return { ok: false, errorKey: 'checkout.cod_not_available_for_zone' };
+  }
+
+  // Sprint 9: validate promo code (read-only preview). Actual consume is
+  // inside the transaction so exhaust-mid-flight rolls the whole order back.
+  const codeInput = parsed.data.promoCode?.trim() ?? '';
+  let promoDiscount = 0;
+  let promoCodeIdToConsume: string | null = null;
+  if (codeInput.length > 0) {
+    const r = await validatePromoCode(codeInput, subtotal);
+    if (!r.ok) {
+      return { ok: false, errorKey: `promo.${r.error}` };
+    }
+    promoDiscount = r.discountEgp;
+    promoCodeIdToConsume = r.promoCode.id;
+  }
+
+  // Sprint 9: per-item VAT (only non-exempt products). Applied to the price
+  // AFTER the promo-code discount so the reported VAT matches what the
+  // customer actually paid. We prorate the promo discount per-line by line
+  // total share so each item's taxable base is proportionally reduced.
+  const vatRate = (await getVatRate()).percent;
+  let vat = 0;
+  if (subtotal > 0) {
+    for (const i of items) {
+      const unit = Number(i.unitPriceEgpSnapshot);
+      const lineTotal = unit * i.qty;
+      const promoShare =
+        promoDiscount > 0 ? promoDiscount * (lineTotal / subtotal) : 0;
+      const taxableLineTotal = Math.max(0, lineTotal - promoShare);
+      vat += computeLineVat(
+        taxableLineTotal / Math.max(1, i.qty),
+        i.qty,
+        i.product.vatExempt,
+        vatRate,
+      );
+    }
+  }
+  vat = roundEgp(vat);
+
+  const shipping = roundEgp(quote.shippingEgp);
+  const codFee = roundEgp(quote.codFeeEgp);
+  const discount = roundEgp(promoDiscount);
+  const total = roundEgp(subtotal + shipping + codFee + vat - discount);
 
   const addressSnapshot = {
     recipientName: parsed.data.address.recipientName,
@@ -182,19 +239,21 @@ export async function createOrderAction(
   try {
     result = await prisma.$transaction(async (tx) => {
       const orderNumber = await generateOrderNumber(tx);
-
-      // For COD, mark the order Confirmed with payment_status=PENDING_ON_DELIVERY.
-      // For Paymob card, mark Confirmed (stock reserved) with payment_status=PENDING;
-      // the webhook flips to PAID.
       const paymentMethod: PaymentMethod =
         parsed.data.paymentMethod === 'COD' ? 'COD' : 'PAYMOB_CARD';
+
+      // Atomically consume promo code first so the order isn't created if
+      // someone else just used the last slot.
+      if (promoCodeIdToConsume) {
+        const consumed = await tryConsumePromoCode(tx, promoCodeIdToConsume);
+        if (!consumed) {
+          throw new Error('promo.usage_limit_reached');
+        }
+      }
 
       const order = await tx.order.create({
         data: {
           orderNumber,
-          // Attach any signed-in user (B2C or B2B) so account → orders lists
-          // the order. B2B orders also get the companyId for company-wide
-          // history (Sprint 7 S7-D4-T3).
           userId: user?.type === 'B2C' || user?.type === 'B2B' ? user.id : null,
           companyId: isB2BOrder ? b2bCtx!.companyId : null,
           type: isB2BOrder ? 'B2B' : 'B2C',
@@ -208,12 +267,12 @@ export async function createOrderAction(
             paymentMethod === 'COD' ? 'PENDING_ON_DELIVERY' : 'PENDING',
           subtotalEgp: subtotal,
           shippingEgp: shipping,
+          codFeeEgp: codFee,
           discountEgp: discount,
           vatEgp: vat,
           totalEgp: total,
+          promoCodeId: promoCodeIdToConsume,
           customerNotes: toNullable(parsed.data.customerNotes),
-          // Sprint 8: B2B attribution fields. Pay-Now B2B keeps them optional
-          // (PRD "same friction as B2C"); ignored on B2C orders.
           placedByName: isB2BOrder
             ? toNullable(parsed.data.placedByName)
             : null,
@@ -222,7 +281,6 @@ export async function createOrderAction(
         },
       });
 
-      // Snapshotted order items.
       await tx.orderItem.createMany({
         data: items.map((i) => ({
           orderId: order.id,
@@ -241,7 +299,6 @@ export async function createOrderAction(
         select: { id: true, productId: true, qty: true },
       });
 
-      // Convert CART reservations → ORDER reservations (firm, no expiresAt).
       await tx.inventoryReservation.deleteMany({
         where: { refId: { in: reservationRefIds }, type: 'CART' },
       });
@@ -257,10 +314,6 @@ export async function createOrderAction(
           })),
       });
 
-      // Decrement inventory + log movements — race-safe (S6-D7-T2):
-      // `updateMany` with `currentQty >= qty` predicate only applies when
-      // there's enough stock. If count === 0 we raced another checkout for the
-      // last unit; throw to rollback the whole transaction.
       for (const oi of orderItems) {
         if (!oi.productId) continue;
         const { count } = await tx.inventory.updateMany({
@@ -281,7 +334,6 @@ export async function createOrderAction(
         });
       }
 
-      // OrderStatusEvent + AuditLog.
       await tx.orderStatusEvent.create({
         data: {
           orderId: order.id,
@@ -301,11 +353,11 @@ export async function createOrderAction(
             orderNumber,
             paymentMethod,
             totalEgp: total,
+            promoCodeId: promoCodeIdToConsume,
           } as never,
         },
       });
 
-      // Empty the cart — items + any stray reservations for it.
       await tx.cartItem.deleteMany({ where: { cartId: cart.id } });
 
       return { order, orderNumber, paymentMethod };
@@ -315,15 +367,15 @@ export async function createOrderAction(
     if (msg === 'cart.insufficient_stock') {
       return { ok: false, errorKey: 'cart.insufficient_stock' };
     }
+    if (msg === 'promo.usage_limit_reached') {
+      return { ok: false, errorKey: 'promo.usage_limit_reached' };
+    }
     logger.error({ err: msg }, 'order.create.transaction_failed');
     return { ok: false, errorKey: 'order.create_failed' };
   }
 
-  // Sprint 6 (ADR-034): Invoice row allocated on CONFIRMED. No file on disk —
-  // PDF rendered on-demand from Order snapshot. Best-effort: invoice row
-  // failure shouldn't block order placement (we can back-fill later).
-  // COD sends immediately; PAYMOB_CARD waits for webhook PAID so the customer
-  // isn't handed an invoice for a payment that never lands.
+  // Sprint 6 (ADR-034): Invoice row allocated on CONFIRMED; COD sends
+  // immediately, Paymob waits for webhook PAID.
   try {
     const invoiceOutcome = await ensureInvoiceForOrder(
       result.order.id,
@@ -343,8 +395,6 @@ export async function createOrderAction(
     );
   }
 
-  // For Paymob card, call out to their API for a payment key. If that fails,
-  // we keep the order but mark it FAILED so the customer can retry.
   if (result.paymentMethod === 'PAYMOB_CARD') {
     try {
       const [firstName, ...restParts] = parsed.data.contact.name.split(/\s+/);
@@ -399,8 +449,7 @@ export async function createOrderAction(
     }
   }
 
-  // COD — no external hop; send confirmation email immediately and land on
-  // our confirmation page.
+  // COD — send confirmation email immediately.
   if (parsed.data.contact.email?.trim()) {
     await enqueueOrderConfirmationEmail({
       to: parsed.data.contact.email.trim(),
@@ -417,6 +466,9 @@ export async function createOrderAction(
       })),
       subtotalEgp: subtotal.toFixed(2),
       shippingEgp: shipping.toFixed(2),
+      codFeeEgp: codFee > 0 ? codFee.toFixed(2) : undefined,
+      discountEgp: discount > 0 ? discount.toFixed(2) : undefined,
+      vatEgp: vat > 0 ? vat.toFixed(2) : undefined,
       totalEgp: total.toFixed(2),
     });
   }
@@ -433,11 +485,13 @@ export async function createOrderAction(
 }
 
 /**
- * Enqueue the localized order-confirmation email. Defaults to Arabic (primary
- * user-facing locale); callers can override via `locale` once per-user locale
- * resolution is wired.
+ * Enqueue the localized order-confirmation email. Sprint 9 closes the
+ * parked-item from Sprint 4: the same email is now also fired from the
+ * Paymob webhook PAID branch so card customers get confirmation (not
+ * just COD). Additional totals (COD fee, discount, VAT) render when
+ * non-zero; zero-value lines are suppressed.
  */
-async function enqueueOrderConfirmationEmail(payload: {
+export async function enqueueOrderConfirmationEmail(payload: {
   to: string;
   orderId: string;
   orderNumber: string;
@@ -452,6 +506,9 @@ async function enqueueOrderConfirmationEmail(payload: {
   }[];
   subtotalEgp: string;
   shippingEgp: string;
+  codFeeEgp?: string;
+  discountEgp?: string;
+  vatEgp?: string;
   totalEgp: string;
   locale?: 'ar' | 'en';
 }) {
@@ -468,6 +525,9 @@ async function enqueueOrderConfirmationEmail(payload: {
     items: payload.items,
     subtotalEgp: payload.subtotalEgp,
     shippingEgp: payload.shippingEgp,
+    codFeeEgp: payload.codFeeEgp,
+    discountEgp: payload.discountEgp,
+    vatEgp: payload.vatEgp,
     totalEgp: payload.totalEgp,
     orderUrl: `${appUrl}/${locale}/order/confirmed/${payload.orderId}`,
   });
@@ -490,22 +550,11 @@ async function enqueueOrderConfirmationEmail(payload: {
   }
 }
 
-export { enqueueOrderConfirmationEmail };
-
 // ---------------------------------------------------------------------------
-// Sprint 8 — B2B Submit-for-Review path (architecture §4 Flow B).
-//
-// Differences from createOrderAction:
-//   - Requires an ACTIVE B2B Company whose checkoutPolicy permits SFR.
-//   - Requires a non-empty `placedByName` (mandatory per PRD Feature 4).
-//   - Order starts in `PENDING_CONFIRMATION` (paymentMethod=SUBMIT_FOR_REVIEW).
-//   - Inventory is firm-held (ORDER reservation + race-safe decrement) from
-//     placement, matching the Sprint-4 pattern + architecture Flow B step 5.
-//     A subsequent CANCELLED transition releases via the Sprint-5 state
-//     machine without special-casing this path.
-//   - No Paymob, no invoice on placement — invoice lands when the sales rep
-//     clicks "Confirm" in Sprint 8 S8-D2-T2.
-//   - Enqueues customer WhatsApp "pending review" + fan-out sales-rep email.
+// Sprint 8 — B2B Submit-for-Review path.
+// Sprint 9 extension: zone-based shipping, VAT, and promo code also apply to
+// SFR orders. COD isn't offered on SFR (payment method = SUBMIT_FOR_REVIEW
+// is terminal until the sales rep confirms with a concrete method).
 // ---------------------------------------------------------------------------
 
 const submitForReviewSchema = z.object({
@@ -517,24 +566,11 @@ const submitForReviewSchema = z.object({
       .regex(/^\+?[0-9]{9,15}$/, 'validation.phone.invalid_eg'),
     email: z.string().trim().email().optional().or(z.literal('')),
   }),
-  address: z.object({
-    recipientName: z.string().trim().min(2).max(80),
-    phone: z
-      .string()
-      .trim()
-      .regex(/^\+?[0-9]{9,15}$/, 'validation.phone.invalid_eg'),
-    governorate: z.nativeEnum(Governorate),
-    city: z.string().trim().min(1).max(80),
-    area: z.string().trim().max(80).optional().or(z.literal('')),
-    street: z.string().trim().min(1).max(160),
-    building: z.string().trim().max(40).optional().or(z.literal('')),
-    apartment: z.string().trim().max(40).optional().or(z.literal('')),
-    notes: z.string().trim().max(280).optional().or(z.literal('')),
-  }),
-  // placedByName mandatory on this path.
+  address: addressSchema,
   placedByName: z.string().trim().min(2).max(80),
   poReference: z.string().trim().max(40).optional().or(z.literal('')),
   customerNotes: z.string().trim().max(500).optional().or(z.literal('')),
+  promoCode: z.string().trim().max(40).optional().or(z.literal('')),
 });
 
 export type SubmitForReviewInput = z.infer<typeof submitForReviewSchema>;
@@ -554,9 +590,7 @@ export async function submitForReviewOrderAction(
   }
 
   const b2bCtx = await getB2BCheckoutContext();
-  if (!b2bCtx) {
-    return { ok: false, errorKey: 'checkout.b2b_required' };
-  }
+  if (!b2bCtx) return { ok: false, errorKey: 'checkout.b2b_required' };
   if (!b2bCtx.allowSubmitForReview) {
     return { ok: false, errorKey: 'checkout.submit_for_review_not_allowed' };
   }
@@ -594,14 +628,51 @@ export async function submitForReviewOrderAction(
     }
   }
 
-  const subtotal = items.reduce(
-    (acc, i) => acc + Number(i.unitPriceEgpSnapshot) * i.qty,
-    0,
+  const subtotal = roundEgp(
+    items.reduce((acc, i) => acc + Number(i.unitPriceEgpSnapshot) * i.qty, 0),
   );
-  const shipping = 0;
-  const discount = 0;
-  const vat = 0;
-  const total = subtotal + shipping - discount + vat;
+
+  const quote = await resolveShippingQuote({
+    governorate: parsed.data.address.governorate,
+    subtotalEgp: subtotal,
+    viewer: 'B2B',
+  });
+  if (quote.unknownZone) {
+    return { ok: false, errorKey: 'checkout.zone_not_configured' };
+  }
+
+  const codeInput = parsed.data.promoCode?.trim() ?? '';
+  let promoDiscount = 0;
+  let promoCodeIdToConsume: string | null = null;
+  if (codeInput.length > 0) {
+    const r = await validatePromoCode(codeInput, subtotal);
+    if (!r.ok) return { ok: false, errorKey: `promo.${r.error}` };
+    promoDiscount = r.discountEgp;
+    promoCodeIdToConsume = r.promoCode.id;
+  }
+
+  const vatRate = (await getVatRate()).percent;
+  let vat = 0;
+  if (subtotal > 0) {
+    for (const i of items) {
+      const unit = Number(i.unitPriceEgpSnapshot);
+      const lineTotal = unit * i.qty;
+      const promoShare =
+        promoDiscount > 0 ? promoDiscount * (lineTotal / subtotal) : 0;
+      const taxableLineTotal = Math.max(0, lineTotal - promoShare);
+      vat += computeLineVat(
+        taxableLineTotal / Math.max(1, i.qty),
+        i.qty,
+        i.product.vatExempt,
+        vatRate,
+      );
+    }
+  }
+  vat = roundEgp(vat);
+
+  const shipping = roundEgp(quote.shippingEgp);
+  const discount = roundEgp(promoDiscount);
+  const total = roundEgp(subtotal + shipping + vat - discount);
 
   const addressSnapshot = {
     recipientName: parsed.data.address.recipientName,
@@ -617,8 +688,13 @@ export async function submitForReviewOrderAction(
 
   let result;
   try {
-    result = await prisma.$transaction(async (tx) => {
+    result = await prisma.$transaction(async (tx: Prisma.TransactionClient) => {
       const orderNumber = await generateOrderNumber(tx);
+
+      if (promoCodeIdToConsume) {
+        const consumed = await tryConsumePromoCode(tx, promoCodeIdToConsume);
+        if (!consumed) throw new Error('promo.usage_limit_reached');
+      }
 
       const order = await tx.order.create({
         data: {
@@ -635,13 +711,14 @@ export async function submitForReviewOrderAction(
           paymentStatus: 'PENDING',
           subtotalEgp: subtotal,
           shippingEgp: shipping,
+          codFeeEgp: 0,
           discountEgp: discount,
           vatEgp: vat,
           totalEgp: total,
+          promoCodeId: promoCodeIdToConsume,
           customerNotes: toNullable(parsed.data.customerNotes),
           placedByName: parsed.data.placedByName,
           poReference: toNullable(parsed.data.poReference),
-          // confirmedAt stays null until the sales rep confirms in Day 2.
         },
       });
 
@@ -663,7 +740,6 @@ export async function submitForReviewOrderAction(
         select: { id: true, productId: true, qty: true },
       });
 
-      // Firm hold — convert CART reservations to ORDER reservations.
       await tx.inventoryReservation.deleteMany({
         where: { refId: { in: reservationRefIds }, type: 'CART' },
       });
@@ -679,7 +755,6 @@ export async function submitForReviewOrderAction(
           })),
       });
 
-      // Race-safe decrement (ADR-036).
       for (const oi of orderItems) {
         if (!oi.productId) continue;
         const { count } = await tx.inventory.updateMany({
@@ -719,6 +794,7 @@ export async function submitForReviewOrderAction(
             totalEgp: total,
             companyId: b2bCtx.companyId,
             placedByName: parsed.data.placedByName,
+            promoCodeId: promoCodeIdToConsume,
           } as never,
         },
       });
@@ -732,11 +808,13 @@ export async function submitForReviewOrderAction(
     if (msg === 'cart.insufficient_stock') {
       return { ok: false, errorKey: 'cart.insufficient_stock' };
     }
+    if (msg === 'promo.usage_limit_reached') {
+      return { ok: false, errorKey: 'promo.usage_limit_reached' };
+    }
     logger.error({ err: msg }, 'order.submit_for_review.transaction_failed');
     return { ok: false, errorKey: 'order.create_failed' };
   }
 
-  // Customer WhatsApp — "pending review, we'll contact you within N hours."
   try {
     await enqueueJob('send-whatsapp', {
       phone: parsed.data.contact.phone,
@@ -755,7 +833,6 @@ export async function submitForReviewOrderAction(
     );
   }
 
-  // Sales-rep fan-out email. Best-effort.
   try {
     await notifySalesRepsOfPendingOrder({
       orderId: result.order.id,

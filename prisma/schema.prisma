@@ -360,6 +360,84 @@ model Address {
 }
 
 // -------------------------------------------------------------------------
+// Shipping zones (Sprint 9 S9-D1-T1) — 5 zones per PRD §5 Feature 3.
+// Admin-editable rates, free-shipping thresholds, COD-enabled per zone.
+// `code` is the stable enum-like key used by app code + seeds; UI uses the
+// bilingual names. `baseRateEgp` is the default; a zone with rate 0 = free.
+// `codEnabled` lets the owner turn off COD in remote zones without touching
+// the global COD policy.
+// -------------------------------------------------------------------------
+
+enum ShippingZoneCode {
+  GREATER_CAIRO
+  ALEX_DELTA
+  CANAL_SUEZ
+  UPPER_EGYPT
+  SINAI_RED_SEA_REMOTE
+}
+
+model ShippingZone {
+  id                            String           @id @default(cuid())
+  code                          ShippingZoneCode @unique
+  nameAr                        String
+  nameEn                        String
+  baseRateEgp                   Decimal          @db.Decimal(10, 2)
+  freeShippingThresholdB2cEgp   Decimal?         @db.Decimal(10, 2)
+  freeShippingThresholdB2bEgp   Decimal?         @db.Decimal(10, 2)
+  codEnabled                    Boolean          @default(true)
+  position                      Int              @default(0)
+  createdAt                     DateTime         @default(now())
+  updatedAt                     DateTime         @updatedAt
+
+  governorates GovernorateZone[]
+
+  @@index([position])
+}
+
+/// Governorate → ShippingZone mapping. One row per governorate (PK on
+/// governorate). Seeded with the plain-reading PRD mapping; admin can
+/// reassign via /admin/settings/shipping.
+model GovernorateZone {
+  governorate Governorate  @id
+  zoneId      String
+  zone        ShippingZone @relation(fields: [zoneId], references: [id], onDelete: Restrict)
+  updatedAt   DateTime     @updatedAt
+
+  @@index([zoneId])
+}
+
+// -------------------------------------------------------------------------
+// Promo codes (Sprint 9 S9-D5-T1) — basic discount codes per PRD §5
+// Feature 3. MVP limits: one code per order, % or fixed value, min-order
+// gate, total-usage cap, date window, active toggle.
+// -------------------------------------------------------------------------
+
+enum PromoCodeType {
+  PERCENT
+  FIXED
+}
+
+model PromoCode {
+  id            String        @id @default(cuid())
+  code          String        @unique
+  type          PromoCodeType
+  /// PERCENT: integer 1-100. FIXED: EGP amount as Decimal.
+  value         Decimal       @db.Decimal(10, 2)
+  minOrderEgp   Decimal?      @db.Decimal(10, 2)
+  usageLimit    Int?
+  usedCount     Int           @default(0)
+  validFrom     DateTime?
+  validTo       DateTime?
+  active        Boolean       @default(true)
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  orders Order[]
+
+  @@index([active, validFrom, validTo])
+}
+
+// -------------------------------------------------------------------------
 // Cart (Sprint 4 — session-based for guests, user-based for logged-in B2C)
 // -------------------------------------------------------------------------
 
@@ -509,9 +587,20 @@ model Order {
 
   subtotalEgp Decimal @db.Decimal(10, 2)
   shippingEgp Decimal @default(0) @db.Decimal(10, 2)
+  // Sprint 9: COD fee tracked separately from shipping so the invoice +
+  // checkout summary can surface it on its own line. Zero for non-COD
+  // orders. Value applied = Setting 'cod.policy' at the moment of
+  // placement (snapshotted via the resolved shipping quote).
+  codFeeEgp   Decimal @default(0) @db.Decimal(10, 2)
   discountEgp Decimal @default(0) @db.Decimal(10, 2)
   vatEgp      Decimal @default(0) @db.Decimal(10, 2)
   totalEgp    Decimal @db.Decimal(10, 2)
+
+  // Sprint 9: applied promo code (nullable — most orders have none). Kept
+  // as a FK so admin can see "which orders used CODE-X" via the relation
+  // + aggregated usedCount stays authoritative on the PromoCode row.
+  promoCodeId String?
+  promoCode   PromoCode? @relation(fields: [promoCodeId], references: [id], onDelete: SetNull)
 
   // Paymob correlation — populated when paymentMethod is a Paymob flow.
   paymobOrderId       String?

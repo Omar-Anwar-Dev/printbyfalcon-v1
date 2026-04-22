@@ -20,6 +20,13 @@ export type StoreInfo = {
   phone: string;
   email: string;
   website: string;
+  /// Sprint 9: logo filename under /storage/brand/. Empty = invoices +
+  /// site header render the store name only (no image).
+  logoFilename: string;
+  /// Sprint 9: support WhatsApp number (sales-team manual line — distinct
+  /// from the Whats360 device used for OTP/notifications). Bridge deep-link
+  /// target for the Sprint 10 "Chat with us" button. Closes PRD Q#2.
+  supportWhatsapp: string;
 };
 
 export const STORE_INFO_DEFAULT: StoreInfo = {
@@ -32,6 +39,8 @@ export const STORE_INFO_DEFAULT: StoreInfo = {
   phone: '—',
   email: 'info@printbyfalcon.com',
   website: 'printbyfalcon.com',
+  logoFilename: '',
+  supportWhatsapp: '',
 };
 
 export const getStoreInfo = cache(async (): Promise<StoreInfo> => {

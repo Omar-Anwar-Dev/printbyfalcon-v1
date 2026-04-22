@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { verifyPaymobHmac } from '@/lib/payments/paymob';
 import { ensureInvoiceForOrder } from '@/lib/invoices/ensure';
 import { sendInvoiceToCustomer } from '@/lib/invoices/delivery';
+import { enqueueOrderConfirmationEmail } from '@/app/actions/checkout';
 import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
@@ -158,6 +159,56 @@ export async function POST(request: Request) {
         { err: (err as Error).message, orderId: order.id },
         'paymob.webhook.invoice_delivery_failed',
       );
+    }
+
+    // Sprint 9 — close Sprint 4 parking-lot item: Paymob card customers now
+    // also receive the order-confirmation email on PAID (previously only COD
+    // customers got one). Best-effort — email enqueue failure must not
+    // block the 200 response.
+    if (order.contactEmail) {
+      try {
+        const items = await prisma.orderItem.findMany({
+          where: { orderId: order.id },
+          select: {
+            skuSnapshot: true,
+            nameArSnapshot: true,
+            nameEnSnapshot: true,
+            qty: true,
+            lineTotalEgp: true,
+          },
+        });
+        const subtotal = Number(order.subtotalEgp);
+        const shipping = Number(order.shippingEgp);
+        const codFee = Number(order.codFeeEgp);
+        const discount = Number(order.discountEgp);
+        const vat = Number(order.vatEgp);
+        const total = Number(order.totalEgp);
+        await enqueueOrderConfirmationEmail({
+          to: order.contactEmail,
+          orderId: order.id,
+          orderNumber: order.orderNumber,
+          recipientName: order.contactName,
+          paymentMethod: 'PAYMOB_CARD',
+          items: items.map((i) => ({
+            sku: i.skuSnapshot,
+            nameAr: i.nameArSnapshot,
+            nameEn: i.nameEnSnapshot,
+            qty: i.qty,
+            lineTotalEgp: Number(i.lineTotalEgp).toFixed(2),
+          })),
+          subtotalEgp: subtotal.toFixed(2),
+          shippingEgp: shipping.toFixed(2),
+          codFeeEgp: codFee > 0 ? codFee.toFixed(2) : undefined,
+          discountEgp: discount > 0 ? discount.toFixed(2) : undefined,
+          vatEgp: vat > 0 ? vat.toFixed(2) : undefined,
+          totalEgp: total.toFixed(2),
+        });
+      } catch (err) {
+        logger.error(
+          { err: (err as Error).message, orderId: order.id },
+          'paymob.webhook.confirmation_email_failed',
+        );
+      }
     }
   } else {
     await prisma.$transaction(async (tx) => {

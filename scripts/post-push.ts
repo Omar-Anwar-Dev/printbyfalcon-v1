@@ -7,9 +7,98 @@
  * so it is idempotent by design (every statement is `IF NOT EXISTS` or an
  * unconditional UPDATE).
  */
-import { PrismaClient } from '@prisma/client';
+import {
+  PrismaClient,
+  type Governorate,
+  type ShippingZoneCode,
+} from '@prisma/client';
 
 const prisma = new PrismaClient();
+
+// Sprint 9 seed data — zone rates from the owner's 2026-04-22 kickoff.
+// All values are admin-editable post-seed via /admin/settings/shipping.
+const SHIPPING_ZONES: Array<{
+  code: ShippingZoneCode;
+  nameAr: string;
+  nameEn: string;
+  baseRateEgp: number;
+  position: number;
+}> = [
+  {
+    code: 'GREATER_CAIRO',
+    nameAr: 'القاهرة الكبرى',
+    nameEn: 'Greater Cairo',
+    baseRateEgp: 40,
+    position: 1,
+  },
+  {
+    code: 'ALEX_DELTA',
+    nameAr: 'الإسكندرية والدلتا',
+    nameEn: 'Alexandria + Delta',
+    baseRateEgp: 65,
+    position: 2,
+  },
+  {
+    code: 'CANAL_SUEZ',
+    nameAr: 'القناة والسويس',
+    nameEn: 'Canal + Suez',
+    baseRateEgp: 70,
+    position: 3,
+  },
+  {
+    code: 'UPPER_EGYPT',
+    nameAr: 'الصعيد',
+    nameEn: 'Upper Egypt',
+    baseRateEgp: 85,
+    position: 4,
+  },
+  {
+    code: 'SINAI_RED_SEA_REMOTE',
+    nameAr: 'سيناء والبحر الأحمر والمناطق النائية',
+    nameEn: 'Sinai + Red Sea + Remote',
+    baseRateEgp: 130,
+    position: 5,
+  },
+];
+
+// Governorate → zone mapping — plain reading of PRD §5 Feature 3.
+const GOVERNORATE_ZONES: Array<{
+  governorate: Governorate;
+  zoneCode: ShippingZoneCode;
+}> = [
+  // Greater Cairo
+  { governorate: 'CAIRO', zoneCode: 'GREATER_CAIRO' },
+  { governorate: 'GIZA', zoneCode: 'GREATER_CAIRO' },
+  { governorate: 'QALYUBIA', zoneCode: 'GREATER_CAIRO' },
+  // Alex + Delta
+  { governorate: 'ALEXANDRIA', zoneCode: 'ALEX_DELTA' },
+  { governorate: 'BEHEIRA', zoneCode: 'ALEX_DELTA' },
+  { governorate: 'DAKAHLIA', zoneCode: 'ALEX_DELTA' },
+  { governorate: 'DAMIETTA', zoneCode: 'ALEX_DELTA' },
+  { governorate: 'GHARBIA', zoneCode: 'ALEX_DELTA' },
+  { governorate: 'KAFR_EL_SHEIKH', zoneCode: 'ALEX_DELTA' },
+  { governorate: 'MENOUFIA', zoneCode: 'ALEX_DELTA' },
+  { governorate: 'SHARQIA', zoneCode: 'ALEX_DELTA' },
+  // Canal + Suez
+  { governorate: 'ISMAILIA', zoneCode: 'CANAL_SUEZ' },
+  { governorate: 'PORT_SAID', zoneCode: 'CANAL_SUEZ' },
+  { governorate: 'SUEZ', zoneCode: 'CANAL_SUEZ' },
+  // Upper Egypt
+  { governorate: 'BENI_SUEF', zoneCode: 'UPPER_EGYPT' },
+  { governorate: 'FAYOUM', zoneCode: 'UPPER_EGYPT' },
+  { governorate: 'MINYA', zoneCode: 'UPPER_EGYPT' },
+  { governorate: 'ASYUT', zoneCode: 'UPPER_EGYPT' },
+  { governorate: 'SOHAG', zoneCode: 'UPPER_EGYPT' },
+  { governorate: 'QENA', zoneCode: 'UPPER_EGYPT' },
+  { governorate: 'LUXOR', zoneCode: 'UPPER_EGYPT' },
+  { governorate: 'ASWAN', zoneCode: 'UPPER_EGYPT' },
+  // Sinai + Red Sea + Remote
+  { governorate: 'NORTH_SINAI', zoneCode: 'SINAI_RED_SEA_REMOTE' },
+  { governorate: 'SOUTH_SINAI', zoneCode: 'SINAI_RED_SEA_REMOTE' },
+  { governorate: 'RED_SEA', zoneCode: 'SINAI_RED_SEA_REMOTE' },
+  { governorate: 'MATRUH', zoneCode: 'SINAI_RED_SEA_REMOTE' },
+  { governorate: 'NEW_VALLEY', zoneCode: 'SINAI_RED_SEA_REMOTE' },
+];
 
 async function main() {
   // Trigram extension — powers fallback short-query search and fuzzy lookups
@@ -80,6 +169,135 @@ async function main() {
       nameAr: 'المستوى ج (أسعار مخصّصة)',
       nameEn: 'Tier C (Custom)',
       defaultDiscountPercent: null,
+    },
+  });
+
+  // Sprint 9 bootstrap: seed 5 ShippingZones + 27 GovernorateZone mappings
+  // + default COD policy + VAT rate + free-ship thresholds. Every call is
+  // upsert-by-natural-key so container restarts are safe; admin edits
+  // survive because `update: {}` is a no-op on existing rows.
+  for (const zone of SHIPPING_ZONES) {
+    await prisma.shippingZone.upsert({
+      where: { code: zone.code },
+      update: {},
+      create: {
+        code: zone.code,
+        nameAr: zone.nameAr,
+        nameEn: zone.nameEn,
+        baseRateEgp: zone.baseRateEgp,
+        position: zone.position,
+        codEnabled: true,
+      },
+    });
+  }
+
+  // Build the code→id map once so the governorate-zone upsert below is a
+  // pure loop with no per-row DB lookup for zone id.
+  const zoneRows = await prisma.shippingZone.findMany({
+    select: { id: true, code: true },
+  });
+  const zoneIdByCode = new Map(zoneRows.map((z) => [z.code, z.id]));
+  for (const gov of GOVERNORATE_ZONES) {
+    const zoneId = zoneIdByCode.get(gov.zoneCode);
+    if (!zoneId) continue; // defensive — shouldn't happen after the loop above
+    await prisma.governorateZone.upsert({
+      where: { governorate: gov.governorate },
+      update: {}, // don't overwrite admin edits
+      create: { governorate: gov.governorate, zoneId },
+    });
+  }
+
+  // Free-shipping threshold defaults (B2C=1500, B2B=5000). Per-zone
+  // overrides live on ShippingZone columns; admin sets globals here.
+  const FREE_SHIP_KEY = 'shipping.freeShipThresholds';
+  const existingFreeShip = await prisma.setting.findUnique({
+    where: { key: FREE_SHIP_KEY },
+    select: { key: true },
+  });
+  if (!existingFreeShip) {
+    await prisma.setting.create({
+      data: {
+        key: FREE_SHIP_KEY,
+        value: { b2cEgp: 1500, b2bEgp: 5000 } as never,
+      },
+    });
+  }
+
+  // COD policy defaults (closes PRD Q#13): enabled / 20 EGP fixed fee /
+  // max 15000 EGP. Per-zone on/off lives on ShippingZone.codEnabled so
+  // the admin can toggle Sinai/Red Sea without touching the global
+  // policy. `feeType` is FIXED or PERCENT; `feeValue` is EGP (FIXED) or
+  // percent points (PERCENT).
+  const COD_KEY = 'cod.policy';
+  const existingCod = await prisma.setting.findUnique({
+    where: { key: COD_KEY },
+    select: { key: true },
+  });
+  if (!existingCod) {
+    await prisma.setting.create({
+      data: {
+        key: COD_KEY,
+        value: {
+          enabled: true,
+          feeType: 'FIXED',
+          feeValue: 20,
+          maxOrderEgp: 15000,
+        } as never,
+      },
+    });
+  }
+
+  // VAT defaults (14% per PRD §8 Non-Functional Requirements).
+  const VAT_KEY = 'vat.rate';
+  const existingVat = await prisma.setting.findUnique({
+    where: { key: VAT_KEY },
+    select: { key: true },
+  });
+  if (!existingVat) {
+    await prisma.setting.create({
+      data: {
+        key: VAT_KEY,
+        value: { percent: 14 } as never,
+      },
+    });
+  }
+
+  // Sprint 9 S9-D9-T3 — seed 3 demo promo codes across types. Idempotent by
+  // unique `code`. Exercised in the demo script + e2e smoke suite.
+  await prisma.promoCode.upsert({
+    where: { code: 'WELCOME10' },
+    update: {},
+    create: {
+      code: 'WELCOME10',
+      type: 'PERCENT',
+      value: 10,
+      minOrderEgp: 300,
+      usageLimit: null, // unlimited
+      active: true,
+    },
+  });
+  await prisma.promoCode.upsert({
+    where: { code: 'FIXED50' },
+    update: {},
+    create: {
+      code: 'FIXED50',
+      type: 'FIXED',
+      value: 50,
+      minOrderEgp: 500,
+      usageLimit: 100,
+      active: true,
+    },
+  });
+  await prisma.promoCode.upsert({
+    where: { code: 'B2BBULK' },
+    update: {},
+    create: {
+      code: 'B2BBULK',
+      type: 'PERCENT',
+      value: 5,
+      minOrderEgp: 2000,
+      usageLimit: null,
+      active: true,
     },
   });
 

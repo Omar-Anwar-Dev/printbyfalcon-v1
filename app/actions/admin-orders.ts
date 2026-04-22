@@ -842,3 +842,74 @@ export async function confirmB2BOrderAction(
   revalidatePath('/', 'layout');
   return { ok: true, data: { orderId: order.id } };
 }
+
+// ---------------------------------------------------------------------------
+// Sprint 9 S9-D3-T2 — admin marks a COD order as "payment received"
+// (paymentStatus: PENDING_ON_DELIVERY → PAID). Typically fired after the
+// courier returns cash from a DELIVERED order, but also valid whenever the
+// admin has proof of receipt (e.g. bank transfer in lieu of cash).
+// ---------------------------------------------------------------------------
+
+const codMarkPaidSchema = z.object({
+  orderId: z.string().min(1),
+  note: z
+    .string()
+    .trim()
+    .max(200)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+});
+
+export type CodMarkPaidInput = z.input<typeof codMarkPaidSchema>;
+
+export async function markCodOrderPaidAction(
+  input: CodMarkPaidInput,
+): Promise<ActionResult<{ orderId: string }>> {
+  const actor = await requireAdmin(['OWNER', 'OPS']);
+  const parsed = codMarkPaidSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, errorKey: 'validation.failed' };
+
+  const order = await prisma.order.findUnique({
+    where: { id: parsed.data.orderId },
+  });
+  if (!order) return { ok: false, errorKey: 'order.not_found' };
+  if (order.paymentMethod !== 'COD') {
+    return { ok: false, errorKey: 'order.not_cod' };
+  }
+  if (order.paymentStatus === 'PAID') {
+    return { ok: false, errorKey: 'order.already_paid' };
+  }
+
+  await prisma.$transaction([
+    prisma.order.update({
+      where: { id: order.id },
+      data: { paymentStatus: 'PAID' },
+    }),
+    prisma.orderStatusEvent.create({
+      data: {
+        orderId: order.id,
+        status: order.status,
+        actorId: actor.id,
+        note: parsed.data.note ?? 'COD payment collected',
+      },
+    }),
+    prisma.auditLog.create({
+      data: {
+        actorId: actor.id,
+        action: 'order.cod.paid',
+        entityType: 'Order',
+        entityId: order.id,
+        before: { paymentStatus: order.paymentStatus } as never,
+        after: {
+          paymentStatus: 'PAID',
+          note: parsed.data.note ?? null,
+        } as never,
+      },
+    }),
+  ]);
+
+  revalidatePath(`/admin/orders/${order.id}`);
+  revalidatePath('/admin/orders');
+  revalidatePath('/admin/orders/cod-reconciliation');
+  return { ok: true, data: { orderId: order.id } };
+}

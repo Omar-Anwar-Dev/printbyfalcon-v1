@@ -18,6 +18,7 @@ import {
 } from '@/lib/whatsapp-templates';
 import { OrderInvoicePanel } from '@/components/admin/order-invoice-panel';
 import { B2BConfirmPanel } from '@/components/admin/b2b-confirm-panel';
+import { CodMarkPaidButton } from '@/components/admin/cod-mark-paid-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -291,6 +292,12 @@ export default async function AdminOrderDetailPage({
               </div>
             ) : null}
           </dl>
+          {order.paymentMethod === 'COD' &&
+          order.paymentStatus === 'PENDING_ON_DELIVERY' ? (
+            <div className="mt-3">
+              <CodMarkPaidButton orderId={order.id} locale={locale} />
+            </div>
+          ) : null}
         </section>
 
         <section className="rounded-md border bg-background p-4 text-sm">
