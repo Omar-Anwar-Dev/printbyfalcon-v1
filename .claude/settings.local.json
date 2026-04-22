@@ -35,7 +35,9 @@
       "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" npx tsc --noEmit)",
       "Bash(echo \"Exit: $?\")",
       "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" npx vitest run)",
-      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" PAYMOB_API_KEY=dev PAYMOB_HMAC_SECRET=dev PAYMOB_INTEGRATION_ID_CARD=1 PAYMOB_INTEGRATION_ID_FAWRY=2 PAYMOB_IFRAME_ID=1 APP_URL=http://localhost:3000 WHATS360_TOKEN=dev WHATS360_INSTANCE_ID=dev WHATS360_WEBHOOK_SECRET=dev NEXTAUTH_SECRET=devsecretdevsecretdevsecretdevsecret INVOICE_URL_SECRET=devsecretdevsecretdevsecretdevsecret npx next build)"
+      "Bash(DATABASE_URL=\"postgresql://u:p@localhost:5432/d\" PAYMOB_API_KEY=dev PAYMOB_HMAC_SECRET=dev PAYMOB_INTEGRATION_ID_CARD=1 PAYMOB_INTEGRATION_ID_FAWRY=2 PAYMOB_IFRAME_ID=1 APP_URL=http://localhost:3000 WHATS360_TOKEN=dev WHATS360_INSTANCE_ID=dev WHATS360_WEBHOOK_SECRET=dev NEXTAUTH_SECRET=devsecretdevsecretdevsecretdevsecret INVOICE_URL_SECRET=devsecretdevsecretdevsecretdevsecret npx next build)",
+      "Bash(npx vitest *)",
+      "Bash(git -C \"D:/PrintByFalcon/.claude/worktrees/romantic-herschel-acd31b\" diff --stat HEAD)"
     ]
   }
 }

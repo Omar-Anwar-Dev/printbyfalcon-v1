@@ -6,7 +6,9 @@ import Script from 'next/script';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { ToastProvider } from '@/components/ui/toast';
+import { WhatsAppChatButton } from '@/components/whatsapp-chat-button';
 import { locales, localeDir } from '@/lib/i18n/config';
+import { getStoreInfo } from '@/lib/settings/store-info';
 
 type Props = {
   children: React.ReactNode;
@@ -45,6 +47,7 @@ export default async function LocaleLayout({ children, params }: Props) {
   setRequestLocale(locale);
   const messages = await getMessages();
   const dir = localeDir[locale as (typeof locales)[number]];
+  const storeInfo = await getStoreInfo();
 
   return (
     <NextIntlClientProvider messages={messages}>
@@ -56,6 +59,12 @@ export default async function LocaleLayout({ children, params }: Props) {
           <SiteHeader locale={locale} />
           <main className="flex-1">{children}</main>
           <SiteFooter />
+          {storeInfo.supportWhatsapp ? (
+            <WhatsAppChatButton
+              supportNumber={storeInfo.supportWhatsapp}
+              locale={locale}
+            />
+          ) : null}
         </div>
       </ToastProvider>
     </NextIntlClientProvider>

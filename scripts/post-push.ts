@@ -262,6 +262,28 @@ async function main() {
     });
   }
 
+  // Sprint 10 — Return policy defaults.
+  // Shape: { enabled, windowDays, minOrderEgp (nullable), overrideRoles[] }.
+  // OWNER can edit in /admin/settings/returns; admin edits preserved via findUnique gate.
+  const RETURN_KEY = 'returns.policy';
+  const existingReturn = await prisma.setting.findUnique({
+    where: { key: RETURN_KEY },
+    select: { key: true },
+  });
+  if (!existingReturn) {
+    await prisma.setting.create({
+      data: {
+        key: RETURN_KEY,
+        value: {
+          enabled: true,
+          windowDays: 14,
+          minOrderEgp: null,
+          overrideRoles: ['OWNER', 'OPS', 'SALES_REP'],
+        } as never,
+      },
+    });
+  }
+
   // Sprint 9 S9-D9-T3 — seed 3 demo promo codes across types. Idempotent by
   // unique `code`. `update: {}` preserves admin edits to value / cap / limit,
   // so changes made via the admin UI survive redeploys.

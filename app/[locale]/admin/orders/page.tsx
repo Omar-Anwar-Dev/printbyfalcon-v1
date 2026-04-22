@@ -258,6 +258,19 @@ export default async function AdminOrdersPage({
         >
           {isAr ? 'إلغاء الفلاتر' : 'Clear filters'}
         </Link>
+        <a
+          href={`/api/admin/orders/export?${new URLSearchParams({
+            ...(q ? { q } : {}),
+            ...(sp.status ? { status: sp.status } : {}),
+            ...(sp.paymentStatus ? { paymentStatus: sp.paymentStatus } : {}),
+            ...(sp.dateFrom ? { from: sp.dateFrom } : {}),
+            ...(sp.dateTo ? { to: sp.dateTo } : {}),
+          }).toString()}`}
+          className="col-span-2 rounded-md border bg-background px-3 py-2 text-center text-sm hover:bg-muted"
+          download
+        >
+          ⬇︎ {isAr ? 'تصدير CSV' : 'Export CSV'}
+        </a>
       </form>
 
       <AdminOrdersBulkBar

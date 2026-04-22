@@ -1,10 +1,10 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 deployed to prod; **Sprints 7 + 8 + 9 COMPLETE 2026-04-22** — awaiting staging + prod deploy. M1 target remains end of Sprint 12.
-- **Current sprint:** **Sprint 9 COMPLETE** ✅ — 6/6 exit criteria met; 5 shipping zones + COD lifecycle + VAT + promo codes + 6 new settings pages + Paymob-PAID email parking-lot closed.
-- **Next sprint:** Sprint 10 — Admin Completeness: Roles, Audit, Customer Mgmt, Returns, Dashboard, WhatsApp Bridge (not started; awaiting "start sprint 10" command — runs AFTER Sprint 7 + 8 + 9 combined deploy).
-- **Last updated:** 2026-04-22 — Sprint 9 close-out.
+- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 deployed to prod; **Sprints 7 + 8 + 9 + 10 COMPLETE 2026-04-22** — awaiting staging + prod deploy. M1 target remains end of Sprint 12.
+- **Current sprint:** **Sprint 10 COMPLETE** ✅ — 7/7 exit criteria met; role-guard audit + admin users with invite flow + B2C customers page + return policy settings (+ per-product `returnable`) + stock release + dashboard widgets with 30-day chart + role-filtered visibility + WhatsApp support bridge + CSV pricing import + pre-confirmation order line edit + order list CSV export + brand logo on invoice.
+- **Next sprint:** Sprint 11 — Production Readiness: Performance, Security, Tests, Backup Drills, Live Merchant Switchover (not started; awaiting "start sprint 11" command — runs AFTER Sprint 7 + 8 + 9 + 10 combined deploy).
+- **Last updated:** 2026-04-22 — Sprint 10 close-out.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 6 deploy confirmed at Sprint 7 kickoff.
 
@@ -1042,4 +1042,120 @@ Mapped to the 6 criteria in `docs/implementation-plan.md` lines 626-633:
 10. **COD reconciliation.** Back in admin, open `/en/admin/orders/cod-reconciliation` — the new order appears under "No courier yet" with its total.
 11. **Mark paid.** Open the order detail → click **"Mark COD as paid"** → Confirm. Reconciliation page refreshes; order gone.
 12. **Paymob email closure.** Place a Paymob order (dev stub or real Paymob test card). Payment completes → Paymob webhook fires → order-confirmation email enqueued alongside the invoice (watch worker log — `send-email` job for `order-confirmation` template).
+
+---
+
+## Sprint 10 kickoff resolutions (2026-04-22)
+
+- **Pre-confirmation order line edit scope (S10-D7-T1):** qty-reduce + line-remove allowed **only** on `CONFIRMED` + non-`PAID` orders (COD only). Paymob-paid orders stay locked — customer-initiated changes post-payment go through the Return flow so finance has an explicit refund record. Confirmed with owner before implementation.
+- **Return policy (new task):** owner added a centralized return policy + per-product `returnable` toggle on top of plan scope. Four fields on `returns.policy`:
+  - `enabled` (global on/off)
+  - `windowDays` (max days after delivery; owner's "الحد الأقصى لعدد الأيام")
+  - `minOrderEgp` (optional; owner's "الحد الأدنى لقيمة الطلب")
+  - `overrideRoles` (array of admin roles allowed to bypass policy; default all admins, owner-configurable from the settings page)
+- **Override semantics:** any admin in `overrideRoles` can bypass policy with a mandatory written reason — reason is persisted on `Return.overrideReason` + audit-logged.
+- **Returns URL choice:** kept existing Sprint 5 paths (`/admin/orders/returns` list + new `/admin/orders/returns/new` recorder + new `/admin/orders/returns/[id]` detail) rather than moving to top-level `/admin/returns` — avoids breaking prior links, consistent with the rest of the order sub-routes. Nav link added under "Returns".
+
+## Sprint 10 — COMPLETE 2026-04-22
+
+Single dense session following the Sprint 2–9 pattern. Every task typechecked + tested incrementally; final QA gate in §Verification.
+
+### Foundation / ADRs
+- [x] **ADR-050** [2026-04-22] Admin role matrix centralized in [lib/admin/role-matrix.ts](../lib/admin/role-matrix.ts) — single source of truth replacing ad-hoc role arrays scattered across 46 admin files. Same role semantics; now documented + importable.
+- [x] **ADR-051** [2026-04-22] AdminInvite flow mirrors PasswordReset token pattern — 48h single-use hashed token, recipient sets own password on accept.
+- [x] **ADR-052** [2026-04-22] `Product.returnable` boolean default `true` + JSON-valued `returns.policy` Setting with override-role matrix. Policy enforced server-side in `recordReturnAction`; admin override requires reason (AuditLog-captured).
+- [x] **ADR-053** [2026-04-22] Pre-confirmation order line edit supports qty-reduce + line-remove only; PAID Paymob orders locked out. Restores inventory + `InventoryMovement(type=ADJUST)` per edit.
+- [x] **ADR-054** [2026-04-22] Sales-trend 30-day chart shipped as hand-rolled SVG sparkline instead of Recharts. Avoids ~60KB min-gzip D3 bundle; minimum-vendor pref preserved.
+
+### Schema + seeds
+- [x] **S10-D2-T1 (schema)** Prisma — `Product.returnable` boolean (default `true`), `Return.policyOverride` (default `false`), `Return.overrideReason` nullable string, `Return.stockReleasedAt` nullable DateTime.
+- [x] **S10-D2-T1 (seed)** `scripts/post-push.ts` extended — idempotent `returns.policy` Setting seed (enabled / 14-day / no min-order / all-roles override).
+
+### Role guard audit (S10-D1-T1)
+- [x] **Audit result** 100% of admin pages + Server Actions already call `requireAdmin(allowedRoles)` with proper per-role arrays (Sprint 1-9 discipline). Only 2 intentionally-unfiltered callers: `/admin/page.tsx` (home; any admin, widgets filter per role internally) and `/admin/change-password/page.tsx` (any admin for own password). Matrix canonicalized in [lib/admin/role-matrix.ts](../lib/admin/role-matrix.ts). Sidebar `<AdminNav>` also filters per role (new users / customers / returns links).
+
+### Admin users + invites (S10-D1-T2/T3)
+- [x] `/admin/users` list ([app/[locale]/admin/users/page.tsx](../app/[locale]/admin/users/page.tsx)) — active admins + pending invites side-by-side, per-row badges, last-login timestamp.
+- [x] `/admin/users/[id]` edit — role dropdown (can't modify self, can't demote last Owner), deactivate/reactivate.
+- [x] `/admin/users/new` + `/admin/invite/accept?token=…` + [app/actions/admin-users.ts](../app/actions/admin-users.ts) (inviteAdmin / revokeAdminInvite / resendAdminInvite / acceptAdminInvite / updateAdminRole / deactivateAdmin / reactivateAdmin). 48h hashed token (ADR-051), bilingual email via [lib/email/admin-invite.ts](../lib/email/admin-invite.ts).
+
+### Customer management (S10-D2-T2)
+- [x] `/admin/customers` B2C list — search by name/phone/email, status filter, 30/page.
+- [x] `/admin/customers/[id]` detail — contact edit (OWNER + SALES_REP; phone read-only), address list, last-20 orders, OWNER-only deactivate/reactivate.
+
+### Returns workflow (S10-D2-T3 + S10-D3-T1/T2/T3 + new return policy)
+- [x] **Policy settings** `/admin/settings/returns` OWNER-only 4-field form + non-returnable-products list.
+- [x] **Policy enforcement** [lib/returns/policy.ts](../lib/returns/policy.ts) — single source of truth + 12-case vitest suite covering disabled / not_delivered / window_expired / min_order / product_not_returnable / override role matrix.
+- [x] **recordReturnAction** rewritten — loads policy + product `returnable` + order `deliveredAt`/`totalEgp`, fails with `policyFailure` payload, supports role-gated `override` + required `overrideReason`. Persists + audit-logs.
+- [x] **updateReturnDecisionAction (new)** flipping to `APPROVED_CASH`/`APPROVED_CARD_MANUAL` atomically releases stock + writes `InventoryMovement(type=RETURN)`. Idempotent via `stockReleasedAt`.
+- [x] Returns log enhanced — filters by decision + stock-released, "Policy override" pill, override reason inline, stock-released badge.
+- [x] Returns detail page new (`/admin/orders/returns/[id]`) with decision editor.
+- [x] Record return new dedicated page (`/admin/orders/returns/new?orderId=X`) with full policy-warning + override UI. Replaces Sprint 5 inline dialog (deleted).
+- [x] Per-product toggle added to productSchema + ProductForm + [app/actions/admin-return-policy.ts](../app/actions/admin-return-policy.ts)::setProductReturnableAction.
+
+### Admin dashboard (S10-D4-T1/T2/T3 + S10-D5-T1/T2)
+- [x] `/admin` home rewritten — per-role widget visibility via `DASHBOARD_WIDGETS` matrix, `revalidate: 300`. Loaders in [lib/admin/dashboard.ts](../lib/admin/dashboard.ts): sales today/week/month with delta, 30-day daily trend, dashboard counts, top-10 products/customers.
+- [x] SVG sales-trend sparkline ([components/admin/sales-trend-chart.tsx](../components/admin/sales-trend-chart.tsx); ADR-054), top-10 products table, top-10 customers list with B2C/B2B badges, low-stock table.
+- [x] Role-filtered queries — widgets the role can't see never hit the DB.
+
+### WhatsApp support bridge (S10-D5-T3)
+- [x] [components/whatsapp-chat-button.tsx](../components/whatsapp-chat-button.tsx) — client component, floating bottom-end (RTL-aware), `#25D366` color, SVG glyph. `usePathname()` composes context-aware pre-filled messages (product slug / order number / bulk-order / cart / generic). Hidden on admin + checkout + confirmation. Rendered from root locale layout when `StoreInfo.supportWhatsapp` set.
+- [x] Build safety — `getStoreInfo()` wrapped in try/catch returning defaults on DB unavailability.
+
+### B2B companies + CSV pricing (S10-D6)
+- [x] `/admin/b2b/companies/[id]` confirmed complete from Sprint 7 — no new page-level work needed.
+- [x] `bulkImportCompanyPriceOverridesCsvAction` in admin-b2b.ts — parses `sku,customPriceEgp`, upserts in single transaction, returns `{created, updated, errors[]}`. UI at bottom of CompanyPriceOverrides via `<details>` disclosure.
+- [x] Inline list edits reduced to per-page detail forms (one click away) — true inline deferred as low-value.
+
+### Order edit + CSV export (S10-D7)
+- [x] `updateOrderLineQtyAction` — ADR-053 scope. Recomputes subtotal/vat/total from remaining items; restores inventory via `InventoryMovement(type=ADJUST)`; emits `OrderStatusEvent` + `AuditLog`. UI: [components/admin/order-line-editor.tsx](../components/admin/order-line-editor.tsx) inline panel per line when editable.
+- [x] `/api/admin/orders/export` — OWNER + OPS gated, respects list filters, UTF-8 BOM, 17-column CSV. "Export CSV" button in filter bar.
+- [x] [tests/e2e/sprint10.spec.ts](../tests/e2e/sprint10.spec.ts) — 12 auth-gate cases + smoke. Staging-manual for full role-matrix walkthrough.
+
+### Audit SQL + docs + brand logo + sample data (S10-D8 + S10-D9)
+- [x] [docs/audit-log-queries.md](audit-log-queries.md) — full action-name catalog + 7 ready-to-run SQL snippets. Closes Sprint 8 + 9 parking-lot.
+- [x] Brand logo on invoice — `buildInvoiceData` loads WebP + sharp-reencodes to PNG for react-pdf `<Image>`. Graceful skip if no logo.
+- [x] [docs/admin-guide.md](admin-guide.md) — owner-facing end-to-end guide.
+- [x] [docs/returns-workflow.md](returns-workflow.md) — ops procedure: recording, override, stock-release, money-flow.
+- [x] `scripts/seed-orders.ts` extended — seeds 5 returns on DELIVERED demo rows (mix of decisions). Idempotent via `DEMO_TAG`.
+
+## Verification (2026-04-22)
+- ✅ `npx prisma generate` — Prisma Client emitted cleanly with Sprint 10 schema changes.
+- ✅ `npx tsc --noEmit` — clean across app + lib + worker + scripts + tests.
+- ✅ `npx vitest run` — **141/141 tests green** across 15 suites (+16 net from Sprint 9's 125; 12 new policy cases).
+- ✅ `npx next lint` — 0 errors. Only pre-existing warning (lib/db.ts console-statement from Sprint 1).
+- ✅ `npx next build` — production build succeeds; 14 new routes compiled: `/admin/users` + `/new` + `/[id]`, `/admin/invite/accept`, `/admin/customers` + `/[id]`, `/admin/settings/returns`, `/admin/orders/returns/new` + `/[id]`, `/api/admin/orders/export`.
+- ⏭️ Live admin-authenticated walkthroughs — staging-manual (Sprint 5-9 pattern).
+
+## Sprint 10 Exit Criteria — status
+
+Mapped to the 7 criteria in `docs/implementation-plan.md` lines 693-700:
+
+- ✅ **Three admin roles enforced across every action** — 100% of `requireAdmin` calls pass per-role arrays; matrix canonicalized.
+- ✅ **Audit log captures all state changes (queryable by devs in MVP)** — Sprint 1-9 discipline confirmed + Sprint 10 actions emit AuditLog; [docs/audit-log-queries.md](audit-log-queries.md) ships as dev reference.
+- ✅ **Admin user management with invite flow** — 48h hashed token, bilingual email, self-modification + last-Owner guards.
+- ✅ **Customer + company management pages** — B2C page new; B2B page from Sprint 7 + CSV pricing import added.
+- ✅ **Returns workflow (recording, processing, stock release)** — full policy + override + idempotent stock release via `stockReleasedAt`.
+- ✅ **Admin home dashboard with role-filtered widgets** — 9 widgets, per-role visibility, 5-min cache, SVG sparkline.
+- ✅ **WhatsApp "Chat with us" bridge live on every storefront page** — context-aware, RTL-aware, admin-configurable.
+
+**7/7 fully met. Sprint 10 closed 2026-04-22.**
+
+## Decisions logged this sprint
+- **ADR-050** [2026-04-22] Admin role matrix centralized in `lib/admin/role-matrix.ts` (with `DASHBOARD_WIDGETS` visibility map).
+- **ADR-051** [2026-04-22] AdminInvite flow = 48h hashed single-use token; recipient sets own password on accept.
+- **ADR-052** [2026-04-22] Return policy = 4-field JSON Setting (`enabled`, `windowDays`, `minOrderEgp`, `overrideRoles[]`) + per-product `Product.returnable`. Override captured with mandatory reason in `Return.overrideReason` + AuditLog.
+- **ADR-053** [2026-04-22] Pre-confirmation order line edit supports qty-reduce + line-remove on CONFIRMED + non-PAID (COD) orders only. Paymob-paid orders route through Return flow.
+- **ADR-054** [2026-04-22] Sales-trend 30-day chart = hand-rolled SVG sparkline (no Recharts/D3) per minimum-vendor pref.
+
+## Risk Log Updates
+- No new risks. Sprint 10 closes all open admin-completeness gaps from PRD Feature 6. **Sprint 9 parking-lot resolved:** brand logo consumed by invoice template; audit-log SQL cheat-sheet shipped as [docs/audit-log-queries.md](audit-log-queries.md).
+
+## Sprint 10 parking lot for Sprint 11
+- **Audit log UI viewer** — still SQL-only. v1.1.
+- **Inline list edits** for customers/companies — Day 6 reduced scope to one-click-to-detail; revisit if ops reports friction.
+- **Manual Paymob refund → auto-REFUNDED status** — admin records decision, money moves out-of-band, webhook doesn't auto-flip. v1.1.
+- **Per-company sales-rep assignment** — ADR-042 / Sprint 8 parking-lot. Fan-out until explicit assignment.
+- **Resend admin welcome from UI** — Sprint 7/8 parking-lot.
+- **Admin notifications for return overrides** — audit-logged but not actively flagged; consider email alert to OWNER when OPS/SALES_REP overrides policy.
 

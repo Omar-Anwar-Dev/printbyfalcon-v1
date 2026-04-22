@@ -93,6 +93,7 @@ export default async function EditProductPage({
             specs: specsObj,
             basePriceEgp: Number(product.basePriceEgp),
             vatExempt: product.vatExempt,
+            returnable: product.returnable,
             authenticity: product.authenticity,
             status: product.status,
           }}
@@ -115,6 +116,7 @@ export default async function EditProductPage({
             addSpec: t('admin.catalog.products.addSpec'),
             basePrice: t('admin.catalog.products.basePrice'),
             vatExempt: t('admin.catalog.products.vatExempt'),
+            returnable: t('admin.catalog.products.returnable'),
             status: t('admin.common.status'),
             active: t('admin.common.active'),
             archived: t('admin.common.archived'),

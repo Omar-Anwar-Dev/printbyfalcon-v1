@@ -60,6 +60,9 @@
       "b2bApplications": "B2B Applications",
       "b2bPendingConfirmation": "Pending Confirmation",
       "b2bCompanies": "B2B Companies",
+      "customers": "Customers",
+      "returns": "Returns",
+      "users": "Admin Users",
       "settings": "Settings"
     },
     "common": {
@@ -104,6 +107,7 @@
         "addSpec": "Add spec",
         "basePrice": "Base price (EGP)",
         "vatExempt": "VAT exempt",
+        "returnable": "Returnable",
         "images": "Images",
         "noImages": "No images yet",
         "uploadImage": "Upload image",

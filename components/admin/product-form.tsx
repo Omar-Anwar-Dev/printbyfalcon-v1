@@ -32,6 +32,7 @@ type Labels = {
   addSpec: string;
   basePrice: string;
   vatExempt: string;
+  returnable: string;
   status: string;
   active: string;
   archived: string;
@@ -86,6 +87,7 @@ export function ProductForm({
       specs: {},
       basePriceEgp: 0,
       vatExempt: false,
+      returnable: true,
       authenticity: 'GENUINE',
       status: 'ACTIVE',
     },
@@ -268,6 +270,18 @@ export function ProductForm({
             className="h-4 w-4"
           />
           <Label htmlFor="vat">{labels.vatExempt}</Label>
+        </div>
+        <div className="flex items-end gap-2">
+          <input
+            id="returnable"
+            type="checkbox"
+            checked={state.returnable}
+            onChange={(e) =>
+              setState((s) => ({ ...s, returnable: e.target.checked }))
+            }
+            className="h-4 w-4"
+          />
+          <Label htmlFor="returnable">{labels.returnable}</Label>
         </div>
       </div>
 

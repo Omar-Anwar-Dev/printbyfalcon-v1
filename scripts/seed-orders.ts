@@ -310,6 +310,59 @@ async function main() {
     where: { internalNotes: { contains: DEMO_TAG } },
   });
   console.log(`[seed-orders] done — ${total} demo orders present.`);
+
+  // Sprint 10 S10-D9-T3 — seed 5 sample returns on DELIVERED demo orders.
+  const deliveredDemo = await prisma.order.findMany({
+    where: {
+      internalNotes: { contains: DEMO_TAG },
+      status: 'DELIVERED',
+    },
+    include: { items: { select: { id: true, qty: true, skuSnapshot: true } } },
+    take: 5,
+  });
+  const REASONS = [
+    'Damaged on arrival',
+    'Wrong cartridge sent',
+    'Customer changed mind within window',
+    'Package missing one line',
+    'Manufacturing defect reported',
+  ];
+  const DECISIONS = [
+    'APPROVED_CASH',
+    'APPROVED_CARD_MANUAL',
+    'PENDING',
+    'DENIED',
+    'APPROVED_CASH',
+  ] as const;
+  let seededReturns = 0;
+  for (let i = 0; i < deliveredDemo.length; i += 1) {
+    const order = deliveredDemo[i]!;
+    const firstItem = order.items[0];
+    if (!firstItem) continue;
+    const existing = await prisma.return.count({
+      where: { orderId: order.id, note: { contains: DEMO_TAG } },
+    });
+    if (existing > 0) continue;
+    await prisma.return.create({
+      data: {
+        orderId: order.id,
+        reason: REASONS[i % REASONS.length]!,
+        refundDecision: DECISIONS[i]!,
+        refundAmountEgp: DECISIONS[i] === 'DENIED' ? null : 150,
+        note: DEMO_TAG,
+        items: {
+          create: [
+            {
+              orderItemId: firstItem.id,
+              qty: Math.min(1, firstItem.qty),
+            },
+          ],
+        },
+      },
+    });
+    seededReturns += 1;
+  }
+  console.log(`[seed-orders] seeded ${seededReturns} demo returns`);
 }
 
 main()

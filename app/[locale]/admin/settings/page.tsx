@@ -47,6 +47,13 @@ export default async function AdminSettingsIndex({
         : 'Create and manage discount codes applied at checkout.',
     },
     {
+      href: '/admin/settings/returns',
+      title: isAr ? 'سياسة الاسترجاع' : 'Return policy',
+      desc: isAr
+        ? 'نافذة الاسترجاع، الحد الأدنى للطلب، والصلاحيات المسموح لها بتجاوز السياسة.'
+        : 'Return window, minimum order value, and roles allowed to override.',
+    },
+    {
       href: '/admin/couriers',
       title: isAr ? 'شركاء التوصيل' : 'Courier partners',
       desc: isAr

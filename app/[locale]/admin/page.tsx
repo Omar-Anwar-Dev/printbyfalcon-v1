@@ -1,6 +1,4 @@
-import { getTranslations } from 'next-intl/server';
 import { requireAdmin } from '@/lib/auth';
-import { prisma } from '@/lib/db';
 import { Link } from '@/lib/i18n/routing';
 import {
   Card,
@@ -10,6 +8,20 @@ import {
   CardTitle,
 } from '@/components/ui/card';
 import { listLowStockProducts } from '@/lib/inventory/low-stock';
+import { canSeeWidget } from '@/lib/admin/role-matrix';
+import {
+  getDashboardCounts,
+  getOldestPendingB2BHours,
+  getSalesMonth,
+  getSalesToday,
+  getSalesTrend30d,
+  getSalesWeek,
+  getTopCustomersThisMonth,
+  getTopProductsThisMonth,
+} from '@/lib/admin/dashboard';
+import { SalesTrendChart } from '@/components/admin/sales-trend-chart';
+
+export const revalidate = 300; // 5-min cache for dashboard widgets (S10-D5-T2).
 
 export default async function AdminHomePage({
   params,
@@ -17,129 +29,259 @@ export default async function AdminHomePage({
   params: Promise<{ locale: string }>;
 }) {
   const user = await requireAdmin();
-  const t = await getTranslations();
   const { locale } = await params;
   const isAr = locale === 'ar';
+  const role = user.adminRole ?? null;
 
+  // Gate each widget behind the role matrix — do NOT load data we won't render.
   const [
-    productCount,
-    brandCount,
-    categoryCount,
+    counts,
+    salesToday,
+    salesWeek,
+    salesMonth,
+    salesTrend,
+    topProducts,
+    topCustomers,
     lowStock,
-    pendingB2BApplications,
-    pendingB2BConfirmations,
-    oldestPendingB2B,
+    oldestPendingB2BHours,
   ] = await Promise.all([
-    prisma.product.count(),
-    prisma.brand.count(),
-    prisma.category.count(),
-    listLowStockProducts(20),
-    // Sprint 8 S8-D2-T3 — sales rep workload widgets. Only rendered for
-    // OWNER / SALES_REP below (OPS don't see these counts).
-    prisma.b2BApplication.count({ where: { status: 'PENDING' } }),
-    prisma.order.count({
-      where: { status: 'PENDING_CONFIRMATION', type: 'B2B' },
-    }),
-    prisma.order.findFirst({
-      where: { status: 'PENDING_CONFIRMATION', type: 'B2B' },
-      orderBy: { createdAt: 'asc' },
-      select: { createdAt: true },
-    }),
+    getDashboardCounts(),
+    canSeeWidget(role, 'salesToday') ? getSalesToday() : Promise.resolve(null),
+    canSeeWidget(role, 'salesWeek') ? getSalesWeek() : Promise.resolve(null),
+    canSeeWidget(role, 'salesMonth') ? getSalesMonth() : Promise.resolve(null),
+    canSeeWidget(role, 'salesTrend') ? getSalesTrend30d() : Promise.resolve([]),
+    canSeeWidget(role, 'topProducts')
+      ? getTopProductsThisMonth()
+      : Promise.resolve([]),
+    canSeeWidget(role, 'topCustomers')
+      ? getTopCustomersThisMonth()
+      : Promise.resolve([]),
+    canSeeWidget(role, 'lowStock')
+      ? listLowStockProducts(20)
+      : Promise.resolve([]),
+    canSeeWidget(role, 'b2bPendingConfirmation')
+      ? getOldestPendingB2BHours()
+      : Promise.resolve(null),
   ]);
 
-  const showSalesRepWidgets =
-    user.adminRole === 'OWNER' || user.adminRole === 'SALES_REP';
-  const oldestWaitingHours = oldestPendingB2B
-    ? Math.floor(
-        (Date.now() - oldestPendingB2B.createdAt.getTime()) / (60 * 60 * 1000),
-      )
-    : null;
+  const currencyFmt = new Intl.NumberFormat(isAr ? 'ar-EG' : 'en-US', {
+    maximumFractionDigits: 0,
+  });
 
   return (
     <div className="container py-8">
-      <h1 className="mb-6 text-2xl font-semibold">{t('admin.loginTitle')}</h1>
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">
+          {isAr ? 'لوحة التحكم' : 'Dashboard'}
+        </h1>
+        <span className="text-sm text-muted-foreground">
+          {isAr ? 'مرحبًا' : 'Welcome'}, <strong>{user.name}</strong>
+          <span className="ms-1 rounded bg-muted px-2 py-0.5 text-xs">
+            {user.adminRole}
+          </span>
+        </span>
+      </div>
 
-      {showSalesRepWidgets ? (
-        <div className="mb-6 grid gap-4 md:grid-cols-2">
-          <Link
-            href="/admin/b2b/pending-confirmation"
-            className="group block rounded-lg border-2 border-accent/40 bg-accent/5 p-5 hover:border-accent/70 hover:bg-accent/10"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  {isAr ? 'بانتظار تأكيد المبيعات' : 'Pending confirmation'}
-                </p>
-                <p className="mt-1 text-3xl font-bold">
-                  {pendingB2BConfirmations}
-                </p>
-                {oldestWaitingHours !== null && oldestWaitingHours > 0 ? (
-                  <p
-                    className={`mt-1 text-xs ${
-                      oldestWaitingHours >= 24
-                        ? 'font-semibold text-destructive'
-                        : 'text-muted-foreground'
-                    }`}
-                  >
-                    {isAr
-                      ? `أقدم طلب ينتظر: ${oldestWaitingHours} ساعة`
-                      : `Oldest waiting: ${oldestWaitingHours}h`}
-                  </p>
-                ) : null}
-              </div>
-              <span className="rounded-full bg-accent/10 px-2 py-1 text-xs font-medium text-accent group-hover:bg-accent/20">
-                →
-              </span>
-            </div>
-          </Link>
-
-          <Link
-            href="/admin/b2b/applications"
-            className="group block rounded-lg border-2 border-primary/20 bg-primary/5 p-5 hover:border-primary/40 hover:bg-primary/10"
-          >
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-muted-foreground">
-                  {isAr ? 'طلبات تسجيل B2B' : 'Pending B2B applications'}
-                </p>
-                <p className="mt-1 text-3xl font-bold">
-                  {pendingB2BApplications}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {isAr
-                    ? 'تحقق من المستندات ثم اعتمد'
-                    : 'Verify docs then approve'}
-                </p>
-              </div>
-              <span className="rounded-full bg-primary/10 px-2 py-1 text-xs font-medium text-primary group-hover:bg-primary/20">
-                →
-              </span>
-            </div>
-          </Link>
-        </div>
+      {/* Revenue row — Owner only. */}
+      {salesToday || salesWeek || salesMonth ? (
+        <section className="mb-6 grid gap-4 md:grid-cols-3">
+          {salesToday ? (
+            <SalesCard
+              title={isAr ? 'مبيعات اليوم' : 'Sales today'}
+              data={salesToday}
+              fmt={currencyFmt}
+              isAr={isAr}
+            />
+          ) : null}
+          {salesWeek ? (
+            <SalesCard
+              title={isAr ? 'آخر 7 أيام' : 'Last 7 days'}
+              data={salesWeek}
+              fmt={currencyFmt}
+              isAr={isAr}
+            />
+          ) : null}
+          {salesMonth ? (
+            <SalesCard
+              title={isAr ? 'الشهر الحالي' : 'This month'}
+              data={salesMonth}
+              fmt={currencyFmt}
+              isAr={isAr}
+            />
+          ) : null}
+        </section>
       ) : null}
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('admin.nav.products')}</CardTitle>
-            <CardDescription>{productCount}</CardDescription>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('admin.nav.brands')}</CardTitle>
-            <CardDescription>{brandCount}</CardDescription>
-          </CardHeader>
-        </Card>
-        <Card>
-          <CardHeader>
-            <CardTitle>{t('admin.nav.categories')}</CardTitle>
-            <CardDescription>{categoryCount}</CardDescription>
-          </CardHeader>
-        </Card>
+      {/* Queues row — per-role visibility. */}
+      <section className="mb-6 grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        {canSeeWidget(role, 'newOrders') ? (
+          <QueueCard
+            href="/admin/orders"
+            label={isAr ? 'طلبات جديدة تنتظر' : 'New orders awaiting'}
+            count={counts.newOrdersAwaitingAction}
+            hint={
+              isAr
+                ? 'طلبات CONFIRMED لم تُسلَّم بعد.'
+                : 'Confirmed orders not yet handed over.'
+            }
+          />
+        ) : null}
+        {canSeeWidget(role, 'b2bPendingConfirmation') ? (
+          <QueueCard
+            href="/admin/b2b/pending-confirmation"
+            label={isAr ? 'بانتظار تأكيد المبيعات' : 'Pending confirmation'}
+            count={counts.pendingConfirmation}
+            hint={
+              oldestPendingB2BHours && oldestPendingB2BHours > 0
+                ? isAr
+                  ? `أقدم طلب: ${oldestPendingB2BHours} ساعة`
+                  : `Oldest: ${oldestPendingB2BHours}h`
+                : isAr
+                  ? 'طلبات B2B "إرسال للمراجعة"'
+                  : 'B2B Submit-for-Review orders'
+            }
+            urgent={Boolean(
+              oldestPendingB2BHours && oldestPendingB2BHours >= 24,
+            )}
+          />
+        ) : null}
+        {canSeeWidget(role, 'b2bPendingApplications') ? (
+          <QueueCard
+            href="/admin/b2b/applications"
+            label={isAr ? 'طلبات تسجيل B2B' : 'B2B applications'}
+            count={counts.pendingB2BApplications}
+            hint={
+              isAr ? 'تحقق من المستندات ثم اعتمد' : 'Verify docs and approve'
+            }
+          />
+        ) : null}
+        {canSeeWidget(role, 'returnsPending') ? (
+          <QueueCard
+            href="/admin/orders/returns?decision=PENDING"
+            label={isAr ? 'إرجاعات قيد المراجعة' : 'Returns pending'}
+            count={counts.returnsPending}
+            hint={
+              isAr
+                ? 'قرارات استرداد تنتظر الحسم'
+                : 'Refund decisions awaiting review'
+            }
+          />
+        ) : null}
+      </section>
 
-        <Card className="md:col-span-2 lg:col-span-3">
+      {/* Sales trend chart — Owner only. */}
+      {canSeeWidget(role, 'salesTrend') && salesTrend.length > 0 ? (
+        <section className="mb-6 rounded-md border bg-background p-5">
+          <SalesTrendChart points={salesTrend} isAr={isAr} />
+        </section>
+      ) : null}
+
+      {/* Two-column: Top products + Top customers (when owner) / low-stock. */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {canSeeWidget(role, 'topProducts') ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {isAr
+                  ? 'أعلى 10 منتجات هذا الشهر'
+                  : 'Top 10 products (this month)'}
+              </CardTitle>
+              <CardDescription>
+                {isAr ? 'بناءً على الكمية المباعة' : 'By units sold'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {topProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {isAr
+                    ? 'لا توجد مبيعات هذا الشهر بعد.'
+                    : 'No sales this month yet.'}
+                </p>
+              ) : (
+                <ol className="space-y-1 text-sm">
+                  {topProducts.map((p, idx) => (
+                    <li
+                      key={p.sku}
+                      className="flex items-center justify-between gap-3 border-b py-1.5 last:border-0"
+                    >
+                      <span className="flex items-center gap-2">
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {idx + 1}.
+                        </span>
+                        <span className="font-medium">
+                          {isAr ? p.nameAr : p.nameEn}
+                        </span>
+                      </span>
+                      <span className="font-mono tabular-nums">
+                        {p.unitsSold}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {canSeeWidget(role, 'topCustomers') ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>
+                {isAr
+                  ? 'أعلى 10 عملاء هذا الشهر'
+                  : 'Top 10 customers (this month)'}
+              </CardTitle>
+              <CardDescription>
+                {isAr ? 'بناءً على قيمة المشتريات' : 'By revenue'}
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              {topCustomers.length === 0 ? (
+                <p className="text-sm text-muted-foreground">
+                  {isAr
+                    ? 'لا توجد مبيعات هذا الشهر بعد.'
+                    : 'No sales this month yet.'}
+                </p>
+              ) : (
+                <ol className="space-y-1 text-sm">
+                  {topCustomers.map((c, idx) => (
+                    <li
+                      key={c.userId}
+                      className="flex items-center justify-between gap-3 border-b py-1.5 last:border-0"
+                    >
+                      <span className="flex items-center gap-2 truncate">
+                        <span className="text-xs tabular-nums text-muted-foreground">
+                          {idx + 1}.
+                        </span>
+                        <Link
+                          href={
+                            c.type === 'B2C'
+                              ? `/admin/customers/${c.userId}`
+                              : `/admin/b2b/companies`
+                          }
+                          className="truncate font-medium hover:underline"
+                        >
+                          {c.name}
+                        </Link>
+                        <span className="rounded bg-muted px-1 py-0.5 text-[10px] uppercase">
+                          {c.type}
+                        </span>
+                      </span>
+                      <span className="font-mono tabular-nums">
+                        {currencyFmt.format(c.totalEgp)}
+                      </span>
+                    </li>
+                  ))}
+                </ol>
+              )}
+            </CardContent>
+          </Card>
+        ) : null}
+      </div>
+
+      {/* Low-stock table — OWNER + OPS. */}
+      {canSeeWidget(role, 'lowStock') ? (
+        <Card className="mt-6">
           <CardHeader>
             <CardTitle>
               {isAr ? 'تنبيهات المخزون المنخفض' : 'Low-stock alerts'}{' '}
@@ -150,7 +292,7 @@ export default async function AdminHomePage({
             <CardDescription>
               {isAr
                 ? 'المنتجات التي رصيدها على حد التنبيه أو أقل.'
-                : 'Products at or below their effective low-stock threshold.'}
+                : 'Products at or below their effective threshold.'}
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -211,16 +353,97 @@ export default async function AdminHomePage({
             )}
           </CardContent>
         </Card>
-
-        <Card className="md:col-span-2 lg:col-span-3">
-          <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">
-              {t('auth.signedInAs')} <strong>{user.email}</strong> (
-              {user.adminRole}).
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      ) : null}
     </div>
+  );
+}
+
+function SalesCard({
+  title,
+  data,
+  fmt,
+  isAr,
+}: {
+  title: string;
+  data: { currentEgp: number; priorEgp: number; deltaPct: number | null };
+  fmt: Intl.NumberFormat;
+  isAr: boolean;
+}) {
+  const deltaColor =
+    data.deltaPct === null
+      ? 'text-muted-foreground'
+      : data.deltaPct >= 0
+        ? 'text-green-700'
+        : 'text-destructive';
+  const deltaText =
+    data.deltaPct === null
+      ? isAr
+        ? 'لا مقارنة (كانت ٠)'
+        : 'No prior baseline'
+      : `${data.deltaPct >= 0 ? '+' : ''}${data.deltaPct.toFixed(1)}%`;
+  return (
+    <Card>
+      <CardHeader>
+        <CardDescription>{title}</CardDescription>
+        <CardTitle className="text-3xl tabular-nums">
+          {fmt.format(data.currentEgp)}{' '}
+          <span className="text-sm font-normal text-muted-foreground">
+            {isAr ? 'ج.م' : 'EGP'}
+          </span>
+        </CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p className={`text-xs ${deltaColor}`}>
+          {deltaText}
+          <span className="ms-1 text-muted-foreground">
+            {isAr ? 'عن الفترة السابقة' : 'vs prior period'}
+          </span>
+        </p>
+      </CardContent>
+    </Card>
+  );
+}
+
+function QueueCard({
+  href,
+  label,
+  count,
+  hint,
+  urgent = false,
+}: {
+  href: string;
+  label: string;
+  count: number;
+  hint: string;
+  urgent?: boolean;
+}) {
+  return (
+    <Link
+      href={href}
+      className={`group block rounded-lg border-2 p-5 transition-colors ${
+        urgent
+          ? 'border-destructive/50 bg-destructive/5 hover:border-destructive/70'
+          : 'border-primary/20 bg-primary/5 hover:border-primary/40'
+      }`}
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          <p className="mt-1 text-3xl font-bold tabular-nums">{count}</p>
+          <p
+            className={`mt-1 text-xs ${
+              urgent
+                ? 'font-semibold text-destructive'
+                : 'text-muted-foreground'
+            }`}
+          >
+            {hint}
+          </p>
+        </div>
+        <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground group-hover:bg-muted/80">
+          →
+        </span>
+      </div>
+    </Link>
   );
 }

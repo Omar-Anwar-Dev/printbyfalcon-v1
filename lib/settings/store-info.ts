@@ -44,13 +44,19 @@ export const STORE_INFO_DEFAULT: StoreInfo = {
 };
 
 export const getStoreInfo = cache(async (): Promise<StoreInfo> => {
-  const row = await prisma.setting.findUnique({
-    where: { key: SETTING_KEY },
-    select: { value: true },
-  });
-  if (!row?.value) return STORE_INFO_DEFAULT;
-  const val = row.value as Partial<StoreInfo>;
-  return { ...STORE_INFO_DEFAULT, ...val };
+  try {
+    const row = await prisma.setting.findUnique({
+      where: { key: SETTING_KEY },
+      select: { value: true },
+    });
+    if (!row?.value) return STORE_INFO_DEFAULT;
+    const val = row.value as Partial<StoreInfo>;
+    return { ...STORE_INFO_DEFAULT, ...val };
+  } catch {
+    // Build-time fallback when DATABASE_URL is absent. Defaults are safe —
+    // supportWhatsapp stays '' so the chat button renders nothing at build.
+    return STORE_INFO_DEFAULT;
+  }
 });
 
 export async function setStoreInfo(

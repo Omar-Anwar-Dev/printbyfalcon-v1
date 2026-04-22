@@ -11,7 +11,7 @@
  */
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import type { OrderStatus, Prisma } from '@prisma/client';
+import { Prisma, type OrderStatus } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { enqueueJob } from '@/lib/queue';
@@ -912,4 +912,190 @@ export async function markCodOrderPaidAction(
   revalidatePath('/admin/orders');
   revalidatePath('/admin/orders/cod-reconciliation');
   return { ok: true, data: { orderId: order.id } };
+}
+
+/* ---------------------------------------------------------------------------
+ * Sprint 10 S10-D7-T1 — pre-confirmation order line editing.
+ *
+ * Allowed only when:
+ *   - order.status === 'CONFIRMED' (never after HANDED_TO_COURIER)
+ *   - order.paymentStatus !== 'PAID' (i.e. COD only; paid Paymob orders go
+ *     through the Return flow so finance has an explicit refund record)
+ *
+ * Supported mutations:
+ *   - `updateOrderLineQtyAction` — reduce a line's qty (no increase; avoids
+ *     inventory races). Restores stock diff to inventory + InventoryMovement.
+ *   - `removeOrderLineAction` — drop a line entirely + restore full stock.
+ *
+ * Each mutation recomputes subtotal / vat / total from the remaining lines,
+ * keeping shipping/discount/COD-fee as snapshotted at checkout. The admin is
+ * warned in-UI that invoices must be regenerated separately from the existing
+ * amend flow when line edits happen post-confirmation.
+ * ------------------------------------------------------------------------- */
+
+type OrderEditGuardFailure = { ok: false; errorKey: string };
+function canEditOrderLines(order: {
+  status: OrderStatus;
+  paymentStatus: string;
+}): OrderEditGuardFailure | null {
+  if (order.status !== 'CONFIRMED') {
+    return { ok: false, errorKey: 'order.edit.not_confirmed' };
+  }
+  if (order.paymentStatus === 'PAID') {
+    return { ok: false, errorKey: 'order.edit.paid_locked' };
+  }
+  return null;
+}
+
+async function recomputeOrderTotals(
+  tx: Prisma.TransactionClient,
+  orderId: string,
+): Promise<{ subtotalEgp: number; vatEgp: number; totalEgp: number }> {
+  const order = await tx.order.findUniqueOrThrow({
+    where: { id: orderId },
+    select: {
+      shippingEgp: true,
+      codFeeEgp: true,
+      discountEgp: true,
+      items: { select: { lineTotalEgp: true, vatEgp: true } },
+    },
+  });
+  const subtotal = order.items.reduce((s, i) => s + Number(i.lineTotalEgp), 0);
+  const vat = order.items.reduce((s, i) => s + Number(i.vatEgp), 0);
+  const total =
+    subtotal +
+    Number(order.shippingEgp) +
+    Number(order.codFeeEgp) +
+    vat -
+    Number(order.discountEgp);
+  await tx.order.update({
+    where: { id: orderId },
+    data: {
+      subtotalEgp: new Prisma.Decimal(subtotal.toFixed(2)),
+      vatEgp: new Prisma.Decimal(vat.toFixed(2)),
+      totalEgp: new Prisma.Decimal(Math.max(0, total).toFixed(2)),
+    },
+  });
+  return { subtotalEgp: subtotal, vatEgp: vat, totalEgp: Math.max(0, total) };
+}
+
+const updateLineQtySchema = z.object({
+  orderItemId: z.string().min(1),
+  newQty: z.coerce.number().int().min(0).max(10_000),
+  note: z.string().trim().max(500).optional(),
+});
+
+export async function updateOrderLineQtyAction(
+  input: z.input<typeof updateLineQtySchema>,
+): Promise<ActionResult<{ orderId: string }>> {
+  const actor = await requireAdmin(['OWNER', 'OPS']);
+  const parsed = updateLineQtySchema.safeParse(input);
+  if (!parsed.success) return { ok: false, errorKey: 'validation.failed' };
+  const { orderItemId, newQty, note } = parsed.data;
+
+  const result = await prisma.$transaction(async (tx) => {
+    const item = await tx.orderItem.findUnique({
+      where: { id: orderItemId },
+      include: {
+        order: {
+          select: {
+            id: true,
+            status: true,
+            paymentStatus: true,
+          },
+        },
+      },
+    });
+    if (!item) return { ok: false, errorKey: 'order.line.not_found' } as const;
+    const guard = canEditOrderLines({
+      status: item.order.status,
+      paymentStatus: item.order.paymentStatus,
+    });
+    if (guard) return guard;
+    if (newQty >= item.qty) {
+      // Never grow a line (would require re-reserving stock at today's price
+      // and re-validating promo code constraints). Forbid — explicit remove-
+      // and-re-add by the customer re-checkout is the compliant path.
+      return { ok: false, errorKey: 'order.edit.qty_not_reducing' } as const;
+    }
+
+    if (newQty === 0) {
+      await tx.orderItem.delete({ where: { id: orderItemId } });
+    } else {
+      const unit = Number(item.unitPriceEgp);
+      // Preserve vat ratio to unit price (matches checkout.ts per-line vat calc).
+      const vatPerUnit = item.qty > 0 ? Number(item.vatEgp) / item.qty : 0;
+      await tx.orderItem.update({
+        where: { id: orderItemId },
+        data: {
+          qty: newQty,
+          lineTotalEgp: new Prisma.Decimal((unit * newQty).toFixed(2)),
+          vatEgp: new Prisma.Decimal((vatPerUnit * newQty).toFixed(2)),
+        },
+      });
+    }
+
+    const restored = item.qty - newQty;
+    if (restored > 0 && item.productId) {
+      await tx.inventory.upsert({
+        where: { productId: item.productId },
+        update: { currentQty: { increment: restored } },
+        create: { productId: item.productId, currentQty: restored },
+      });
+      await tx.inventoryMovement.create({
+        data: {
+          productId: item.productId,
+          type: 'ADJUST',
+          qtyDelta: restored,
+          reason:
+            note && note.trim().length > 0
+              ? `Order line edit: ${note}`
+              : 'Order line edit (qty reduced or removed)',
+          refId: item.orderId,
+          actorId: actor.id,
+        },
+      });
+    }
+
+    const totals = await recomputeOrderTotals(tx, item.orderId);
+
+    await tx.orderStatusEvent.create({
+      data: {
+        orderId: item.orderId,
+        status: 'CONFIRMED',
+        actorId: actor.id,
+        note:
+          note && note.trim().length > 0
+            ? `Order line edited: ${note}`
+            : newQty === 0
+              ? `Line removed (${item.skuSnapshot})`
+              : `Line qty ${item.qty} → ${newQty} (${item.skuSnapshot})`,
+      },
+    });
+    await tx.auditLog.create({
+      data: {
+        actorId: actor.id,
+        action: newQty === 0 ? 'order.line.remove' : 'order.line.qty_update',
+        entityType: 'OrderItem',
+        entityId: orderItemId,
+        before: {
+          qty: item.qty,
+          lineTotalEgp: item.lineTotalEgp.toString(),
+        } as never,
+        after: {
+          qty: newQty,
+          restoredToInventory: restored,
+          newSubtotal: totals.subtotalEgp,
+          newTotal: totals.totalEgp,
+        } as never,
+      },
+    });
+    return { ok: true, data: { orderId: item.orderId } } as const;
+  });
+
+  if (result.ok) {
+    revalidatePath(`/admin/orders/${result.data.orderId}`);
+    revalidatePath('/admin/orders');
+  }
+  return result;
 }

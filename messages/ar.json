@@ -60,6 +60,9 @@
       "orders": "الطلبات",
       "couriers": "شركات الشحن",
       "inventory": "المخزون",
+      "customers": "العملاء",
+      "returns": "المرتجعات",
+      "users": "مستخدمو الإدارة",
       "settings": "الإعدادات"
     },
     "common": {
@@ -104,6 +107,7 @@
         "addSpec": "إضافة مواصفة",
         "basePrice": "السعر الأساسي (جنيه)",
         "vatExempt": "معفى من الضريبة",
+        "returnable": "قابل للاسترجاع",
         "images": "الصور",
         "noImages": "لا توجد صور بعد",
         "uploadImage": "رفع صورة",
