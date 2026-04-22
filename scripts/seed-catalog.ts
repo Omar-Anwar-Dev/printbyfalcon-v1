@@ -32,92 +32,13 @@ import path from 'node:path';
 import { processProductImage } from '@/lib/storage/images';
 import { slugify, uniqueSlug } from '@/lib/catalog/slug';
 import { updateProductSearchVector } from '@/lib/catalog/search-vector';
+import { parseCatalogCsv, type CsvRow } from '@/lib/catalog/csv-parser';
 
 const prisma = new PrismaClient();
 
-type CsvRow = {
-  sku: string;
-  name_ar: string;
-  name_en: string;
-  description_ar: string;
-  description_en: string;
-  brand_slug: string;
-  category_slug: string;
-  base_price_egp: string;
-  vat_exempt: string;
-  authenticity: string;
-  specs_json: string;
-  status: string;
-};
-
-function parseCsv(text: string): CsvRow[] {
-  // RFC 4180-ish parser. Handles quoted fields and escaped quotes. No
-  // heroics — catalog CSVs are small and hand-produced.
-  const rows: string[][] = [];
-  let i = 0;
-  let row: string[] = [];
-  let cell = '';
-  let inQuotes = false;
-  while (i < text.length) {
-    const ch = text[i];
-    if (inQuotes) {
-      if (ch === '"') {
-        if (text[i + 1] === '"') {
-          cell += '"';
-          i += 2;
-          continue;
-        }
-        inQuotes = false;
-        i++;
-        continue;
-      }
-      cell += ch;
-      i++;
-      continue;
-    }
-    if (ch === '"') {
-      inQuotes = true;
-      i++;
-      continue;
-    }
-    if (ch === ',') {
-      row.push(cell);
-      cell = '';
-      i++;
-      continue;
-    }
-    if (ch === '\r') {
-      i++;
-      continue;
-    }
-    if (ch === '\n') {
-      row.push(cell);
-      rows.push(row);
-      row = [];
-      cell = '';
-      i++;
-      continue;
-    }
-    cell += ch;
-    i++;
-  }
-  if (cell.length > 0 || row.length > 0) {
-    row.push(cell);
-    rows.push(row);
-  }
-  if (rows.length === 0) return [];
-  const header = rows[0].map((h) => h.trim().toLowerCase());
-  return rows
-    .slice(1)
-    .filter((r) => r.some((c) => c.trim().length > 0))
-    .map((r) => {
-      const obj: Record<string, string> = {};
-      header.forEach((h, idx) => {
-        obj[h] = (r[idx] ?? '').trim();
-      });
-      return obj as unknown as CsvRow;
-    });
-}
+// CsvRow / CSV parsing + validation moved to `lib/catalog/csv-parser.ts` in
+// Sprint 11 so edge cases (BOM, duplicate SKUs, missing headers, Arabic
+// Unicode quirks) can be unit-tested without instantiating PrismaClient.
 
 async function ensureBrand(slug: string) {
   const existing = await prisma.brand.findUnique({ where: { slug } });
@@ -282,7 +203,27 @@ async function main() {
   const absCsv = path.resolve(csvPath);
   const csvDir = path.dirname(absCsv);
   const text = await readFile(absCsv, 'utf8');
-  const rows = parseCsv(text);
+  const parseResult = parseCatalogCsv(text);
+
+  if (parseResult.errors.length > 0) {
+    console.error(
+      `[seed-catalog] PARSE ERRORS (${parseResult.errors.length}):`,
+    );
+    for (const e of parseResult.errors) {
+      console.error(`[seed-catalog]   ${e.message}`);
+    }
+    if (parseResult.rows.length === 0) process.exit(1);
+    console.warn(
+      `[seed-catalog] proceeding with ${parseResult.rows.length} valid rows; ${parseResult.errors.length} rows skipped.`,
+    );
+  }
+  if (parseResult.warnings.length > 0) {
+    for (const w of parseResult.warnings) {
+      console.warn(`[seed-catalog] WARN ${w.message}`);
+    }
+  }
+
+  const rows = parseResult.rows;
   console.warn(`[seed-catalog] parsed ${rows.length} rows from ${absCsv}`);
 
   let ok = 0;

@@ -1,0 +1,11 @@
+# One URL path per line (relative to BASE). Comments and blank lines ignored.
+# Replace {slug} placeholders before running if the script doesn't auto-resolve.
+
+/ar
+/en
+/ar/products
+/ar/search?q=toner
+/ar/cart
+/ar/checkout
+/ar/b2b/signup
+/ar/admin/login

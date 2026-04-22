@@ -6,6 +6,9 @@ import {
   normalizeWhats360Event,
   pickWhats360String,
 } from '@/lib/whats360-webhook';
+import { checkAndIncrement, RATE_LIMIT_RULES } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/request-ip';
+import { detectOptOutMessage, recordOptOut } from '@/lib/notifications/opt-out';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -45,6 +48,19 @@ export const runtime = 'nodejs';
  * retry-storm — anything unusual ends up in the logs.
  */
 export async function POST(request: Request) {
+  const ip = getClientIp(request.headers) ?? 'unknown';
+  const rl = await checkAndIncrement(
+    RATE_LIMIT_RULES.webhook,
+    `whats360:${ip}`,
+  );
+  if (!rl.allowed) {
+    logger.warn({ ip }, 'whats360.webhook.rate_limited');
+    return NextResponse.json(
+      { status: 'error', message: 'rate-limited' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } },
+    );
+  }
+
   const expected = process.env.WHATS360_WEBHOOK_SECRET;
   if (!expected) {
     logger.error({}, 'whats360.webhook.secret_missing');
@@ -166,8 +182,10 @@ export async function POST(request: Request) {
     case 'subscription_expiry':
       await handleSubscriptionExpiry({ reason });
       break;
-    case 'outgoing_message':
     case 'incoming_message':
+      await handleIncomingMessage({ phone, body });
+      break;
+    case 'outgoing_message':
       // Observational — no state change.
       break;
     default:
@@ -208,6 +226,39 @@ async function handleSendFailure(args: {
     { messageId: args.messageId, flipped: updated.count },
     'whats360.webhook.send_failure.processed',
   );
+}
+
+async function handleIncomingMessage(args: {
+  phone: string | null;
+  body: Record<string, unknown>;
+}) {
+  if (!args.phone) return;
+
+  // Message body field names vary between Whats360 event shapes; check the
+  // common candidates.
+  const messageText = pickWhats360String(args.body, [
+    'body',
+    'text',
+    'message',
+    'message_text',
+    'content',
+  ]);
+
+  if (detectOptOutMessage(messageText)) {
+    const result = await recordOptOut({
+      phone: args.phone,
+      source: 'WHATSAPP_KEYWORD',
+      reason: messageText ?? 'STOP keyword',
+    });
+    logger.info(
+      {
+        recorded: result.recorded,
+        phonePrefix: result.phone ? result.phone.slice(0, 4) + '****' : null,
+      },
+      'whats360.webhook.opt_out',
+    );
+  }
+  // Non-opt-out incoming messages are ignored in MVP (no auto-reply logic yet).
 }
 
 async function handleSubscriptionExpiry(args: { reason: string | null }) {

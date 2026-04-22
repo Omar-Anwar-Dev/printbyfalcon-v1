@@ -56,3 +56,6 @@ prisma/migrations/**/*.sql.bak
 coverage/
 .nyc_output/
 tmp/
+
+# perf-audit reports (Sprint 11)
+scripts/perf/reports/

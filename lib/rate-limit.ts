@@ -63,6 +63,18 @@ export const RATE_LIMIT_RULES = {
     max: 3,
     windowSeconds: 24 * 60 * 60,
   },
+  /**
+   * Webhook per-IP throttle (Sprint 11 S11-D1-T3, architecture §7.5).
+   * Paymob + Whats360 webhooks both key off client IP. The generous 1000/min
+   * cap protects us from a misbehaving provider (retry storm on a redeploy
+   * blip) without tripping on legitimate traffic — neither provider should
+   * issue more than a few per second in healthy operation.
+   */
+  webhook: {
+    name: 'webhook',
+    max: 1000,
+    windowSeconds: 60,
+  },
 } as const satisfies Record<string, LimitRule>;
 
 export type RateLimitResult = {

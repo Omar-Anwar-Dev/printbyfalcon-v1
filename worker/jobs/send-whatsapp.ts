@@ -2,6 +2,7 @@ import type PgBoss from 'pg-boss';
 import { sendWhatsApp, type WhatsAppSend } from '@/lib/whatsapp';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
+import { isCustomerOptedOut } from '@/lib/notifications/opt-out';
 
 export async function registerWhatsAppJob(boss: PgBoss, concurrency: number) {
   const queue = 'send-whatsapp';
@@ -11,6 +12,31 @@ export async function registerWhatsAppJob(boss: PgBoss, concurrency: number) {
     { batchSize: concurrency },
     async (jobs) => {
       for (const job of jobs) {
+        // Sprint 11 — skip customer-opted-out recipients (recorded when the
+        // customer replied STOP to our WhatsApp number). OTP sends bypass
+        // this queue entirely (issueOtp calls sendWhatsApp directly) so auth
+        // flows still work for opted-out users.
+        if (await isCustomerOptedOut(job.data.phone)) {
+          if (job.data.notificationId) {
+            await prisma.notification
+              .update({
+                where: { id: job.data.notificationId },
+                data: { status: 'FAILED', errorMessage: 'opted_out' },
+              })
+              .catch((err) =>
+                logger.warn(
+                  { notificationId: job.data.notificationId, err },
+                  'send-whatsapp.opt_out.notification_update_failed',
+                ),
+              );
+          }
+          logger.info(
+            { jobId: job.id, bodyPreview: job.data.body.slice(0, 40) },
+            'send-whatsapp.skipped.opted_out',
+          );
+          continue;
+        }
+
         const result = await sendWhatsApp(job.data);
 
         // Reflect the send result back onto the Notification row if one was
