@@ -149,8 +149,9 @@ export default async function B2BOrdersPage({ params, searchParams }: Props) {
                         labels={{
                           reorderCta: isAr ? 'أعِد' : 'Reorder',
                           loading: isAr ? 'جارٍ...' : 'Loading…',
-                          modalTitle: (n) =>
-                            isAr ? `إعادة طلب ${n}` : `Reorder ${n}`,
+                          modalTitleTemplate: isAr
+                            ? `إعادة طلب {orderNumber}`
+                            : `Reorder {orderNumber}`,
                           body: isAr
                             ? 'راجع الأصناف — هنضيف المتاح بالأسعار الحالية.'
                             : 'Review lines — available items added at current prices.',
@@ -168,10 +169,9 @@ export default async function B2BOrdersPage({ params, searchParams }: Props) {
                           addCta: isAr ? 'أضف للسلة' : 'Add to cart',
                           adding: isAr ? 'جارٍ...' : 'Adding…',
                           cancel: isAr ? 'إلغاء' : 'Cancel',
-                          successLine: (n) =>
-                            isAr
-                              ? `أضيف ${n} صنف — افتح السلة.`
-                              : `${n} added — open cart.`,
+                          successLineTemplate: isAr
+                            ? `أضيف {count} صنف — افتح السلة.`
+                            : `{count} added — open cart.`,
                           nothingToAdd: isAr
                             ? 'مفيش أصناف متاحة.'
                             : 'Nothing available.',

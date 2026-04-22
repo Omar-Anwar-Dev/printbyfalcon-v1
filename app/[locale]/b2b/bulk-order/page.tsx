@@ -89,10 +89,9 @@ export default async function B2BBulkOrderPage({
               ? 'المنتج غير موجود أو مؤرشف'
               : 'Product not found or archived',
           },
-          successToast: (count: number) =>
-            isAr
-              ? `تمت إضافة ${count} صنف إلى السلة.`
-              : `Added ${count} item${count === 1 ? '' : 's'} to your cart.`,
+          successToastTemplate: isAr
+            ? `تمت إضافة {count} صنف إلى السلة.`
+            : `Added {count} items to your cart.`,
           tooManyRows: isAr
             ? 'الحد الأقصى 50 صفًا لكل عملية.'
             : 'Maximum 50 rows per batch.',
