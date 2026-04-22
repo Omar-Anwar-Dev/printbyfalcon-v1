@@ -1215,3 +1215,94 @@ Status: Accepted
 - Admin bundle stays small.
 - When a second chart type is needed (pie, bar, stacked), re-evaluate: adopt Recharts if volume grows. Today, YAGNI.
 - The SVG has no tooltips — acceptable for an at-a-glance widget; richer analytics land in v1.1 reporting.
+
+---
+
+## ADR-055: CSP enforced but lenient for Next.js 15 hydration
+Date: 2026-04-23
+Status: Accepted
+
+**Context:** PRD §8 + architecture §9.5 required a Content-Security-Policy header. A strict nonce-based CSP (`'strict-dynamic'` + per-request nonces) is ideal but requires middleware that generates + propagates a nonce through every Next.js App Router render — a meaningful refactor for Sprint 11 production-readiness work when the primary XSS vectors (external-origin script injection, `<script src=>` attacks, iframe exfiltration) are already blocked by a lenient policy.
+
+**Decision:** Ship an enforced but permissive CSP with `script-src 'self' 'unsafe-inline' 'unsafe-eval'`, `style-src 'self' 'unsafe-inline' https://fonts.googleapis.com`, `frame-src 'self' https://accept.paymob.com`, `upgrade-insecure-requests` in [next.config.mjs](../next.config.mjs). COOP `same-origin-allow-popups`, CORP `same-site`, X-Permitted-Cross-Domain-Policies `none` alongside.
+
+**Alternatives considered:**
+- Report-Only CSP first — rejected; Sprint 11 is the production-readiness pass, enforcing > observing is the whole point.
+- Full nonce-based strict-dynamic — rejected for Sprint 11 scope; parked for post-M1 polish pass.
+- No CSP at all — rejected; the PRD committed to it.
+
+**Consequences:**
+- XSS-via-inline-script attack surface remains — acceptable given React escapes user content by default + `dangerouslySetInnerHTML` is lint-enforced off for user content.
+- Paymob iframe works (explicit allow-list).
+- Post-M1 parking lot: tighten to nonce-based strict-dynamic.
+
+---
+
+## ADR-056: Production env sanity as a fail-fast boot assertion
+Date: 2026-04-23
+Status: Accepted
+
+**Context:** A bad production deploy where `OTP_DEV_MODE=true` or `NOTIFICATIONS_DEV_MODE=true` slips into `.env.production` would leak real OTPs to the response body + log real WhatsApp messages as no-ops — both silent failures that customers would notice before operators do.
+
+**Decision:** New [lib/env-check.ts](../lib/env-check.ts) exports `assertProductionEnv()` which throws on boot if `NODE_ENV=production` AND any of the dangerous flags (`OTP_DEV_MODE`, `NOTIFICATIONS_DEV_MODE`, `WHATS360_SANDBOX`) = `true`, or any of the required secrets (`DATABASE_URL`, `APP_URL`, `PAYMOB_API_KEY`, `PAYMOB_HMAC_SECRET`, `PAYMOB_INTEGRATION_ID_CARD`, `WHATS360_TOKEN`, `WHATS360_INSTANCE_ID`, `WHATS360_WEBHOOK_SECRET`) are missing. Wired via Next.js 15 [instrumentation.ts](../instrumentation.ts) `register()` hook, nodejs runtime only.
+
+**Escape hatch:** `SKIP_ENV_CHECK=true` disables the assertion for emergency boots where one secret is temporarily missing and the operator knows what they're doing. Should never bake into `.env.production`.
+
+**Alternatives considered:**
+- Runtime per-request check — rejected; doesn't stop the boot, and the first request already leaks a real OTP.
+- Build-time check — rejected; env is set per-container at run-time, not build-time.
+- Static lint rule — rejected; can't catch runtime environment-variable misconfigurations.
+
+**Consequences:**
+- A container with a dev-flag enabled in production will fail to start, surfacing the misconfiguration loudly at deploy time rather than silently at request time.
+- `env_check.failed` appears in container logs with the full list of issues, so the operator fixes all of them in one pass.
+
+---
+
+## ADR-057: WhatsApp customer opt-out keyed by phone, OTP sends bypass
+Date: 2026-04-23
+Status: Accepted
+
+**Context:** Sprint 11 S11-D6-T3 required honoring `STOP`-style keywords from customers who want to unsubscribe from automated WhatsApp notifications. Two design questions: (a) what to key off — `User` or phone? (b) should OTP sends respect the opt-out?
+
+**Decision:**
+- Dedicated `NotificationOptOut` table keyed by phone (E.164 without '+', e.g. `201012345678`) per [prisma/schema.prisma](../prisma/schema.prisma).
+- Keywords: `STOP`, `UNSUBSCRIBE`, `إلغاء`, `الغاء`, `ايقاف`, `إيقاف`, `الغاء الاشتراك`. Equality match after trim + upper-case — does NOT match STOP embedded in a longer message.
+- `send-whatsapp` worker gates before dispatch: opted-out rows marked FAILED with errorMessage='opted_out', no Whats360 call.
+- **OTP sends bypass the opt-out** — `issueOtp` calls `sendWhatsApp` directly (not via the worker queue), so authentication still works for opted-out users.
+- Admin + support can record opt-outs on behalf of a customer via the new `OptOutSource` enum (WHATSAPP_KEYWORD / ADMIN / SUPPORT).
+
+**Alternatives considered:**
+- Key by User.id — rejected; guests + shared-login B2B accounts both have phones but may not have User rows.
+- Block OTP sends too — rejected; locks out authentication permanently if a customer ever STOPs, which is worse UX + security than letting them sign in.
+- Detect STOP embedded in a sentence — rejected; false-positives far outweigh false-negatives (users who type "please don't stop my order" don't want to be opted out).
+
+**Consequences:**
+- Privacy policy §10 + cookies §1 can honestly state "you can opt out via STOP".
+- If a user who STOP'd later needs to receive an order confirmation, they won't — that's a customer-chosen trade-off. Admin can `clearOptOut()` via DB if the customer calls support to re-subscribe.
+- If the same phone later belongs to a different human (phone number recycling), the opt-out persists — acceptable at MVP scale; consider a timestamp-based auto-expiry post-MVP.
+
+---
+
+## ADR-058: Late Paymob PAID webhook on CANCELLED order → audit flag + skip side-effects
+Date: 2026-04-23
+Status: Accepted
+
+**Context:** Sprint 11 S11-D8-T3 webhook reliability audit found that a late-arriving `PAID` Paymob webhook on an order the customer had already cancelled would: (a) flip `paymentStatus` to PAID, (b) generate + send an invoice PDF, (c) send an order-confirmation email — all while the order itself stays in CANCELLED. This creates a phantom confirmation to a customer who thinks their order is cancelled + an invoice in the accounting record for an order that was never fulfilled + a VAT-audit surprise.
+
+**Decision:** In [app/api/webhooks/paymob/route.ts](../app/api/webhooks/paymob/route.ts), detect `order.status === 'CANCELLED'` at the PAID branch. When true:
+- Still flip `paymentStatus` to PAID (the money did move, so ops needs to reconcile the refund — recording it as PENDING would lose that fact).
+- Record `OrderStatusEvent` with note "Payment captured AFTER cancellation — MANUAL REFUND REQUIRED".
+- Record `AuditLog` with action `order.payment.paid_after_cancel`.
+- **Skip** invoice generation + confirmation email.
+- Return `{ ok: true, needsRefund: true }` so Paymob stops retrying.
+
+**Alternatives considered:**
+- Un-cancel the order + fulfill — rejected; customer doesn't expect delivery, ops would ship to a customer who didn't consent.
+- Refund via Paymob API automatically — rejected; Paymob refund API requires live merchant approval + config we haven't tested. Manual refund is safer at MVP.
+- Record + fire invoice + email anyway — rejected; phantom email + VAT-audit breakage (this was the pre-fix behavior).
+
+**Consequences:**
+- Ops has a queryable audit action to find these cases: `SELECT * FROM "AuditLog" WHERE action = 'order.payment.paid_after_cancel';`
+- Customer doesn't get a phantom confirmation.
+- Refund is manual — requires adding ops process to the admin runbook post-M1. Parking-lot: automated Paymob refund API + auto-REFUNDED status in v1.1.

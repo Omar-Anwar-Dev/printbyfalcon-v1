@@ -221,8 +221,19 @@ export function verifyPaymobHmac(
     .createHmac('sha512', secret)
     .update(concat)
     .digest('hex');
-  return crypto.timingSafeEqual(
-    Buffer.from(computed, 'hex'),
-    Buffer.from(providedHmac, 'hex'),
-  );
+
+  // Length check before timingSafeEqual — a short / malformed provided HMAC
+  // would otherwise throw a RangeError inside timingSafeEqual and crash the
+  // route handler. We want a clean boolean false for any bad input.
+  if (providedHmac.length !== computed.length) return false;
+  let computedBuf: Buffer;
+  let providedBuf: Buffer;
+  try {
+    computedBuf = Buffer.from(computed, 'hex');
+    providedBuf = Buffer.from(providedHmac, 'hex');
+  } catch {
+    return false;
+  }
+  if (computedBuf.length !== providedBuf.length) return false;
+  return crypto.timingSafeEqual(computedBuf, providedBuf);
 }

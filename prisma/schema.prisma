@@ -820,6 +820,40 @@ model Notification {
   @@index([status, createdAt])
   @@index([userId, createdAt])
   @@index([relatedOrderId])
+  // Sprint 11 — Whats360 inbound webhook calls `notification.updateMany({ where: { externalMessageId } })`
+  // to flip status on delivery-failure events; without this, every inbound
+  // webhook was doing a full table scan.
+  @@index([externalMessageId])
+}
+
+/// Customer-initiated opt-out from automated WhatsApp notifications (Sprint 11 S11-D6-T3).
+///
+/// Triggered when a recipient replies "STOP" / "إلغاء" / "UNSUBSCRIBE" to the
+/// store's WhatsApp number — the Whats360 inbound webhook upserts a row here,
+/// and the `send-whatsapp` worker skips queued Notification rows whose phone
+/// matches. Admin can also record opt-outs via the settings panel (support).
+///
+/// **OTP + auth-critical messages bypass this table** — `issueOtp` calls
+/// `sendWhatsApp` directly without going through the Notification worker, so
+/// opted-out phones can still receive a one-time OTP to sign in / recover.
+///
+/// Stored phone format: E.164 without '+', e.g. `201012345678`. Must match
+/// `normalizeEgyptianPhone()` output for the send-time lookup to hit.
+model NotificationOptOut {
+  id        String             @id @default(cuid())
+  phone     String             @unique
+  source    OptOutSource
+  reason    String?
+  createdAt DateTime           @default(now())
+  createdBy String?
+
+  @@index([createdAt])
+}
+
+enum OptOutSource {
+  WHATSAPP_KEYWORD
+  ADMIN
+  SUPPORT
 }
 
 // -------------------------------------------------------------------------

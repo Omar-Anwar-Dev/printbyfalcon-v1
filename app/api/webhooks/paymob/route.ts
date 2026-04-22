@@ -5,6 +5,8 @@ import { ensureInvoiceForOrder } from '@/lib/invoices/ensure';
 import { sendInvoiceToCustomer } from '@/lib/invoices/delivery';
 import { enqueueOrderConfirmationEmail } from '@/app/actions/checkout';
 import { logger } from '@/lib/logger';
+import { checkAndIncrement, RATE_LIMIT_RULES } from '@/lib/rate-limit';
+import { getClientIp } from '@/lib/request-ip';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -31,6 +33,17 @@ export const runtime = 'nodejs';
  */
 export async function POST(request: Request) {
   const url = new URL(request.url);
+
+  const ip = getClientIp(request.headers) ?? 'unknown';
+  const rl = await checkAndIncrement(RATE_LIMIT_RULES.webhook, `paymob:${ip}`);
+  if (!rl.allowed) {
+    logger.warn({ ip }, 'paymob.webhook.rate_limited');
+    return NextResponse.json(
+      { ok: false, error: 'rate-limited' },
+      { status: 429, headers: { 'Retry-After': String(rl.retryAfterSeconds) } },
+    );
+  }
+
   const bodyText = await request.text();
 
   let payload: Record<string, unknown> | null = null;
@@ -122,6 +135,12 @@ export async function POST(request: Request) {
   }
 
   if (success) {
+    // Sprint 11 S11-D8-T3 — late-arriving PAID webhook on an already-CANCELLED
+    // order. Record the capture (ops needs to refund) but skip invoice + email
+    // side effects — the customer no longer expects a confirmation for this
+    // order, and issuing an invoice would break audit / VAT reconciliation.
+    const orderAlreadyCancelled = order.status === 'CANCELLED';
+
     await prisma.$transaction(async (tx) => {
       await tx.order.update({
         where: { id: order.id },
@@ -135,18 +154,37 @@ export async function POST(request: Request) {
         data: {
           orderId: order.id,
           status: order.status,
-          note: `Payment captured (paymob txn ${txnId})`,
+          note: orderAlreadyCancelled
+            ? `Payment captured AFTER cancellation (paymob txn ${txnId}) — MANUAL REFUND REQUIRED`
+            : `Payment captured (paymob txn ${txnId})`,
         },
       });
       await tx.auditLog.create({
         data: {
-          action: 'order.payment.paid',
+          action: orderAlreadyCancelled
+            ? 'order.payment.paid_after_cancel'
+            : 'order.payment.paid',
           entityType: 'Order',
           entityId: order.id,
-          after: { paymobTransactionId: txnId } as never,
+          after: {
+            paymobTransactionId: txnId,
+            orderStatusAtCapture: order.status,
+          } as never,
+          note: orderAlreadyCancelled
+            ? 'Late-arriving Paymob PAID webhook hit a cancelled order; ops must reconcile the refund.'
+            : null,
         },
       });
     });
+
+    if (orderAlreadyCancelled) {
+      logger.warn(
+        { orderId: order.id, txnId },
+        'paymob.webhook.paid_after_cancel',
+      );
+      return NextResponse.json({ ok: true, needsRefund: true });
+    }
+
     logger.info({ orderId: order.id, txnId }, 'paymob.webhook.order_paid');
 
     // Sprint 6 — fire invoice delivery on PAID. Best-effort; failure here

@@ -2,6 +2,25 @@ import createNextIntlPlugin from 'next-intl/plugin';
 
 const withNextIntl = createNextIntlPlugin('./lib/i18n/request.ts');
 
+const cspDirectives = [
+  "default-src 'self'",
+  "base-uri 'self'",
+  "object-src 'none'",
+  // 'unsafe-inline' + 'unsafe-eval' are required for Next.js 15 App Router
+  // hydration bootstrap without nonce rotation. Tighten with a nonce-based
+  // strict-dynamic CSP post-M1 (parking-lot: Sprint 11 CSP hardening).
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+  "img-src 'self' data: blob: https:",
+  "font-src 'self' data: https://fonts.gstatic.com",
+  "connect-src 'self'",
+  // Paymob hosted iframe for card + Fawry sub-integration (ADR-025).
+  "frame-src 'self' https://accept.paymob.com",
+  "frame-ancestors 'none'",
+  "form-action 'self'",
+  'upgrade-insecure-requests',
+].join('; ');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
@@ -41,6 +60,14 @@ const nextConfig = {
             key: 'Permissions-Policy',
             value: 'camera=(), microphone=(), geolocation=()',
           },
+          { key: 'Content-Security-Policy', value: cspDirectives },
+          {
+            key: 'Cross-Origin-Opener-Policy',
+            value: 'same-origin-allow-popups',
+          },
+          { key: 'Cross-Origin-Resource-Policy', value: 'same-site' },
+          { key: 'X-Permitted-Cross-Domain-Policies', value: 'none' },
+          { key: 'X-DNS-Prefetch-Control', value: 'on' },
         ],
       },
     ];

@@ -7,6 +7,7 @@ import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { ToastProvider } from '@/components/ui/toast';
 import { WhatsAppChatButton } from '@/components/whatsapp-chat-button';
+import { CookieConsent } from '@/components/cookie-consent';
 import { locales, localeDir } from '@/lib/i18n/config';
 import { getStoreInfo } from '@/lib/settings/store-info';
 
@@ -65,6 +66,7 @@ export default async function LocaleLayout({ children, params }: Props) {
               locale={locale}
             />
           ) : null}
+          <CookieConsent locale={locale as 'ar' | 'en'} />
         </div>
       </ToastProvider>
     </NextIntlClientProvider>
