@@ -44,6 +44,8 @@ export type InvoiceData = {
     addressLine: string;
   };
   placedByName: string | null;
+  poReference: string | null;
+  paymentMethodNote: string | null;
   lines: InvoiceLine[];
   subtotalEgp: number;
   discountEgp: number;
@@ -252,6 +254,11 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
             <Text style={[styles.invoiceDate, styles.ltr]}>
               Order: {data.orderNumber}
             </Text>
+            {data.poReference ? (
+              <Text style={[styles.invoiceDate, styles.ltr]}>
+                PO: {data.poReference}
+              </Text>
+            ) : null}
           </View>
         </View>
 
@@ -288,6 +295,11 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
             <Text style={styles.colBody}>
               الحالة: {data.paymentStatusLabel}
             </Text>
+            {data.paymentMethodNote ? (
+              <Text style={[styles.colBody, { marginTop: 4 }]}>
+                ملاحظة: {data.paymentMethodNote}
+              </Text>
+            ) : null}
           </View>
         </View>
 

@@ -118,10 +118,22 @@ export default async function B2BProfilePage({ params }: Props) {
         </h2>
         <div className="flex flex-wrap gap-3">
           <Link
+            href="/b2b/bulk-order"
+            className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:opacity-90"
+          >
+            {isAr ? 'طلب مُجمَّع (Bulk)' : 'Bulk order'}
+          </Link>
+          <Link
+            href="/b2b/orders"
+            className="rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted"
+          >
+            {isAr ? 'طلبات الشركة' : 'Company orders'}
+          </Link>
+          <Link
             href="/account/orders"
             className="rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted"
           >
-            {isAr ? 'سجل الطلبات' : 'Order history'}
+            {isAr ? 'طلباتي' : 'My orders'}
           </Link>
           <Link
             href="/account/change-password"

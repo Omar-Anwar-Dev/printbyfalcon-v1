@@ -21,6 +21,7 @@ import {
 } from '@/lib/order/status';
 import {
   renderOrderStatusChange,
+  renderB2bOrderConfirmedByRep,
   type OrderStatusKey,
   type SupportedLocale,
 } from '@/lib/whatsapp-templates';
@@ -642,4 +643,202 @@ export async function bulkHandOverToCourierAction(
   }
 
   return { ok: true, data: { succeeded, failed } };
+}
+
+// ---------------------------------------------------------------------------
+// Sprint 8 S8-D2-T2 — Confirm a B2B Submit-for-Review order.
+//
+// Flow (PRD Feature 4 / architecture Flow B step 9):
+//   - Sales rep opens an order in /admin/b2b/pending-confirmation.
+//   - Enters a paymentMethodNote (PO#, bank transfer ref, "Net-15 on account",
+//     etc.) + optional note. No Paymob call — payment is out-of-band.
+//   - Transaction: status → CONFIRMED, confirmedAt=now, paymentMethodNote set,
+//     OrderStatusEvent + AuditLog, Notification rows, invoice ensured + sent.
+//   - Customer gets WhatsApp (+ email for B2B) via the status-change renderer.
+//
+// Role gate: OWNER + SALES_REP (not OPS — this is a B2B-specific rep action).
+// ---------------------------------------------------------------------------
+
+const confirmB2BOrderSchema = z.object({
+  orderId: z.string().min(1),
+  paymentMethodNote: z.string().trim().min(1).max(200),
+  note: z
+    .string()
+    .trim()
+    .max(500)
+    .optional()
+    .transform((v) => (v ? v : undefined)),
+});
+
+export type ConfirmB2BOrderInput = z.input<typeof confirmB2BOrderSchema>;
+
+export async function confirmB2BOrderAction(
+  input: ConfirmB2BOrderInput,
+): Promise<ActionResult<{ orderId: string }>> {
+  const actor = await requireAdmin(['OWNER', 'SALES_REP']);
+  const parsed = confirmB2BOrderSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, errorKey: 'validation.failed' };
+
+  const { orderId, paymentMethodNote, note } = parsed.data;
+
+  const order = await prisma.order.findUnique({
+    where: { id: orderId },
+    select: {
+      id: true,
+      status: true,
+      type: true,
+      orderNumber: true,
+      contactName: true,
+      contactPhone: true,
+      contactEmail: true,
+      userId: true,
+      user: { select: { phone: true, languagePref: true } },
+    },
+  });
+  if (!order) return { ok: false, errorKey: 'order.not_found' };
+  if (order.type !== 'B2B') {
+    return { ok: false, errorKey: 'order.not_b2b' };
+  }
+  if (!canTransitionOrderStatus(order.status, 'CONFIRMED')) {
+    return { ok: false, errorKey: 'order.invalid_status_transition' };
+  }
+  if (order.status !== 'PENDING_CONFIRMATION') {
+    // Guard rail: this endpoint is strictly the PENDING_CONFIRMATION → CONFIRMED
+    // path; any other transition goes through updateOrderStatusAction.
+    return { ok: false, errorKey: 'order.not_pending_confirmation' };
+  }
+
+  await prisma.$transaction(async (tx) => {
+    await tx.order.update({
+      where: { id: order.id },
+      data: {
+        status: 'CONFIRMED',
+        confirmedAt: new Date(),
+        paymentMethodNote,
+      },
+    });
+
+    await tx.orderStatusEvent.create({
+      data: {
+        orderId: order.id,
+        status: 'CONFIRMED',
+        note: note ?? null,
+        actorId: actor.id,
+      },
+    });
+
+    await tx.auditLog.create({
+      data: {
+        actorId: actor.id,
+        action: 'b2b.order.confirm',
+        entityType: 'Order',
+        entityId: order.id,
+        before: { status: order.status } as never,
+        after: {
+          status: 'CONFIRMED',
+          paymentMethodNote,
+          note: note ?? null,
+        } as never,
+      },
+    });
+  });
+
+  // Customer notification — uses the dedicated B2B-confirm renderer so the
+  // paymentMethodNote (PO#, bank transfer ref, etc.) is surfaced prominently.
+  const locale: SupportedLocale =
+    order.user?.languagePref === 'EN' ? 'en' : 'ar';
+  const phone = order.user?.phone ?? order.contactPhone;
+
+  const body = renderB2bOrderConfirmedByRep(
+    {
+      orderNumber: order.orderNumber,
+      paymentMethodNote,
+      repNote: note,
+    },
+    locale,
+  );
+
+  const whatsappOptedOut = await isNotificationOptedOut(
+    'WHATSAPP',
+    'CONFIRMED',
+  );
+  if (!whatsappOptedOut) {
+    const notification = await prisma.notification.create({
+      data: {
+        userId: order.userId ?? null,
+        channel: 'WHATSAPP',
+        template: 'order.statusChange.confirmed',
+        payload: { phone, body, locale } as never,
+        relatedOrderId: order.id,
+        status: 'PENDING',
+      },
+    });
+    try {
+      await enqueueJob(
+        'send-whatsapp',
+        { phone, body, notificationId: notification.id },
+        { retryLimit: 3, retryDelay: 60, retryBackoff: true },
+      );
+    } catch (err) {
+      logger.error(
+        { err: (err as Error).message, orderId: order.id },
+        'b2b.confirm.whatsapp_enqueue_failed',
+      );
+    }
+  }
+
+  // B2B email mirror.
+  const emailOptedOut = await isNotificationOptedOut('EMAIL', 'CONFIRMED');
+  if (order.contactEmail && !emailOptedOut) {
+    const { renderOrderStatusChangeEmail } =
+      await import('@/lib/email/order-status-change');
+    const baseUrl =
+      process.env.APP_URL?.replace(/\/$/, '') ?? 'https://printbyfalcon.com';
+    const rendered = renderOrderStatusChangeEmail({
+      locale,
+      orderNumber: order.orderNumber,
+      newStatus: 'CONFIRMED',
+      recipientName: order.contactName,
+      note: note ?? paymentMethodNote,
+      orderUrl: `${baseUrl}/${locale}/account/orders/${order.id}`,
+    });
+    try {
+      await enqueueJob(
+        'send-email',
+        {
+          to: order.contactEmail,
+          subject: rendered.subject,
+          text: rendered.text,
+          html: rendered.html,
+        },
+        { retryLimit: 3, retryDelay: 60, retryBackoff: true },
+      );
+    } catch (err) {
+      logger.error(
+        { err: (err as Error).message, orderId: order.id },
+        'b2b.confirm.email_enqueue_failed',
+      );
+    }
+  }
+
+  // Ensure invoice + deliver — best-effort (mirrors createOrderAction's pattern).
+  try {
+    const { ensureInvoiceForOrder } = await import('@/lib/invoices/ensure');
+    const { sendInvoiceToCustomer } = await import('@/lib/invoices/delivery');
+    const outcome = await ensureInvoiceForOrder(order.id, actor.id);
+    if (outcome.invoiceId) {
+      await sendInvoiceToCustomer(outcome.invoiceId);
+    }
+  } catch (err) {
+    logger.error(
+      { err: (err as Error).message, orderId: order.id },
+      'b2b.confirm.invoice_failed',
+    );
+  }
+
+  // Double-click guard is implicit: the PENDING_CONFIRMATION → CONFIRMED
+  // status check rejects the second call with `order.not_pending_confirmation`.
+
+  revalidatePath('/', 'layout');
+  return { ok: true, data: { orderId: order.id } };
 }

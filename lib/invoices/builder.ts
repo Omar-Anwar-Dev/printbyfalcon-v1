@@ -84,7 +84,10 @@ export async function buildInvoiceData(
       email: order.contactEmail ?? null,
       addressLine: addressSnapshotToLine(order.addressSnapshot),
     },
-    placedByName: null, // populated in Sprint 8 when B2B `placed_by_name` lands
+    // Sprint 8 S8-D3-T3: B2B attribution fields flow through from Order.
+    placedByName: order.placedByName ?? null,
+    poReference: order.poReference ?? null,
+    paymentMethodNote: order.paymentMethodNote ?? null,
     lines,
     subtotalEgp: Number(order.subtotalEgp),
     discountEgp: Number(order.discountEgp),

@@ -527,6 +527,17 @@ model Order {
   internalNotes String?
   customerNotes String?
 
+  // B2B attribution (Sprint 8 S8-D1-T1). `placedByName` is required at
+  // checkout for B2B Submit-for-Review flows (shared login per ADR-007 —
+  // owner wants to know which employee placed the order). `poReference`
+  // is an optional customer-supplied PO number shown on the invoice.
+  // `paymentMethodNote` is a free-text hint the sales rep fills when
+  // confirming an SFR order (e.g. "Net-15 PO #A12", "Bank transfer") —
+  // keeps PaymentMethod enum stable while surfacing the agreed terms.
+  placedByName       String?
+  poReference        String?
+  paymentMethodNote  String?
+
   // Cancellation request (Sprint 5 S5-D4): customer requests cancel pre-HandedToCourier;
   // admin approves (→ status=CANCELLED + reservation release) or denies (resolution recorded).
   // Null `cancellationRequestedAt` = no request ever. `cancellationResolvedAt` null while pending.

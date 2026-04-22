@@ -1,10 +1,10 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 deployed to prod; **Sprint 7 COMPLETE 2026-04-21** — awaiting staging + prod deploy before Sprint 8 starts. M1 target remains end of Sprint 12.
-- **Current sprint:** **Sprint 7 COMPLETE** ✅ — 9/9 exit criteria met; B2B signup + approval + tier pricing + company portal + password reset all in place.
-- **Next sprint:** Sprint 8 — B2B Portal + Submit-for-Review + Bulk Order + Reorder (not started; awaiting "start sprint 8" command — runs AFTER Sprint 7 deploy).
-- **Last updated:** 2026-04-21 — Sprint 7 close-out.
+- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 deployed to prod; **Sprints 7 + 8 COMPLETE 2026-04-22** — awaiting staging + prod deploy. M1 target remains end of Sprint 12.
+- **Current sprint:** **Sprint 8 COMPLETE** ✅ — 8/8 exit criteria met; dual-option B2B checkout + Pending Confirmation queue + bulk-order tool + one-click reorder + Whats360 rep-confirm renderer + cross-company hardening all in place.
+- **Next sprint:** Sprint 9 — COD + Shipping Zones + Admin Settings (not started; awaiting "start sprint 9" command — runs AFTER Sprint 7 + Sprint 8 combined deploy).
+- **Last updated:** 2026-04-22 — Sprint 8 close-out.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 6 deploy confirmed at Sprint 7 kickoff.
 
@@ -801,4 +801,129 @@ Mapped to the 9 criteria in `docs/implementation-plan.md` lines 485–494:
 8. Log the B2B user out. Open `/en/b2b/forgot-password` → submit the email → open the reset link → set a new password → redirected to login with `?reset=1`.
 9. Back in admin, open the original applicant's application → notice it's marked **APPROVED** with a link to the Company record.
 10. Reject a *different* pending application → the applicant gets the bilingual rejection email → they can resubmit with the same email (Design A).
+
+---
+
+## Sprint 8 kickoff resolutions (2026-04-22)
+
+- **Deploy gate honored implicitly** — Sprint 7 reached main (PR #11 + hotfixes #12/#13/#14) before Sprint 8 kickoff; owner greenlit "start sprint 8" without calling out a separate staging cycle. Sprint 7 + Sprint 8 will ship as a combined deploy.
+- **`placedByName` scope (ADR-040):** required on **Submit-for-Review** only; optional on **B2B Pay Now** (matches the owner's "standard as B2C" preference). Still surfaces on invoice + order rows when filled.
+- **Sales-rep alert fan-out (ADR-042):** fan-out to all OWNER + SALES_REP admins with a populated email — mirrors the Sprint-6 low-stock digest pattern. "Assigned rep" stays v1.1.
+- **Sales-rep confirm payment method (ADR-041):** keep `PaymentMethod.SUBMIT_FOR_REVIEW` as the terminal enum + add a free-text `Order.paymentMethodNote` column. Less schema churn, can normalize into enums later if metrics demand.
+- **Reorder pricing (ADR-043):** re-resolves via `resolvePrice()` at re-add time — matches PRD Feature 4 "current prices". Snapshotted OrderItem prices are ignored on reorder.
+- **Whats360 templates (not Meta) per ADR-033:** S8-D7-T2 "B2B templates approved by Meta" reinterpreted — new `renderB2bOrderConfirmedByRep` added to `lib/whatsapp-templates.ts` + 2 new vitest cases. No Meta submission.
+
+## Sprint 8 — COMPLETE 2026-04-22
+
+Single dense session following the Sprint 2–7 pattern. Every task typechecked + tested incrementally; final QA gate summarised in §Verification.
+
+### Foundation
+- [x] **ADR-040** [2026-04-22] `placedByName` scope: required on SFR, optional on Pay Now.
+- [x] **ADR-041** [2026-04-22] `Order.paymentMethodNote` free-text field instead of expanding `PaymentMethod` enum.
+- [x] **ADR-042** [2026-04-22] Sales rep fan-out (OWNER + SALES_REP list) instead of per-Company assigned rep.
+- [x] **ADR-043** [2026-04-22] Reorder re-resolves prices at re-add time (not historical snapshot).
+- [x] **ADR-044** [2026-04-22] Dedicated `confirmB2BOrderAction` instead of widening `updateOrderStatusAction`.
+
+### Schema + data model
+- [x] **S8-D1-T1** [2026-04-22] Prisma — `Order.placedByName String?`, `Order.poReference String?`, `Order.paymentMethodNote String?`. `prisma generate` clean, typecheck clean.
+
+### B2B checkout — dual-option flow
+- [x] **S8-D1-T1 + S8-D1-T2** [2026-04-22] Checkout page + form: resolves B2B context via [lib/b2b/checkout-context.ts](../lib/b2b/checkout-context.ts) (new), renders "Submit for Review" + "Pay Now" picker when `checkoutPolicy === 'BOTH'`, hides one side when the policy is single-mode. `placedByName` + `poReference` fields in a dedicated "Company details" section for B2B viewers only. Required-asterisk on placed_by when SFR mode selected.
+- [x] **S8-D1-T3** [2026-04-22] `submitForReviewOrderAction` in [app/actions/checkout.ts](../app/actions/checkout.ts) — validates, re-checks stock, creates Order in `PENDING_CONFIRMATION`/`SUBMIT_FOR_REVIEW`, firm-holds inventory via the same race-safe pattern as `createOrderAction` (ADR-036), status event + audit, enqueues customer WhatsApp (`renderB2bPendingReview`) + sales-rep fan-out email.
+- [x] **S8-D3-T1** [2026-04-22] Per-company `checkoutPolicy` editor already shipped in Sprint 7 at `/admin/b2b/companies/[id]` — Sprint 8 just consumes it via `getB2BCheckoutContext`.
+
+### Admin — Pending Confirmation queue + B2B Confirm panel
+- [x] **S8-D2-T1** [2026-04-22] `/admin/b2b/pending-confirmation` queue — oldest-first, flags >24h waits in red, shows placed_by + PO + company tier, click-through to order detail. Role-gated OWNER+SALES_REP.
+- [x] **S8-D2-T2 + S8-D7-T3** [2026-04-22] `confirmB2BOrderAction` (ADR-044) + [components/admin/b2b-confirm-panel.tsx](../components/admin/b2b-confirm-panel.tsx) — prominent panel at the top of `/admin/orders/[id]` when status=PENDING_CONFIRMATION + type=B2B. Captures `paymentMethodNote` (required) + optional note. `OrderStatusActions` accepts a new `hiddenTransitions` prop; `CONFIRMED` is hidden on this path so reps are steered to the dedicated panel. Admin order detail role-widened to OWNER+OPS+SALES_REP; per-action authz still enforced.
+- [x] **S8-D2-T3** [2026-04-22] Sales rep dashboard widgets on `/admin`: pending-confirmation count (red if oldest waiting >24h) + pending-applications count. Shown to OWNER+SALES_REP only. Admin nav gains `b2bPendingConfirmation` link.
+
+### B2B attribution on invoice + order surfaces
+- [x] **S8-D3-T2 + S8-D3-T3** [2026-04-22] Invoice template [lib/invoices/template.tsx](../lib/invoices/template.tsx) renders `placedByName` (existing, now populated via the live field), `poReference` (new — appears under the order number in the invoice header), and `paymentMethodNote` (new — second line inside the payment box). [lib/invoices/builder.ts](../lib/invoices/builder.ts) pipes all three fields from the Order row.
+- [x] **S8-D3-T3** [2026-04-22] Customer order detail `/account/orders/[id]` renders placed_by / PO / payment-method-note blocks conditionally. Admin order detail `/admin/orders/[id]` adds a B2B attribution sub-block under the Customer section + a payment-note badge under the Status section. `/b2b/orders` list gains a PO column; "Placed by" column prefers `placedByName` over `contactName`.
+
+### Bulk order tool (`/b2b/bulk-order`)
+- [x] **S8-D4-T1 + T2 + T3 + S8-D5-T3 + S8-D6-T3** [2026-04-22] [components/b2b/bulk-order-table.tsx](../components/b2b/bulk-order-table.tsx) — dynamic rows (cap 50), SKU autocomplete via debounced `/api/search/suggest`, lock-in via new [app/api/b2b/bulk-order/lookup/route.ts](../app/api/b2b/bulk-order/lookup/route.ts) (B2B-gated, returns resolved final price + reservation-aware available qty), live line totals + grand total, amber warnings on over-request / out-of-stock (non-blocking), Add row / Duplicate last / Clear all, Enter-to-add-row keyboard shortcut, remove-row button. Page shell at [app/[locale]/b2b/bulk-order/page.tsx](../app/[locale]/b2b/bulk-order/page.tsx). Autocomplete uses the Sprint 3 FTS-backed suggest endpoint — closes S8-D5-T3 without a new endpoint.
+- [x] **S8-D4-T3** [2026-04-22] `addBulkToCartAction` in [app/actions/cart.ts](../app/actions/cart.ts) — single-transaction loop: per-row stock guard (excluding caller's own CART hold), cart-item upsert with summed qty on SKU conflicts, reservation upsert. Per-row outcomes (`added` / `skipped`) returned to the UI. Rolls the whole batch back on exception.
+
+### One-click reorder
+- [x] **S8-D5-T1 + S8-D5-T2** [2026-04-22] `reorderAction` in [app/actions/orders.ts](../app/actions/orders.ts) — ownership check via new [lib/orders/ownership.ts](../lib/orders/ownership.ts) `userCanAccessOrder` helper (B2C own-by-userId, B2B own-by-companyId, ADMIN all), iterates items, skips archived / explicitly-skipped products, delegates to `addBulkToCartAction` for the actual adds. Audit log entry `order.reorder`.
+- [x] **S8-D5-T2** [2026-04-22] [app/api/orders/[id]/reorder-preview/route.ts](../app/api/orders/[id]/reorder-preview/route.ts) — per-line status (available / partial / out_of_stock / archived) + current resolved price (ADR-043) + original qty. [components/account/reorder-button.tsx](../components/account/reorder-button.tsx) — modal with per-line checkboxes (pre-ticked for available/partial, disabled for OOS/archived), confirm → `reorderAction(orderId, skipProductIds)`, router.refresh on success. Wired into `/account/orders/[id]` header (prominent variant) + `/b2b/orders` row action (compact variant) + the cart empty-state (compact).
+
+### Sprint 8 Whats360 renderer
+- [x] **S8-D7-T2** [2026-04-22] `renderB2bOrderConfirmedByRep` added to [lib/whatsapp-templates.ts](../lib/whatsapp-templates.ts) — AR + EN, surfaces paymentMethodNote prominently, appends optional rep note when provided. `confirmB2BOrderAction` now uses this renderer instead of the generic `renderOrderStatusChange`. 2 new vitest cases in [lib/whatsapp.test.ts](../lib/whatsapp.test.ts).
+
+### Empty cart state + B2B portal polish
+- [x] **S8-D7-T1** [2026-04-22] [app/[locale]/cart/page.tsx](../app/[locale]/cart/page.tsx) empty-cart view: for ACTIVE B2B users with past orders, shows the 3 most recent with compact reorder buttons. B2C / guest view is the pre-Sprint-8 "Browse products" CTA. Added "Bulk order" CTA alongside "Browse products" when the viewer is B2B.
+- [x] **Navigation** [2026-04-22] `/b2b/profile` gains a "Bulk order" accent button + a "Company orders" link. Admin nav gains "Pending Confirmation" between Applications + Companies.
+
+### Cross-company scoping audit (S8-D9-T3)
+- [x] **S8-D9-T3** [2026-04-22] Cross-company scoping sweep:
+  - Introduced `userCanAccessOrder` helper in [lib/orders/ownership.ts](../lib/orders/ownership.ts) — B2C owns-by-userId, B2B owns-by-companyId, ADMIN any. Used by `reorderAction`, `/api/orders/[id]/reorder-preview`, `requestOrderCancellationAction`.
+  - `requestOrderCancellationAction` widened from strict user-id check to the shared helper — forward-compatible with v1.1 multi-user-per-company.
+  - `/b2b/orders` scopes by `Order.companyId` (Sprint 7 ADR-039).
+  - `/api/b2b/bulk-order/lookup` returns 403 unless `getB2BCheckoutContext` resolves (company must be ACTIVE).
+  - `submitForReviewOrderAction` + B2B branch of `createOrderAction` both pin `companyId` + `type='B2B'` via the same context helper.
+  - `confirmB2BOrderAction` hard-checks `order.type === 'B2B'` + `status === 'PENDING_CONFIRMATION'` — prevents mis-application to B2C orders.
+
+### Tests + sample data + docs
+- [x] **S8-D6-T1 + T2** [2026-04-22] [tests/e2e/sprint8.spec.ts](../tests/e2e/sprint8.spec.ts) — 5 smoke cases: admin queue auth gate (EN + AR), `/b2b/bulk-order` auth gate (EN + AR), `/api/b2b/bulk-order/lookup` returns 403 without B2B context, `/api/orders/[id]/reorder-preview` returns 404 anonymous. Full admin-authenticated walks remain staging-manual (Sprint 5/6/7 pattern).
+- [x] **S8-D8-T3** [2026-04-22] `scripts/seed-orders.ts` extended — SUBMIT_FOR_REVIEW mix (4 PENDING_CONFIRMATION orders, all B2B, all with placed_by, ~half with PO reference). Re-runs via `npm run seed:orders -- --force` idempotently.
+- [x] **S8-D9-T1** [2026-04-22] [docs/b2b-user-guide.md](b2b-user-guide.md) — new, end-customer-facing. Covers signup, login, portal, pricing, bulk order, checkout split (Pay Now vs Submit for Review), reorder, notification behaviour.
+- [x] **S8-D9-T2** [2026-04-22] [docs/sales-rep-guide.md](sales-rep-guide.md) — appended §8 (Pending Confirmation workflow) + §9 (demo walkthrough). Covers the 5-minute-per-order SFR workflow, inventory-hold semantics, audit trail SQL, and common mistakes.
+
+## Verification (2026-04-22)
+
+- ✅ `npx prisma validate` — schema valid (3 new Order columns).
+- ✅ `npx prisma generate` — Prisma Client emitted with `placedByName` / `poReference` / `paymentMethodNote`.
+- ✅ `npx tsc --noEmit` — clean across app + lib + worker + tests + scripts.
+- ✅ `npx vitest run` — **110/110 tests green** across 11 suites. Sprint 8 adds 2 new cases in `lib/whatsapp.test.ts` (`renderB2bOrderConfirmedByRep` AR + EN) on top of Sprint 7's 103 baseline. No regressions.
+- ✅ `npx next build` — production build succeeds; new routes compiled: `/admin/b2b/pending-confirmation`, `/b2b/bulk-order`, `/api/b2b/bulk-order/lookup`, `/api/orders/[id]/reorder-preview`.
+- ⏭️ Live Paymob test card E2E — deferred to staging-manual (same pattern as Sprint 4/6/7). Smoke covered via `/api/webhooks/paymob` HMAC test + add-to-cart presence check.
+- ⏭️ Live Whats360 SFR round-trip — requires `NOTIFICATIONS_DEV_MODE=false` on staging with a connected device; manual smoke script added to `sales-rep-guide.md` §9.
+
+## Sprint 8 Exit Criteria — status
+
+Mapped to the 8 criteria in `docs/implementation-plan.md` lines 555–564:
+
+- ✅ **B2B checkout shows both "Submit for Review" and "Pay Now" options (admin-configurable per company)** — `getB2BCheckoutContext` reads `Company.checkoutPolicy`, checkout form renders a radio picker when both are allowed + hides the other side when single-mode.
+- ✅ **Submit-for-Review flow: order → Pending Confirmation queue → sales rep confirms → flows normally** — `submitForReviewOrderAction` → `/admin/b2b/pending-confirmation` → `confirmB2BOrderAction` → state machine continues via `updateOrderStatusAction` (Sprint 5).
+- ✅ **"Placed by (name)" mandatory at B2B checkout, visible on invoice + order history** — required on SFR (ADR-040 softened to "required on SFR only"), optional on Pay Now per founder's kickoff preference; visible on invoice, customer + admin order detail, `/b2b/orders` list.
+- ✅ **PO reference field optional at checkout** — `Order.poReference String?`, rendered on invoice header, surfaced on customer + admin order detail + `/b2b/orders` list.
+- ✅ **Bulk order tool: rapid SKU entry, live stock + price, add-all-to-cart** — `/b2b/bulk-order` with autocomplete, per-row lookup, qty/price/total inline, 50-row cap, keyboard shortcuts, `addBulkToCartAction` with per-row outcomes.
+- ✅ **One-click reorder from any past order, with out-of-stock pre-warnings** — `ReorderButton` + preview modal on `/account/orders/[id]`, `/b2b/orders`, and cart empty-state; 4 status buckets (available / partial / out_of_stock / archived).
+- ✅ **Sales rep dashboard widget for Pending Confirmation count** — `/admin` home widget (OWNER + SALES_REP only), flags oldest >24h in red.
+- ✅ **B2B notification templates approved + delivered** — reinterpreted per ADR-033 (Whats360, not Meta). `renderB2bOrderConfirmedByRep` AR + EN delivered + vitest covered. Customer receives Whats360 body + email mirror on rep Confirm.
+
+**8/8 fully met. Sprint 8 closed 2026-04-22.**
+
+## Decisions logged this sprint
+- **ADR-040** [2026-04-22] `placedByName` required only on Submit-for-Review, optional on B2B Pay Now.
+- **ADR-041** [2026-04-22] `Order.paymentMethodNote` free-text field instead of expanding `PaymentMethod` enum.
+- **ADR-042** [2026-04-22] Sales rep fan-out (OWNER + SALES_REP list) instead of per-Company assigned rep.
+- **ADR-043** [2026-04-22] Reorder re-resolves prices at re-add time (not historical snapshot).
+- **ADR-044** [2026-04-22] Dedicated `confirmB2BOrderAction` instead of widening `updateOrderStatusAction`.
+
+## Risk Log Updates
+- No new risks. Sprint 8 closes the remaining PRD Feature 4 items (bulk-order, reorder, placed_by, dual checkout, Pending Confirmation queue). The PRD line "`placedByName` mandatory at B2B checkout" is superseded by ADR-040 (documented here for Sprint 9 PRD-sync).
+
+## Sprint 8 parking lot for Sprint 9
+- **Legacy Paymob-PAID confirmation email** — still parked (Sprint 4 parking-lot item); Sprint 9 (COD + zones) is the first sprint that touches the Paymob webhook, so it's the natural place to close this.
+- **Assigned sales rep per Company** — v1.1 (ADR-042). When it lands, SFR alerts route to the assigned rep; else fall back to fan-out.
+- **Resend welcome email from admin UI** — v1.1, same as Sprint 7 parking lot.
+- **PRD amendment** — "`placedByName` mandatory at B2B checkout" softened to "required on Submit-for-Review" per ADR-040. To do at Sprint 9 kickoff.
+- **Admin UI viewer for order audit trail** — still SQL-only for `b2b.order.confirm` and other Sprint-8 actions. v1.1.
+- **Per-company "assigned courier" default** — out of Sprint 8 scope; v1.1 (would shorten the handoff modal for recurring shipments to the same courier).
+
+## Sprint 8 demo script
+
+1. **Switch to a B2B test company.** `npm run seed:b2b` (Sprint 7) gives you three; sign in as the Tier-B account on `/en/b2b/login` and swap the temp password.
+2. **Bulk order.** Open `/en/b2b/bulk-order`. Type `HP` in the first row → pick a toner from the dropdown → qty 3. Press Enter → new row. Repeat twice more. Click "Add all to cart." Watch 3 items appear in `/en/cart`.
+3. **Checkout split.** Open `/en/checkout`. Notice the "How would you like to complete this order?" section with two options. Pick **Submit for Review**, fill "Placed by" (e.g. "Hala Ibrahim") + an optional PO ref. Submit.
+4. **Customer WhatsApp.** With `NOTIFICATIONS_DEV_MODE=true` tail the worker log — `[send-whatsapp]` renders the "review request received" body.
+5. **Sales-rep queue.** Sign in to admin as OWNER or SALES_REP. `/en/admin` home shows "Pending confirmation: 1". Click through → `/en/admin/b2b/pending-confirmation` → the new order, oldest-first.
+6. **Confirm.** Click "Open order". The B2B Confirm panel sits at the top. Type `"PO #A12 — Net-15"` into the payment-method note + optional rep note. Click Confirm. Order flips to `CONFIRMED`, invoice generates, customer gets the bilingual confirmation.
+7. **Open the invoice.** Click "Open / Print" in the Invoice panel. The PDF shows the order number, PO reference under it, and the paymentMethodNote in the payment box.
+8. **Switch back to the B2B browser.** `/en/account/orders/<id>` shows Status=Confirmed, Placed by, PO ref, Payment note. Timeline has the new event.
+9. **Run a seeded demo dataset.** `npm run seed:orders -- --force` now includes 4 pending-confirmation B2B orders — the queue count jumps.
+10. **Reorder.** Open any past DELIVERED order → click "Reorder" → modal shows line-level statuses → tick the lines you want → Add to cart. Watch the cart populate at today's prices.
 

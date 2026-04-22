@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { normalizeJid } from './whatsapp';
 import {
   ORDER_STATUS_LABELS,
+  renderB2bOrderConfirmedByRep,
   renderB2bPendingReview,
   renderOrderConfirmed,
   renderOrderStatusChange,
@@ -189,6 +190,38 @@ describe('renderB2bPendingReview', () => {
     );
     expect(body).toContain('ORD-26-2004-00021');
     expect(body).toContain('12 hours');
+    expect(body).toContain('Print By Falcon');
+  });
+});
+
+describe('renderB2bOrderConfirmedByRep', () => {
+  it('Arabic body surfaces payment-method note + rep note', () => {
+    const body = renderB2bOrderConfirmedByRep(
+      {
+        orderNumber: 'ORD-26-2704-00001',
+        paymentMethodNote: 'PO #A12 — نت-15',
+        repNote: 'سيتم التسليم الخميس',
+      },
+      'ar',
+    );
+    expect(body).toContain('ORD-26-2704-00001');
+    expect(body).toContain('PO #A12');
+    expect(body).toContain('نت-15');
+    expect(body).toContain('سيتم التسليم الخميس');
+    expect(body).toContain('برنت باي فالكون');
+  });
+
+  it('English body omits the note line when no repNote passed', () => {
+    const body = renderB2bOrderConfirmedByRep(
+      {
+        orderNumber: 'ORD-26-2704-00002',
+        paymentMethodNote: 'Bank transfer confirmed',
+      },
+      'en',
+    );
+    expect(body).toContain('ORD-26-2704-00002');
+    expect(body).toContain('Bank transfer confirmed');
+    expect(body).not.toContain('\n\nNote:');
     expect(body).toContain('Print By Falcon');
   });
 });

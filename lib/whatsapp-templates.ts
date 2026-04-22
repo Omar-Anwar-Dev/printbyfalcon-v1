@@ -147,3 +147,34 @@ export function renderB2bPendingReview(
     BRAND_EN
   );
 }
+
+/**
+ * Sprint 8 S8-D7-T2 — customer WhatsApp when the sales rep confirms a B2B
+ * Submit-for-Review order. `paymentMethodNote` is the free-text arrangement
+ * the rep agreed with the customer (e.g. "PO #A12 — Net-15", "Bank transfer
+ * received"). Rendered verbatim — callers trim / sanitize as needed.
+ */
+export function renderB2bOrderConfirmedByRep(
+  args: {
+    orderNumber: string;
+    paymentMethodNote: string;
+    repNote?: string;
+  },
+  locale: SupportedLocale,
+): string {
+  const { orderNumber, paymentMethodNote, repNote } = args;
+  if (locale === 'ar') {
+    let body =
+      `تم تأكيد طلبك رقم ${orderNumber} من فريق المبيعات.\n\n` +
+      `طريقة الدفع / الشروط: ${paymentMethodNote}`;
+    if (repNote) body += `\n\nملاحظة: ${repNote}`;
+    body += `\n\nهنبلّغك مع كل تحديث للحالة.\n\n` + BRAND_AR;
+    return body;
+  }
+  let body =
+    `Your order ${orderNumber} has been confirmed by our sales team.\n\n` +
+    `Payment / terms: ${paymentMethodNote}`;
+  if (repNote) body += `\n\nNote: ${repNote}`;
+  body += `\n\nWe'll update you at every status change.\n\n` + BRAND_EN;
+  return body;
+}

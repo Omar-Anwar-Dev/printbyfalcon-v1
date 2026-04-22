@@ -3,6 +3,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/db';
 import { getOptionalUser } from '@/lib/auth';
 import { getActiveCart } from '@/lib/cart/cart';
+import { getB2BCheckoutContext } from '@/lib/b2b/checkout-context';
 import { productImageUrl } from '@/lib/storage/paths';
 import { CheckoutForm } from '@/components/checkout/checkout-form';
 
@@ -59,6 +60,7 @@ export default async function CheckoutPage({
 
   const user = await getOptionalUser();
   const isB2C = user?.type === 'B2C';
+  const b2bCtx = await getB2BCheckoutContext();
 
   const addresses = isB2C
     ? await prisma.address.findMany({
@@ -103,6 +105,18 @@ export default async function CheckoutPage({
             notes: a.notes,
             isDefault: a.isDefault,
           }))}
+          b2b={
+            b2bCtx
+              ? {
+                  companyName:
+                    (isAr ? b2bCtx.companyNameAr : b2bCtx.companyNameEn) ??
+                    b2bCtx.companyNameAr,
+                  allowPayNow: b2bCtx.allowPayNow,
+                  allowSubmitForReview: b2bCtx.allowSubmitForReview,
+                  tierCode: b2bCtx.tierCode,
+                }
+              : null
+          }
         />
         <aside className="space-y-3 rounded-md border bg-background p-4">
           <h2 className="text-base font-semibold">

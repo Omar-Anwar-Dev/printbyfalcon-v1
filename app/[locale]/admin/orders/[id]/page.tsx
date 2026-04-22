@@ -17,6 +17,7 @@ import {
   type OrderStatusKey,
 } from '@/lib/whatsapp-templates';
 import { OrderInvoicePanel } from '@/components/admin/order-invoice-panel';
+import { B2BConfirmPanel } from '@/components/admin/b2b-confirm-panel';
 
 export const dynamic = 'force-dynamic';
 
@@ -25,7 +26,10 @@ export default async function AdminOrderDetailPage({
 }: {
   params: Promise<{ locale: string; id: string }>;
 }) {
-  await requireAdmin(['OWNER', 'OPS']);
+  // Widened for Sprint 8: SALES_REP needs access to B2B Pending-Confirmation
+  // orders. Per-action authz is still enforced server-side (courier handoff
+  // stays OWNER+OPS; B2B confirm is OWNER+SALES_REP).
+  await requireAdmin(['OWNER', 'OPS', 'SALES_REP']);
   const { locale, id } = await params;
   const isAr = locale === 'ar';
   const statusLocale: 'ar' | 'en' = isAr ? 'ar' : 'en';
@@ -115,6 +119,63 @@ export default async function AdminOrderDetailPage({
         </p>
       </header>
 
+      {order.status === 'PENDING_CONFIRMATION' && order.type === 'B2B' ? (
+        <section className="mb-6">
+          <B2BConfirmPanel
+            orderId={order.id}
+            labels={{
+              title: isAr
+                ? 'تأكيد طلب B2B (مبيعات)'
+                : 'Confirm B2B order (sales rep)',
+              body: isAr
+                ? 'وصل الطلب بصيغة "إرسال للمراجعة" — اتفق مع العميل على طريقة الدفع واضغط تأكيد.'
+                : 'This order was submitted for review — agree the payment arrangement with the customer, then confirm.',
+              paymentMethodNoteLabel: isAr
+                ? 'ملاحظة طريقة الدفع / الشروط'
+                : 'Payment method / terms note',
+              paymentMethodNoteHelp: isAr
+                ? 'مثال: "PO #A12 — نت-15" · تظهر على الفاتورة وتفاصيل الطلب.'
+                : 'e.g. "PO #A12 — Net-15" · surfaced on the invoice + order detail.',
+              noteLabel: isAr
+                ? 'ملاحظة للعميل (اختياري)'
+                : 'Customer note (optional)',
+              notePlaceholder: isAr
+                ? 'ملاحظة تُضاف لرسالة التأكيد'
+                : 'Appears in the customer confirmation message',
+              confirmCta: isAr ? 'تأكيد الطلب' : 'Confirm order',
+              confirming: isAr ? 'جارٍ التأكيد...' : 'Confirming…',
+              successToast: isAr ? 'تم التأكيد' : 'Confirmed',
+              errorGeneric: isAr
+                ? 'حصل خطأ. حاول مرة أخرى.'
+                : 'Something went wrong — please try again.',
+              errorMap: {
+                'paymentMethodNote.required': isAr
+                  ? 'ملاحظة طريقة الدفع مطلوبة.'
+                  : 'Payment method note is required.',
+                'order.not_found': isAr
+                  ? 'الطلب غير موجود.'
+                  : 'Order not found.',
+                'order.not_b2b': isAr
+                  ? 'هذا الإجراء خاص بطلبات B2B.'
+                  : 'Only B2B orders can be confirmed here.',
+                'order.not_pending_confirmation': isAr
+                  ? 'الطلب مش في حالة "بانتظار التأكيد".'
+                  : 'Order is no longer pending confirmation.',
+                'order.invalid_status_transition': isAr
+                  ? 'التحويل غير مسموح.'
+                  : 'Invalid status transition.',
+                'validation.failed': isAr
+                  ? 'البيانات غير صالحة.'
+                  : 'Invalid input.',
+                'auth.admin_required': isAr
+                  ? 'يجب تسجيل الدخول كمسؤول.'
+                  : 'Admin login required.',
+              },
+            }}
+          />
+        </section>
+      ) : null}
+
       <section className="mb-6 rounded-md border bg-background p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
@@ -133,6 +194,11 @@ export default async function AdminOrderDetailPage({
           orderId={order.id}
           currentStatus={order.status}
           couriers={courierOptions}
+          hiddenTransitions={
+            order.status === 'PENDING_CONFIRMATION' && order.type === 'B2B'
+              ? ['CONFIRMED']
+              : undefined
+          }
           labels={{
             sectionTitle: isAr ? 'إجراءات الحالة' : 'Status actions',
             note: isAr ? 'ملاحظة (اختياري)' : 'Note (optional)',
@@ -216,6 +282,14 @@ export default async function AdminOrderDetailPage({
                 </dd>
               </div>
             ) : null}
+            {order.paymentMethodNote ? (
+              <div className="mt-2 rounded border border-accent/30 bg-accent/5 px-2 py-1.5 text-xs">
+                <span className="text-muted-foreground">
+                  {isAr ? 'ملاحظة الدفع: ' : 'Payment note: '}
+                </span>
+                <span className="font-medium">{order.paymentMethodNote}</span>
+              </div>
+            ) : null}
           </dl>
         </section>
 
@@ -241,6 +315,26 @@ export default async function AdminOrderDetailPage({
               {isAr ? 'طلب ضيف' : 'Guest checkout'}
             </p>
           )}
+          {order.type === 'B2B' ? (
+            <dl className="mt-3 space-y-1 rounded border bg-muted/30 px-3 py-2 text-xs">
+              {order.placedByName ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">
+                    {isAr ? 'وضعه' : 'Placed by'}
+                  </dt>
+                  <dd className="font-medium">{order.placedByName}</dd>
+                </div>
+              ) : null}
+              {order.poReference ? (
+                <div className="flex justify-between gap-2">
+                  <dt className="text-muted-foreground">
+                    {isAr ? 'رقم PO' : 'PO reference'}
+                  </dt>
+                  <dd className="font-mono">{order.poReference}</dd>
+                </div>
+              ) : null}
+            </dl>
+          ) : null}
         </section>
 
         {courierName || order.waybill || order.expectedDeliveryDate ? (

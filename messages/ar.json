@@ -50,6 +50,7 @@
     "unauthorized": "ليس لديك صلاحية الوصول",
     "nav": {
       "b2bApplications": "طلبات الشركات",
+      "b2bPendingConfirmation": "بانتظار تأكيد المبيعات",
       "b2bCompanies": "حسابات الشركات",
       "dashboard": "الرئيسية",
       "products": "المنتجات",
