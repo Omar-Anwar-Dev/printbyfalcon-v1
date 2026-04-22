@@ -8,10 +8,7 @@ import {
 } from '@/components/admin/order-status-actions';
 import { defaultOrderStatusActionLabels } from '@/lib/admin/order-action-labels';
 import { OrderNotesEditor } from '@/components/admin/order-notes-editor';
-import {
-  RecordReturnButton,
-  type ReturnableItem,
-} from '@/components/admin/record-return-button';
+import { Link } from '@/lib/i18n/routing';
 import {
   ORDER_STATUS_LABELS,
   type OrderStatusKey,
@@ -19,6 +16,7 @@ import {
 import { OrderInvoicePanel } from '@/components/admin/order-invoice-panel';
 import { B2BConfirmPanel } from '@/components/admin/b2b-confirm-panel';
 import { CodMarkPaidButton } from '@/components/admin/cod-mark-paid-button';
+import { OrderLineEditor } from '@/components/admin/order-line-editor';
 
 export const dynamic = 'force-dynamic';
 
@@ -75,12 +73,6 @@ export default async function AdminOrderDetailPage({
   const priorInvoices = invoices.filter(
     (i) => !currentInvoice || i.id !== currentInvoice.id,
   );
-
-  const returnableItems: ReturnableItem[] = order.items.map((i) => ({
-    id: i.id,
-    label: `${isAr ? i.nameArSnapshot : i.nameEnSnapshot} (${i.skuSnapshot})`,
-    maxQty: i.qty,
-  }));
 
   const addr = order.addressSnapshot as {
     recipientName: string;
@@ -417,21 +409,41 @@ export default async function AdminOrderDetailPage({
           <h2 className="mb-2 text-base font-semibold">
             {isAr ? 'المنتجات' : 'Items'}
           </h2>
-          <ul className="space-y-2">
-            {order.items.map((i) => (
-              <li key={i.id} className="flex justify-between">
-                <span>
-                  {isAr ? i.nameArSnapshot : i.nameEnSnapshot} × {i.qty}
-                  <span className="block font-mono text-xs text-muted-foreground">
-                    {i.skuSnapshot}
-                  </span>
-                </span>
-                <span>
-                  {formatEgp(i.lineTotalEgp.toString(), isAr ? 'ar' : 'en')}
-                </span>
-              </li>
-            ))}
-          </ul>
+          {/* Sprint 10 S10-D7-T1 — line editing allowed only on CONFIRMED + non-paid
+              orders (COD only). See lib note + action guards in admin-orders.ts. */}
+          {(() => {
+            const canEdit =
+              order.status === 'CONFIRMED' && order.paymentStatus !== 'PAID';
+            return (
+              <ul className="space-y-2">
+                {order.items.map((i) => (
+                  <li key={i.id} className="border-b pb-2 last:border-0">
+                    <div className="flex justify-between">
+                      <span>
+                        {isAr ? i.nameArSnapshot : i.nameEnSnapshot} × {i.qty}
+                        <span className="block font-mono text-xs text-muted-foreground">
+                          {i.skuSnapshot}
+                        </span>
+                      </span>
+                      <span>
+                        {formatEgp(
+                          i.lineTotalEgp.toString(),
+                          isAr ? 'ar' : 'en',
+                        )}
+                      </span>
+                    </div>
+                    {canEdit ? (
+                      <OrderLineEditor
+                        orderItemId={i.id}
+                        currentQty={i.qty}
+                        isAr={isAr}
+                      />
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            );
+          })()}
           <dl className="mt-3 space-y-1 border-t pt-3">
             <div className="flex justify-between">
               <dt className="text-muted-foreground">
@@ -463,41 +475,14 @@ export default async function AdminOrderDetailPage({
             <h2 className="text-base font-semibold">
               {isAr ? 'الإرجاعات' : 'Returns'}
             </h2>
-            <RecordReturnButton
-              orderId={order.id}
-              items={returnableItems}
-              labels={{
-                trigger: isAr ? 'تسجيل إرجاع' : 'Record a return',
-                title: isAr ? 'تسجيل إرجاع' : 'Record a return',
-                body: isAr
-                  ? 'يتم إرسال قرار الاسترداد إلى القسم المالي يدوياً — لا يوجد استرداد تلقائي.'
-                  : 'The refund decision is forwarded to finance manually — no automatic refund processing.',
-                reason: isAr ? 'سبب الإرجاع' : 'Reason',
-                reasonPlaceholder: isAr
-                  ? 'مثال: تالف عند الاستلام'
-                  : 'e.g. damaged on arrival',
-                refundDecision: isAr ? 'قرار الاسترداد' : 'Refund decision',
-                refundDecisionOptions: {
-                  PENDING: isAr ? 'بانتظار المراجعة' : 'Pending review',
-                  APPROVED_CASH: isAr ? 'استرداد نقدي' : 'Cash refund',
-                  APPROVED_CARD_MANUAL: isAr
-                    ? 'استرداد بطاقة (يدوي)'
-                    : 'Card refund (manual)',
-                  DENIED: isAr ? 'مرفوض' : 'Denied',
-                },
-                refundAmount: isAr
-                  ? 'قيمة الاسترداد (جنيه)'
-                  : 'Refund amount (EGP)',
-                note: isAr ? 'ملاحظات داخلية' : 'Internal note',
-                notePlaceholder: isAr
-                  ? 'للفريق فقط — لا تظهر للعميل'
-                  : 'Team-only — not shown to the customer',
-                items: isAr ? 'المنتجات المُرجَعة' : 'Returned items',
-                itemQty: isAr ? 'الكمية القصوى:' : 'Max qty:',
-                confirm: isAr ? 'تسجيل الإرجاع' : 'Record return',
-                cancel: isAr ? 'إلغاء' : 'Cancel',
-              }}
-            />
+            {/* Sprint 10 S10-D3-T3 — prominent return-creation button, routes to the
+                dedicated form where the policy check + override UI render fully. */}
+            <Link
+              href={`/admin/orders/returns/new?orderId=${order.id}`}
+              className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90"
+            >
+              + {isAr ? 'تسجيل إرجاع' : 'Record a return'}
+            </Link>
           </div>
           {order.returns.length === 0 ? (
             <p className="text-sm italic text-muted-foreground">

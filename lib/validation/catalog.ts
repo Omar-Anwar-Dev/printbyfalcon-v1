@@ -53,6 +53,7 @@ export const productSchema = z.object({
   specs: z.record(z.string(), z.string()).default({}),
   basePriceEgp: z.coerce.number().nonnegative().max(10_000_000),
   vatExempt: z.coerce.boolean().default(false),
+  returnable: z.coerce.boolean().default(true),
   authenticity: z.enum(['GENUINE', 'COMPATIBLE']).default('GENUINE'),
   status: z.enum(['ACTIVE', 'ARCHIVED']).default('ACTIVE'),
 });

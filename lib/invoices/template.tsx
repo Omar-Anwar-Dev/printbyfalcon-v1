@@ -11,7 +11,14 @@
  * deterministic, we can regenerate the same PDF bytes on-demand for every
  * download (ADR-034 — no files on disk).
  */
-import { Document, Page, Text, View, StyleSheet } from '@react-pdf/renderer';
+import {
+  Document,
+  Image,
+  Page,
+  Text,
+  View,
+  StyleSheet,
+} from '@react-pdf/renderer';
 import { INVOICE_FONT_FAMILY } from './fonts';
 
 export type InvoiceLine = {
@@ -36,6 +43,10 @@ export type InvoiceData = {
     phone: string;
     email: string;
     website: string;
+    /** Brand logo filename under /storage/brand/ (Sprint 9 ADR-048). */
+    logoFilename?: string | null;
+    /** Decoded PNG buffer (WebP converted by builder) — null when no logo set. */
+    logoPngBuffer?: Buffer | null;
   };
   customer: {
     name: string;
@@ -200,6 +211,12 @@ const styles = StyleSheet.create({
     transform: 'rotate(-30deg)',
   },
   ltr: { direction: 'ltr' },
+  logo: {
+    width: 80,
+    height: 40,
+    objectFit: 'contain',
+    marginBottom: 6,
+  },
 });
 
 function money(value: number): string {
@@ -230,6 +247,11 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
 
         <View style={styles.header}>
           <View style={styles.brand}>
+            {data.store.logoPngBuffer ? (
+              // react-pdf's Image has no alt prop; a11y linter doesn't apply in PDF output.
+              // eslint-disable-next-line jsx-a11y/alt-text
+              <Image src={data.store.logoPngBuffer} style={styles.logo} />
+            ) : null}
             <Text style={styles.brandName}>{data.store.nameAr}</Text>
             <Text style={styles.brandMeta}>
               س.ت: {data.store.commercialRegistryNumber}

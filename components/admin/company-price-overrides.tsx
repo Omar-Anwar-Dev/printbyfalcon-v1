@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 import {
+  bulkImportCompanyPriceOverridesCsvAction,
   deleteCompanyPriceOverrideAction,
   upsertCompanyPriceOverrideAction,
 } from '@/app/actions/admin-b2b';
@@ -180,6 +181,124 @@ export function CompanyPriceOverrides({
           {error}
         </p>
       ) : null}
+
+      <CsvImportPanel
+        companyId={companyId}
+        isAr={isAr}
+        onDone={() => router.refresh()}
+      />
     </section>
+  );
+}
+
+function CsvImportPanel({
+  companyId,
+  isAr,
+  onDone,
+}: {
+  companyId: string;
+  isAr: boolean;
+  onDone: () => void;
+}) {
+  const [csv, setCsv] = useState('');
+  const [pending, start] = useTransition();
+  const [result, setResult] = useState<null | {
+    created: number;
+    updated: number;
+    errors: Array<{ row: number; sku: string; reason: string }>;
+  }>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setError(null);
+    setResult(null);
+    if (!csv.trim()) {
+      setError(isAr ? 'الصق بيانات CSV أولاً' : 'Paste CSV data first');
+      return;
+    }
+    start(async () => {
+      const res = await bulkImportCompanyPriceOverridesCsvAction({
+        companyId,
+        csv,
+      });
+      if (!res.ok) {
+        setError(res.errorKey);
+        return;
+      }
+      setResult(res.data);
+      onDone();
+    });
+  }
+
+  return (
+    <details className="rounded-md border border-dashed bg-muted/10">
+      <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
+        {isAr ? 'استيراد من CSV' : 'Bulk import from CSV'}
+      </summary>
+      <form onSubmit={onSubmit} className="space-y-3 p-3">
+        <p className="text-xs text-muted-foreground">
+          {isAr
+            ? 'الشكل: sku,customPriceEgp — صف واحد لكل منتج. السطر الأول (header) اختياري. الأسطر التي تبدأ بـ # تُتجاهل.'
+            : 'Format: sku,customPriceEgp — one product per row. Header row optional. Lines starting with # are skipped.'}
+        </p>
+        <textarea
+          value={csv}
+          onChange={(e) => setCsv(e.target.value)}
+          rows={8}
+          className="w-full rounded-md border border-input bg-background p-2 font-mono text-xs"
+          placeholder="sku,customPriceEgp&#10;HP-CF259A,2400.00&#10;CN-GPR51,1850.50"
+          dir="ltr"
+        />
+        <div className="flex gap-2">
+          <Button type="submit" disabled={pending} variant="outline">
+            {pending
+              ? isAr
+                ? 'جارٍ الاستيراد...'
+                : 'Importing...'
+              : isAr
+                ? 'استيراد الكل'
+                : 'Import all'}
+          </Button>
+        </div>
+        {error ? (
+          <p className="text-sm text-destructive" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {result ? (
+          <div className="space-y-2 rounded-md border bg-background p-3 text-sm">
+            <p>
+              {isAr ? 'تم:' : 'Done:'} {result.created}{' '}
+              {isAr ? 'جديد' : 'created'} · {result.updated}{' '}
+              {isAr ? 'محدّث' : 'updated'}
+            </p>
+            {result.errors.length > 0 ? (
+              <div className="rounded bg-destructive/10 p-2 text-xs">
+                <p className="mb-1 font-medium text-destructive">
+                  {isAr
+                    ? `${result.errors.length} سطر فشل:`
+                    : `${result.errors.length} row(s) failed:`}
+                </p>
+                <ul className="space-y-0.5">
+                  {result.errors.slice(0, 10).map((err, i) => (
+                    <li key={i} className="font-mono text-destructive">
+                      {isAr ? `سطر` : 'Row'} {err.row}:{' '}
+                      {err.sku ? `${err.sku} — ` : ''}
+                      {err.reason}
+                    </li>
+                  ))}
+                  {result.errors.length > 10 ? (
+                    <li className="text-muted-foreground">
+                      ... +{result.errors.length - 10}
+                    </li>
+                  ) : null}
+                </ul>
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </form>
+    </details>
   );
 }

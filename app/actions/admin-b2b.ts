@@ -572,6 +572,127 @@ export async function upsertCompanyPriceOverrideAction(
   return { ok: true, data: null };
 }
 
+/**
+ * Sprint 10 S10-D6-T2 — bulk CSV import of per-company price overrides.
+ * CSV shape: header row optional; each data row = `sku,customPriceEgp`.
+ * Blank lines skipped. All writes run inside a single transaction so either
+ * all rows land or none do (prevents partial state on mid-file errors).
+ */
+export async function bulkImportCompanyPriceOverridesCsvAction(input: {
+  companyId: string;
+  csv: string;
+}): Promise<
+  ActionResult<{
+    created: number;
+    updated: number;
+    errors: Array<{ row: number; sku: string; reason: string }>;
+  }>
+> {
+  const actor = await requireAdmin([...B2B_REVIEW_ROLES]);
+  const { companyId, csv } = input;
+  if (!companyId || typeof csv !== 'string') {
+    return { ok: false, errorKey: 'validation.invalid' };
+  }
+
+  const rows = csv
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter((l) => l && !l.startsWith('#'));
+  if (rows.length === 0) {
+    return { ok: false, errorKey: 'csv.empty' };
+  }
+  // Detect + skip header.
+  const first = rows[0].toLowerCase();
+  const dataRows =
+    first.includes('sku') && first.includes('price') ? rows.slice(1) : rows;
+
+  const parsed: Array<{ row: number; sku: string; price: number }> = [];
+  const errors: Array<{ row: number; sku: string; reason: string }> = [];
+  dataRows.forEach((line, idx) => {
+    const rowNum = idx + (dataRows.length === rows.length ? 1 : 2);
+    const cols = line.split(',').map((c) => c.trim().replace(/^"|"$/g, ''));
+    if (cols.length < 2) {
+      errors.push({ row: rowNum, sku: cols[0] ?? '', reason: 'malformed' });
+      return;
+    }
+    const [sku, priceRaw] = cols;
+    const price = Number(priceRaw);
+    if (!sku) {
+      errors.push({ row: rowNum, sku: '', reason: 'missing_sku' });
+      return;
+    }
+    if (!Number.isFinite(price) || price < 0) {
+      errors.push({ row: rowNum, sku, reason: 'invalid_price' });
+      return;
+    }
+    parsed.push({ row: rowNum, sku, price });
+  });
+
+  if (parsed.length === 0) {
+    return { ok: true, data: { created: 0, updated: 0, errors } };
+  }
+
+  const products = await prisma.product.findMany({
+    where: { sku: { in: parsed.map((r) => r.sku) } },
+    select: { id: true, sku: true, status: true },
+  });
+  const productBySku = new Map(products.map((p) => [p.sku, p]));
+
+  let created = 0;
+  let updated = 0;
+
+  await prisma.$transaction(async (tx) => {
+    for (const row of parsed) {
+      const product = productBySku.get(row.sku);
+      if (!product) {
+        errors.push({ row: row.row, sku: row.sku, reason: 'sku_not_found' });
+        continue;
+      }
+      if (product.status !== 'ACTIVE') {
+        errors.push({ row: row.row, sku: row.sku, reason: 'sku_archived' });
+        continue;
+      }
+      const existing = await tx.companyPriceOverride.findUnique({
+        where: {
+          companyId_productId: { companyId, productId: product.id },
+        },
+      });
+      await tx.companyPriceOverride.upsert({
+        where: {
+          companyId_productId: { companyId, productId: product.id },
+        },
+        create: {
+          companyId,
+          productId: product.id,
+          customPriceEgp: new Prisma.Decimal(row.price),
+        },
+        update: {
+          customPriceEgp: new Prisma.Decimal(row.price),
+        },
+      });
+      if (existing) updated += 1;
+      else created += 1;
+    }
+    await tx.auditLog.create({
+      data: {
+        actorId: actor.id,
+        action: 'b2b.company.override.bulk_import',
+        entityType: 'Company',
+        entityId: companyId,
+        after: {
+          created,
+          updated,
+          errorCount: errors.length,
+          totalParsed: parsed.length,
+        },
+      },
+    });
+  });
+
+  revalidatePath(`/admin/b2b/companies/${companyId}`);
+  return { ok: true, data: { created, updated, errors } };
+}
+
 export async function deleteCompanyPriceOverrideAction(
   formData: FormData,
 ): Promise<ActionResult<null>> {

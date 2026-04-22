@@ -6,9 +6,29 @@
  * is what makes on-demand re-rendering safe (no file on disk — we rebuild the
  * same bytes every request).
  */
+import { readFile } from 'node:fs/promises';
+import sharp from 'sharp';
 import { prisma } from '@/lib/db';
 import { getStoreInfo } from '@/lib/settings/store-info';
+import { brandAssetDiskPath } from '@/lib/storage/paths';
+import { logger } from '@/lib/logger';
 import type { InvoiceData, InvoiceLine } from './template';
+
+/**
+ * Sprint 10 — load the brand logo from disk + re-encode to PNG for react-pdf
+ * (which doesn't support WebP natively). Returns null if no logo is set or
+ * the file is missing — template skips the image block in that case.
+ */
+async function loadLogoAsPng(filename: string): Promise<Buffer | null> {
+  if (!filename) return null;
+  try {
+    const webp = await readFile(brandAssetDiskPath(filename));
+    return await sharp(webp).png().toBuffer();
+  } catch (err) {
+    logger.warn({ err, filename }, 'invoice.logo.load_failed');
+    return null;
+  }
+}
 
 const PAYMENT_METHOD_AR: Record<string, string> = {
   PAYMOB_CARD: 'بطاقة ائتمان (باي موب)',
@@ -77,6 +97,8 @@ export async function buildInvoiceData(
       phone: store.phone,
       email: store.email,
       website: store.website,
+      logoFilename: store.logoFilename || null,
+      logoPngBuffer: await loadLogoAsPng(store.logoFilename),
     },
     customer: {
       name: order.contactName,

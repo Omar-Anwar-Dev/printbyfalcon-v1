@@ -233,6 +233,9 @@ model Product {
   specs         Json                     @default("{}")
   basePriceEgp  Decimal                  @db.Decimal(10, 2)
   vatExempt     Boolean                  @default(false)
+  /// Per-product return eligibility (Sprint 10). Admin toggles in product form.
+  /// When false, no return can list this SKU regardless of the global policy.
+  returnable    Boolean                  @default(true)
   authenticity  Authenticity             @default(GENUINE)
   status        CatalogStatus            @default(ACTIVE)
   // Full-text search vector — populated by `lib/catalog/search-vector.ts` on
@@ -692,6 +695,13 @@ model Return {
   refundDecision    RefundDecision  @default(PENDING)
   refundAmountEgp   Decimal?        @db.Decimal(10, 2)
   note              String?
+  /// Sprint 10: set when the Return policy was bypassed by an admin.
+  /// When non-null, `overrideReason` is required.
+  policyOverride    Boolean         @default(false)
+  overrideReason    String?
+  /// Sprint 10: set when the stock for this return has been released back into
+  /// inventory. Idempotent — subsequent process attempts skip the release.
+  stockReleasedAt   DateTime?
   createdById       String?
   createdBy         User?           @relation("ReturnAuthor", fields: [createdById], references: [id], onDelete: SetNull)
   createdAt         DateTime        @default(now())

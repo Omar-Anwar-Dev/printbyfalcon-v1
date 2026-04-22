@@ -1108,3 +1108,110 @@ Status: Accepted
 - Duplicate email risk is minimal: the webhook only fires on successful PAID transition, and the webhook is idempotent (`paymobTransactionId` unique + duplicate-check short-circuit).
 - Parking-lot item closed. Future Paymob dev stub / sandbox runs that don't emit a webhook still leave the customer without this email — acceptable for dev mode.
 
+
+---
+
+## ADR-050: Centralize admin role matrix in lib/admin/role-matrix.ts
+
+**Date:** 2026-04-22 (Sprint 10 S10-D1-T1)
+
+**Status:** Accepted
+
+**Context:**
+- 46 admin files (pages + Server Actions) call `requireAdmin(allowedRoles)` with per-role arrays hardcoded inline. The discipline was kept but the matrix lived nowhere — no single place to read "what can Ops do?".
+- Dashboard widget visibility was also ad-hoc: the Sprint 5 home mixed role checks inline with rendering.
+
+**Decision:**
+- `lib/admin/role-matrix.ts` exports two typed constants: `ROLE_MATRIX` (keys map to readonly `AdminRole[]`, one per admin area) and `DASHBOARD_WIDGETS` (per-widget visibility). Helpers: `canAct(role, key)` + `canSeeWidget(role, key)`.
+- No behavior change — existing `requireAdmin(...)` calls stay as-is. New code can import from the matrix. Dashboard rewrite uses `DASHBOARD_WIDGETS`.
+
+**Consequences:**
+- Single source of truth for "what can X role do". New pages/actions can import instead of hardcoding.
+- Owner-facing admin guide (docs/admin-guide.md) describes the matrix in plain English.
+
+---
+
+## ADR-051: AdminInvite flow = 48h hashed single-use token, recipient sets own password
+
+**Date:** 2026-04-22 (Sprint 10 S10-D1-T3)
+
+**Status:** Accepted
+
+**Context:**
+- OWNER needs to onboard new admins (Ops, Sales Rep, or additional Owners). Either OWNER creates user + sets password + emails credentials (password-in-email risk), or OWNER invites + recipient sets own password (mirrors password-reset flow).
+- `AdminInvite` model already existed in Prisma schema (since Sprint 1) but unused.
+
+**Decision:**
+- OWNER submits email + role via `/admin/users/new`. Server generates a 32-byte random token, SHA-256-hashes it into `AdminInvite.tokenHash`, sets `expiresAt = now + 48h`, emails a bilingual link. On click, `/admin/invite/accept?token=...` verifies + shows a set-password form. Submit creates `User(type=ADMIN, adminRole=invite.role)` with bcrypt password + starts a session.
+- Actions: inviteAdmin / revokeAdminInvite / resendAdminInvite (rotates token) / acceptAdminInvite / updateAdminRole / deactivateAdmin / reactivateAdmin.
+- Guards: cannot invite an existing email; cannot modify self; last Owner cannot be demoted (prevents lockout); cannot deactivate self.
+
+**Consequences:**
+- Passwords never travel over email or through the admin UI.
+- 48h expiry balances "forgot to check email" vs link-longevity risk. Revoke + resend give OWNER recovery options.
+
+---
+
+## ADR-052: Return policy = 4-field Setting + per-product Returnable flag; override requires reason
+
+**Date:** 2026-04-22 (Sprint 10 S10-D2-T3 + kickoff scope extension)
+
+**Status:** Accepted
+
+**Context:**
+- Sprint 5 shipped the return-recording mechanics. No centralized policy existed: ops could record a return for a 3-year-old order.
+- Owner requested at Sprint 10 kickoff: return window, min order value, global on/off, per-product opt-out, and role-based override. Folded in as top priority.
+
+**Decision:**
+- JSON-valued Setting key `returns.policy` with 4 fields: `enabled`, `windowDays` (max days after delivery), `minOrderEgp` (optional floor), `overrideRoles` (array of admin roles allowed to bypass). Default: enabled / 14 days / null / all 3 roles.
+- New Prisma fields: `Product.returnable` (bool, default `true`) + `Return.policyOverride` (bool, default `false`) + `Return.overrideReason` (nullable string) + `Return.stockReleasedAt` (nullable DateTime for idempotent release — ADR-053).
+- `checkReturnPolicy(policy, ctx)` in lib/returns/policy.ts returns `{ ok: true }` or a discriminated failure shape. `canOverrideReturnPolicy(policy, role)` gates the override UI.
+- `recordReturnAction` enforces: fail + policyFailure payload by default; override requires role membership + non-empty reason (audit-logged).
+
+**Consequences:**
+- Clear product-facing story: policy lives in Settings, visible to OWNER, audit-traceable.
+- Stock-release is now automatic on refund approval (ADR-053) — removes a manual step.
+- Schema migration required (3 field additions) — non-breaking on existing rows (defaults).
+
+---
+
+## ADR-053: Pre-confirmation order line edit — qty-reduce + line-remove on COD-only; PAID routes via Returns
+
+**Date:** 2026-04-22 (Sprint 10 S10-D7-T1)
+
+**Status:** Accepted
+
+**Context:**
+- Customer-initiated quantity adjustments between order placement and courier handoff are common (B2C may realize they ordered 2 instead of 1). Before Sprint 10, the only answer was "cancel + re-place."
+- For PAID Paymob orders, partial refunds need explicit tracking (finance, accounting, Paymob dashboard) — direct line edit would silently reduce the collected total with no refund record.
+
+**Decision:**
+- Allow line edits only when `order.status === CONFIRMED` AND `order.paymentStatus != PAID` (COD, not yet handed to courier). Supported: qty-reduce (new qty strictly less than current) and line-remove (qty = 0).
+- PAID orders are locked: admin UI hides the edit control; server rejects with `order.edit.paid_locked`. Post-payment changes route through the Return flow.
+- Qty-increase never supported (would require re-reserving stock + re-validating promo-code min-order).
+- On edit: update/delete OrderItem, restore inventory via `InventoryMovement(type=ADJUST)`, recompute subtotal/vat/total from remaining items (shipping/discount/COD-fee stay as snapshotted at checkout), emit OrderStatusEvent + AuditLog.
+
+**Consequences:**
+- Predictable, auditable small-scale order corrections; ops handle "take 1 off" calls without full cancel-and-re-place.
+- PAID Paymob edge cases funneled through Returns — clean finance/audit trail.
+- Discount/promo constraints not re-validated — acceptable because we never make the order cheaper per unit, only remove units.
+
+---
+
+## ADR-054: Sales-trend dashboard chart = hand-rolled SVG sparkline (no Recharts)
+
+**Date:** 2026-04-22 (Sprint 10 S10-D4-T3)
+
+**Status:** Accepted
+
+**Context:**
+- Implementation plan called for Recharts. Recharts + D3 adds ~60KB min-gzip to the admin bundle. The trend chart is one simple line (30 daily points).
+- Owner preference: minimum-vendor stack.
+
+**Decision:**
+- Ship the 30-day trend as hand-rolled SVG in components/admin/sales-trend-chart.tsx — ~120 lines, zero deps beyond React. Quartile gridlines, line path, filled area, terminal-point dots.
+
+**Consequences:**
+- Admin bundle stays small.
+- When a second chart type is needed (pie, bar, stacked), re-evaluate: adopt Recharts if volume grows. Today, YAGNI.
+- The SVG has no tooltips — acceptable for an at-a-glance widget; richer analytics land in v1.1 reporting.
