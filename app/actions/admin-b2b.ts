@@ -259,7 +259,7 @@ export async function approveB2BApplicationAction(
   // User (defaulted to AR for new rows). We use the User's languagePref we
   // just wrote / upserted; re-read to avoid assumptions about the branch.
   const baseUrl =
-    process.env.APP_BASE_URL?.replace(/\/$/, '') ?? 'https://printbyfalcon.com';
+    process.env.APP_URL?.replace(/\/+$/, '') ?? 'https://printbyfalcon.com';
   const freshUser = await prisma.user.findUnique({
     where: { email: application.email },
     select: { languagePref: true },
@@ -362,7 +362,7 @@ export async function rejectB2BApplicationAction(
   });
 
   const baseUrl =
-    process.env.APP_BASE_URL?.replace(/\/$/, '') ?? 'https://printbyfalcon.com';
+    process.env.APP_URL?.replace(/\/+$/, '') ?? 'https://printbyfalcon.com';
   // Rejected applications haven't created a User, so we don't have a stored
   // language preference — send AR since most applicants submit in AR.
   const locale: 'ar' | 'en' = 'ar';
