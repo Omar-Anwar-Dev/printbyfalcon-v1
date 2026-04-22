@@ -46,19 +46,24 @@ jobs:
             bash -lc '/var/pbf/repo/scripts/deploy-production.sh'
 
       - name: Post-deploy health probe
+        # 15 attempts × 15s = up to 3m45s window. A fresh `docker compose build`
+        # on the 2-core VPS can take ~2 min before the new container is serving;
+        # the previous 50s window produced false-fails (Deploy #10, 2026-04-22)
+        # even though prod came up healthy. Keep the ceiling generous enough to
+        # absorb a cold Prisma-generate + Next build without flapping.
         run: |
           sleep 15  # allow containers to finish boot
           echo "Probing production health endpoint…"
-          for i in 1 2 3 4 5; do
+          for i in $(seq 1 15); do
             response=$(curl -sS -o /tmp/health.json -w "%{http_code}" https://printbyfalcon.com/api/health || true)
-            echo "Attempt $i — HTTP $response"
+            echo "Attempt $i/15 — HTTP $response"
             cat /tmp/health.json || true
             echo
             if [ "$response" = "200" ]; then
               echo "::notice::Production health OK on attempt $i"
               exit 0
             fi
-            sleep 10
+            sleep 15
           done
-          echo "::error::Production health check FAILED after 5 attempts. See docs/runbook.md §6 for rollback."
+          echo "::error::Production health check FAILED after 15 attempts (~3m45s). See docs/runbook.md §6 for rollback."
           exit 1
