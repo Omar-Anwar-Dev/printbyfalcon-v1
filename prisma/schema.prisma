@@ -424,6 +424,11 @@ model PromoCode {
   /// PERCENT: integer 1-100. FIXED: EGP amount as Decimal.
   value         Decimal       @db.Decimal(10, 2)
   minOrderEgp   Decimal?      @db.Decimal(10, 2)
+  /// Optional EGP ceiling on the resulting discount. Mostly useful for
+  /// PERCENT codes (prevents a 10% code from giving 2,895 EGP off a 28k
+  /// order). When null → no cap. FIXED codes can also set this as a
+  /// redundant safety net, but the FIXED value already caps itself.
+  maxDiscountEgp Decimal?     @db.Decimal(10, 2)
   usageLimit    Int?
   usedCount     Int           @default(0)
   validFrom     DateTime?

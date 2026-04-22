@@ -32,4 +32,23 @@ describe('computeDiscount', () => {
     expect(computeDiscount('PERCENT', 50, 0)).toBe(0);
     expect(computeDiscount('FIXED', 100, 0)).toBe(0);
   });
+
+  it('PERCENT with max cap clamps oversized percent discount', () => {
+    // 10% of 28950 = 2895, cap at 150 → 150.
+    expect(computeDiscount('PERCENT', 10, 28950, 150)).toBe(150);
+  });
+
+  it('PERCENT with max cap leaves small discounts unchanged', () => {
+    // 10% of 500 = 50, cap at 150 → 50.
+    expect(computeDiscount('PERCENT', 10, 500, 150)).toBe(50);
+  });
+
+  it('FIXED with max cap honours the smaller of fixed vs cap', () => {
+    expect(computeDiscount('FIXED', 500, 2000, 150)).toBe(150);
+  });
+
+  it('null cap = no cap (defaults work)', () => {
+    expect(computeDiscount('PERCENT', 10, 1000, null)).toBe(100);
+    expect(computeDiscount('PERCENT', 10, 1000)).toBe(100);
+  });
 });

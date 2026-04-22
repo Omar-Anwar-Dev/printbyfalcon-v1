@@ -51,7 +51,12 @@ export async function validatePromoCode(
   const minOrder = row.minOrderEgp !== null ? Number(row.minOrderEgp) : 0;
   if (subtotalEgp < minOrder) return { ok: false, error: 'min_order_not_met' };
 
-  const discountEgp = computeDiscount(row.type, Number(row.value), subtotalEgp);
+  const discountEgp = computeDiscount(
+    row.type,
+    Number(row.value),
+    subtotalEgp,
+    row.maxDiscountEgp !== null ? Number(row.maxDiscountEgp) : null,
+  );
   return { ok: true, promoCode: row, discountEgp };
 }
 
@@ -59,13 +64,21 @@ export function computeDiscount(
   type: PromoCodeType,
   value: number,
   subtotalEgp: number,
+  maxDiscountEgp: number | null = null,
 ): number {
+  let discount: number;
   if (type === 'PERCENT') {
-    const d = (subtotalEgp * value) / 100;
-    return roundEgp(Math.min(d, subtotalEgp));
+    discount = (subtotalEgp * value) / 100;
+  } else {
+    // FIXED.
+    discount = value;
   }
-  // FIXED: clamp so it never exceeds subtotal.
-  return roundEgp(Math.min(value, subtotalEgp));
+  // Apply optional absolute cap.
+  if (maxDiscountEgp !== null && maxDiscountEgp >= 0) {
+    discount = Math.min(discount, maxDiscountEgp);
+  }
+  // Never exceed the subtotal itself.
+  return roundEgp(Math.min(discount, subtotalEgp));
 }
 
 /**

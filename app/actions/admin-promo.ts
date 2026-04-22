@@ -27,6 +27,9 @@ const baseSchema = z.object({
   type: z.enum(['PERCENT', 'FIXED']),
   value: z.number().min(0).max(1_000_000),
   minOrderEgp: z.number().min(0).max(1_000_000).nullable(),
+  /// Sprint 9 fix: optional EGP ceiling on the computed discount.
+  /// Primarily for PERCENT codes (e.g. "10% off, max 150 EGP").
+  maxDiscountEgp: z.number().min(0).max(1_000_000).nullable(),
   usageLimit: z.number().int().min(1).max(100_000).nullable(),
   validFrom: z
     .string()
@@ -71,6 +74,7 @@ export async function createPromoCodeAction(
         type: parsed.data.type,
         value: parsed.data.value,
         minOrderEgp: parsed.data.minOrderEgp,
+        maxDiscountEgp: parsed.data.maxDiscountEgp,
         usageLimit: parsed.data.usageLimit,
         validFrom: parsed.data.validFrom,
         validTo: parsed.data.validTo,
@@ -118,6 +122,7 @@ export async function updatePromoCodeAction(
         type: parsed.data.type,
         value: parsed.data.value,
         minOrderEgp: parsed.data.minOrderEgp,
+        maxDiscountEgp: parsed.data.maxDiscountEgp,
         usageLimit: parsed.data.usageLimit,
         validFrom: parsed.data.validFrom,
         validTo: parsed.data.validTo,
