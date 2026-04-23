@@ -1,11 +1,36 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 + 7 + 8 + 9 + 10 **all live in production** (confirmed by owner 2026-04-23). **Sprint 11 dev-track complete** in worktree `claude/priceless-boyd-432d48` — awaiting review + merge → staging deploy. M1 target remains end of Sprint 12.
-- **Current sprint:** **Sprint 11 dev-track COMPLETE** ✅ — 6 of 10 exit criteria fully green; remaining 4 are ops-track (Lighthouse/k6 runs, backup drill, live merchant switchover, DNS) with all harnesses + docs + checklist shipped in [docs/m1-readiness.md](m1-readiness.md). **Sprint 11 ops-track + Sprint 12 (soft launch)** still pending.
-- **Last updated:** 2026-04-23 — Sprint 11 dev-track close-out (single dense session).
+- **Current milestone:** **M0 reached + Sprint 11 LIVE IN PRODUCTION**. Sprints 4 → 11 + UI refiner v2 (Tier 1 + 2 + 3) **all deployed to production** 2026-04-23 (commit `61505a8`). Pre-flight env-check passed, Prisma schema in sync (NotificationOptOut + externalMessageId index applied), app Ready in 222ms, no boot errors. M1 target remains end of Sprint 12.
+- **Current sprint:** **Sprint 11 dev-track COMPLETE + DEPLOYED** ✅ — 6 of 10 exit criteria fully green on code side; remaining 4 are ops-track (Lighthouse/k6 runs on staging, backup+restore drill, live Paymob merchant switchover, SPF/DKIM/DMARC DNS) with all harnesses + docs + checklist shipped in [docs/m1-readiness.md](m1-readiness.md). **Sprint 11 ops-track is next, then Sprint 12 (soft launch) → M1**.
+- **Last updated:** 2026-04-23 — Sprint 11 + UI refiner production deploy close-out.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 6 deploy confirmed at Sprint 7 kickoff.
+
+## 👉 Next session starts here
+
+**Where we are:** Sprint 11 + full UI refiner pass (Tier 1-3) are **live on production**. Staging also current. No active dev work in-flight. Tests 200/200 green, build clean, env-check passing in prod.
+
+**What the next session should do (in priority order):**
+
+1. **Execute Sprint 11 ops-track** — items listed in [docs/m1-readiness.md](m1-readiness.md) "Ops-track checklist". Highest priority:
+   - [ ] Live Paymob merchant switchover (`.env.production` may still have sandbox creds — confirm live or swap)
+   - [ ] Whats360 QR scan on the live business WhatsApp device (for real OTP delivery)
+   - [ ] SPF / DKIM / DMARC DNS records in Cloudflare (email deliverability)
+   - [ ] Run `scripts/perf/lighthouse.sh https://staging.printbyfalcon.com` + `scripts/perf/k6-browse.js` + `scripts/perf/axe-audit.sh` — capture reports for M1 readiness.
+   - [ ] Backup + restore drill on a fresh VPS (catastrophic-failure simulation per runbook §9).
+   - [ ] GlitchTip alert rule (>10 errors / 5min → email).
+   - [ ] Privacy/Terms lawyer sign-off → remove "REVIEW REQUIRED BEFORE M1" banners from `/privacy` + `/terms`.
+
+2. **Sprint 12 (Soft Launch)** kickoff — scheduled for after ops-track items are green. M1 delivered here.
+   - Invite 5 B2C friendly testers + 3 B2B friendly companies
+   - Process real orders, fix bugs uncovered in real use
+   - Finalize catalog data (500–2000 SKUs from owner)
+   - UX tweaks based on tester feedback
+
+**No pending dev work.** All open UI refiner PRs merged (#23, #25, #26, #28, #29). The `claude/*` worktree branches on the repo can be pruned when convenient (they're all post-merge).
+
+**If production has a new bug after some operational use:** use [docs/runbook.md](runbook.md) §6 rollback procedure. Rollback SHA for this deploy = `15131ad` (the commit before PR #28 merged — pre-UI-refiner-v2.2). Deploy SHA live now = `61505a8`.
 
 ## Completed Sprints
 
@@ -502,6 +527,53 @@ Admin now fully conforms to design-system §3.1 tokens + §7 don'ts #7 + #8 (no 
 - `npx tsc --noEmit` clean
 - `npx vitest run` — 200 / 200 tests green
 - `npx next build` — successful
+
+### 2026-04-23 — Production deploy (Sprint 11 + UI refiner v2 Tier 1 + 2 + 3)
+
+Manual SSH deploy via [runbook §4.3](runbook.md). Bundled deploy bringing all of PRs #22 (Sprint 11), #23 (Tier 1), #25 (footer hotfix), #26 (v2.1 token cleanup), #28 (v2.2 Tier 2), #29 (v2.3 Tier 3 admin) — previously validated on staging.
+
+**Pre-flight checks (all green):**
+- `OTP_DEV_MODE=false`, `NOTIFICATIONS_DEV_MODE=false`, `WHATS360_SANDBOX=false` in `.env.production`
+- `SKIP_ENV_CHECK` not set
+- 8/8 required secrets SET (DATABASE_URL, APP_URL, PAYMOB_API_KEY/HMAC_SECRET/INTEGRATION_ID_CARD, WHATS360_TOKEN/INSTANCE_ID/WEBHOOK_SECRET)
+- Manual `scripts/backup.sh` → `pbf-prod-2026-04-23-0350.sql.gz` (944K) for rollback safety
+
+**Deploy:**
+- `git fetch && git reset --hard origin/main` → `61505a8` (Tier 3 admin polish merge)
+- `docker compose -f docker/docker-compose.prod.yml --env-file .env.production up -d --build`
+- Docker BuildKit hit cache on all 42 layers (identical context from staging's prior build on same VPS)
+- Container recreation: ~6s
+
+**Boot verification (logs):**
+```
+🚀 Your database is now in sync with your Prisma schema. Done in 186ms
+[post-push] FTS bootstrap OK — rewrote 200 product search vectors.
+Owner admin already exists (support@printbyfalcon.com); skipping seed.
+▲ Next.js 15.5.15
+✓ Starting...
+{"level":30,...,"env":"production","service":"web","msg":"env_check.passed"}
+✓ Ready in 222ms
+[PBF] Prisma client init — NODE_ENV=production DATABASE_URL_present=true
+```
+
+**Schema applied:**
+- `NotificationOptOut` table (new, Sprint 11 S11-D6-T3) + `OptOutSource` enum
+- `@@index([externalMessageId])` on `Notification` (new, Sprint 11 S11-D2-T1 query audit fix)
+
+**What's now live in production:**
+- **Security (Sprint 11 / ADR-055 + ADR-056):** CSP, COOP, CORP, X-Permitted-Cross-Domain-Policies; webhook rate limit 1000/IP/min; fail-fast env-check on boot.
+- **Webhook reliability (ADR-058):** Paymob HMAC length-safe compare; late-arriving PAID webhook on cancelled order records audit + skips invoice/email.
+- **WhatsApp opt-out (ADR-057):** STOP / UNSUBSCRIBE / إلغاء / الغاء / ايقاف / إيقاف detection via Whats360 inbound webhook; opt-out honored by `send-whatsapp` worker; OTP sends bypass so auth still works.
+- **CSV importer hardening (Sprint 11 S11-D6-T1):** BOM strip, duplicate SKUs, Arabic Unicode normalize, missing-header fail-fast, partial-success mode.
+- **Privacy / Terms / Cookies pages** — AR + EN, Law 151/2020 compliant scaffold with "REVIEW REQUIRED BEFORE M1" banner (pending lawyer sign-off).
+- **Cookie consent banner** — essential-cookies-only informational.
+- **UI refiner v2 (ADR-059):** pure-white body, ink header/footer, prominent accent-cyan search, RayaShop-inspired structural grammar. Full Tier 2 per-screen polish across 13 storefront surfaces. Full Tier 3 admin polish across 30+ routes + 51 raw-palette violations swept. Newsletter placeholder in footer + payment pills + social icons.
+
+**Rollback SHA recorded:** `61505a8` (current deploy). Previous production SHA before this deploy was also `61505a8` (pre-flight check showed HEAD was already on this — GitHub Actions may have auto-deployed earlier, or prior manual trigger). In practice if we needed rollback to pre-Sprint-11 state, target SHA would be **`a64f4d8`** (Sprint 10 merge).
+
+**Post-deploy smoke test steps** per [runbook §5](runbook.md): pending owner execution.
+
+**Ops-track checklist** (remaining for M1 per [m1-readiness.md](m1-readiness.md)): Paymob live switchover, Whats360 live device, SPF/DKIM/DMARC DNS, Lighthouse + k6 runs, backup+restore drill, GlitchTip alerts, Privacy/Terms lawyer review.
 
 ---
 
