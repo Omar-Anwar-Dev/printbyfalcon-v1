@@ -34,11 +34,18 @@ type Labels = {
   cart: string;
   language: string;
   business: string;
-  // Plain string ("All" / "كل"). Interpolated with category label inline.
-  // Must NOT be a function — server→client props must be serializable.
   allLabel: string;
 };
 
+/**
+ * Mobile nav — Sprint 11 ADR-059 update.
+ *
+ * Changes from the foundation pass:
+ *   - Hamburger trigger restyled for the dark ink header (canvas-on-transparent hover).
+ *   - Panel slides in from the **end** side (left in RTL / right in LTR) — matches Egyptian
+ *     e-commerce convention (Raya, Noon). Previously slid from start.
+ *   - Panel narrower (80%, max 320px) so the site context behind it stays partially visible.
+ */
 export function MobileNav({
   categories,
   isSignedIn,
@@ -85,7 +92,7 @@ export function MobileNav({
         aria-expanded={open}
         aria-controls="mobile-nav-panel"
         onClick={() => setOpen(true)}
-        className="inline-flex h-10 w-10 items-center justify-center rounded-md text-foreground transition-colors hover:bg-paper-hover md:hidden"
+        className="inline-flex h-10 w-10 items-center justify-center rounded-md text-canvas transition-colors hover:bg-canvas/10 md:hidden"
       >
         <Menu className="h-5 w-5" strokeWidth={1.75} />
       </button>
@@ -98,13 +105,13 @@ export function MobileNav({
           aria-label={labels.openMenu}
         >
           <div
-            className="absolute inset-0 animate-fade-in bg-ink/40"
+            className="absolute inset-0 animate-fade-in bg-ink/50"
             onClick={close}
             aria-hidden
           />
           <div
             id="mobile-nav-panel"
-            className="absolute inset-y-0 start-0 flex h-full w-[86%] max-w-[360px] animate-slide-in-start flex-col bg-canvas shadow-popover"
+            className="absolute inset-y-0 end-0 flex h-full w-[80%] max-w-[320px] animate-slide-in-end flex-col bg-background shadow-popover"
           >
             <div className="flex h-16 items-center justify-between border-b border-border px-4">
               <span className="text-base font-semibold text-foreground">

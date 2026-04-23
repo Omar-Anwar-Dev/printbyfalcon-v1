@@ -1306,3 +1306,54 @@ Status: Accepted
 - Ops has a queryable audit action to find these cases: `SELECT * FROM "AuditLog" WHERE action = 'order.payment.paid_after_cancel';`
 - Customer doesn't get a phantom confirmation.
 - Refund is manual — requires adding ops process to the admin runbook post-M1. Parking-lot: automated Paymob refund API + auto-REFUNDED status in v1.1.
+
+---
+
+## ADR-059: UI direction v2 — pure-white body + ink shell + structural familiarity from Egyptian retail
+Date: 2026-04-23
+Status: Accepted
+Supersedes: ADR-031 (foundation pass direction — cream canvas, minimal header/footer, Apple-Store restraint)
+
+**Context:** Sprint 11 UI refiner pass post-dev-track, pre-production-deploy. Owner reviewed the Sprint 1 foundation (ADR-031) against two reference sites — **RayaShop** (dominant Egyptian consumer electronics retailer) and **Applinz** (mid-tier Egyptian electronics retailer) — and asked for two shifts:
+
+1. **Cream/beige palette → pure white.** Canvas `#FAFAF7` + Paper `#F3F1EC` felt hospitality-warm; printer + supplies is a utilitarian/technical domain where clinical-clean reads more trustworthy.
+2. **Header + footer structural polish.** Raya's shell (bold-colored primary bar, prominent central search, category-nav strip, dense trust-laden footer with payment logos + social + newsletter) is instantly familiar to Egyptian shoppers. The Sprint 1 foundation had a quieter single-bar header + a paper-tinted 4-column footer that didn't carry the same trust weight.
+
+**Tension with ADR-031.** The foundation pass was deliberately differentiated from Raya/Noon/2B, rejecting their warm-loud-dense aesthetic. Pure 1:1 mimicry of Raya would dissolve that differentiation and make PBF look like a weak Raya clone.
+
+**Decision:** **"Clean technical retail — familiar scaffold, PBF skin."** Adopt the structural grammar of Raya/Applinz (two-bar header with prominent central search, category nav strip, trust-laden footer) but keep PBF's own identity (ink + ink-cyan accent; no Raya-blue, no Raya-yellow; neutral grays not warm tints).
+
+**Token changes** (in [app/globals.css](../app/globals.css)):
+| Token | Before (ADR-031) | After (ADR-059) |
+|---|---|---|
+| `--canvas` | `#FAFAF7` warm off-white | `#FFFFFF` pure white |
+| `--paper` | `#F3F1EC` warm cream | `#F7F7F7` neutral off-white |
+| `--paper-hover` | `#EBE8E0` warm | `#F0F0F0` neutral |
+| `--border` | `#E5E2DA` warm | `#E5E5E5` neutral |
+| `--border-strong` | `#8F8A7D` warm | `#808080` neutral |
+| `--muted-fg` | `#6B6B6B` | `#666666` (AA 5.7:1 on white) |
+
+**Preserved from ADR-031:** ink `#0F172A` + ink-2 `#1F2937`, accent cyan `#0E7C86` + strong `#0A6B74` + soft `#E6F3F4`, semantic success/warning/error tokens, typography (IBM Plex Sans Arabic + Inter), spacing, radii, shadows, motion.
+
+**Shell redesign:**
+
+- **Header two-bar structure.** Bar 1 is solid `bg-ink` containing: logo (start) + full-width HeaderSearch with prominent accent-cyan submit button (center desktop / own row on mobile) + actions cluster (end) containing LanguageSwitcher (dark variant, new), cart link, account/sign-in link, and mobile hamburger (end-side). Bar 2 is a white `border-b` strip with a horizontal category-nav (desktop only) + a "Register your business" B2B CTA on the end.
+- **Footer solid-ink.** 4-column grid: brand/contact (logo + tagline + WhatsApp+email+address + 4 social icons), Shop, Account, Newsletter (placeholder with disabled submit + "قريباً — v1.1" copy). Below the grid: payment-method pills (Visa/Mastercard/Meeza/Fawry/COD). Separate copyright strip in `bg-ink-2`. **5 broken links removed** (/help, /shipping, /returns, /contact, /account/orders — pending v1.1 pages).
+- **MobileNav** hamburger moved from start-side to end-side per Raya/Noon convention; panel slides from end; width reduced to 80% max-320px for better context retention.
+- **HeaderSearch** gained a prominent accent-cyan submit button via built-in `<button type="submit">`, matching Raya's yellow button pattern but in PBF brand color.
+- **LanguageSwitcher** gained a `variant="dark"` prop so it reads correctly on the ink header.
+- **CookieConsent** repositioned: tighter mobile width (inset-x-3), docks to `end-4` on desktop instead of centered, cleaner on 375px alongside the WhatsApp chat button.
+- **CSP** allow-listed `https://static.cloudflareinsights.com` in `script-src` and `cloudflareinsights.com + *.cloudflareinsights.com` in `connect-src` so Cloudflare Web Analytics beacon stops violating CSP (was a side effect of ADR-055's enforced CSP).
+
+**Alternatives considered:**
+- **Copy Raya blue + yellow 1:1** — rejected. Brand mimicry = weak differentiation; RayaShop is the strongest brand in the adjacent retail category, cloning it positions PBF as a knockoff rather than a specialist.
+- **Keep the cream canvas, polish only structure** — rejected. The cream reads hospitality, not technical; owner explicitly pushed for pure white, and the warmth was already in tension with the "trustworthy + technical" direction.
+- **Stay ADR-031** — rejected. The foundation pass shipped before any real shopper feedback; a mid-pre-launch refinement toward stronger trust-signalling is appropriate, and the differentiation-via-accent (cyan not yellow) preserves the ADR-031 intent while moving the structural grammar closer to what Egyptian B2C + B2B buyers expect.
+- **Invoke `frontend-design` for full palette re-derivation** — rejected as overkill. The shift is a re-application of existing PBF tokens (ink + cyan) to a new structural grammar; no new tokens needed, just neutralization of the warm tints.
+
+**Consequences:**
+- **Tier 2 screens** (products list/detail, search, cart/checkout, account, auth) inherit the new tokens automatically via `bg-background`/`bg-paper`/`bg-card` → they render correctly on first deploy without per-page edits. Per-screen polish (hero treatment, empty states, spacing rhythm) still pending; tracked as Tier 2 follow-up.
+- **Tier 3 admin surfaces** (PRD §8 best-effort) inherit tokens too; no action needed for M1.
+- The "Don'ts" list in design-system.md needs two updates: the warm-accent prohibition stays (Raya-yellow still rejected); a new rule adds "no bright blue primary" to prevent drift toward Raya-blue if someone reads the structural inspiration too literally.
+- The canvas contrast on shimmer-skeleton animation narrows slightly (#F7F7F7 → #F0F0F0 instead of the prior #F3F1EC → #EBE8E0) — barely perceptible, but if the skeleton loses visibility under load-testing, widen the stop values.
+- Ops verification: CSP header on `/ar` now includes `https://static.cloudflareinsights.com` in script-src — confirm with `curl -I https://staging.printbyfalcon.com/ar | grep -i content-security-policy` after redeploy.

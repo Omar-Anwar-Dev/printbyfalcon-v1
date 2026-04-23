@@ -352,6 +352,46 @@ Scope locked at kickoff to **tokens + shell + homepage + feedback layer** per ow
 **Decisions logged this pass:**
 - **ADR-031** [2026-04-19] Design direction, token system, and scope-limitation to foundation-only polish now + M1-eve polish later.
 
+### 2026-04-23 — Pre-deploy pass v2 (Sprint 11 dev-track → M1-eve)
+
+Owner reviewed foundation pass live on staging against two Egyptian retail references ([RayaShop](https://rayashop.com/ar) + [Applinz](https://applinz.com)) and asked for a direction shift before the Sprint 11 prod deploy:
+1. Cream/beige palette → **pure white** body (utilitarian-technical reads more appropriate for printer supplies than hospitality-warm)
+2. Header + footer should carry the **structural familiarity** of Egyptian retail (prominent search, category strip, trust-laden footer with payment logos + social + newsletter)
+
+Direction resolved as ADR-059 — **"Clean technical retail — familiar scaffold, PBF skin."** Structural grammar borrowed from Raya/Applinz; palette stays distinctly PBF (ink + ink-cyan, no Raya blue/yellow).
+
+**Shipped (Tier 1 — foundation + global shell):**
+
+- **Token shift** in [app/globals.css](../app/globals.css) + [docs/design-system.md](design-system.md) §3.1:
+  - `--canvas` `#FAFAF7` → `#FFFFFF` (pure white)
+  - `--paper` `#F3F1EC` → `#F7F7F7` (neutral off-white)
+  - `--paper-hover` `#EBE8E0` → `#F0F0F0`
+  - `--border` `#E5E2DA` → `#E5E5E5` (neutral gray)
+  - `--border-strong` `#8F8A7D` → `#808080`
+  - `--muted-fg` `#6B6B6B` → `#666666` (AA 5.7:1 on white)
+  - Ink / ink-cyan / semantic tokens **preserved** — Tier 2 screens inherit v2 palette automatically.
+- **Shell redesign** — structural mirror of Egyptian retail grammar:
+  - [components/site-header.tsx](../components/site-header.tsx) — **two-bar**. Bar 1 solid `bg-ink text-canvas`: logo + prominent HeaderSearch + LanguageSwitcher(dark) + cart + account/sign-in + MobileNav hamburger (end-side). Bar 2 white `border-b`: horizontal category-nav strip (desktop only) + end-side "سجّل شركتك" B2B CTA for signed-out users.
+  - [components/site-footer.tsx](../components/site-footer.tsx) — **ink-solid**. 4-column grid (brand+contact+4 social icons, Shop, Account, Newsletter-placeholder) + payment-pill row (Visa/Mastercard/Meeza/Fawry/COD) + support-legal link row + separate `bg-ink-2` copyright strip. 5 broken links removed (/help, /shipping, /returns, /contact, /account/orders).
+  - [components/mobile-nav.tsx](../components/mobile-nav.tsx) — hamburger trigger restyled for dark header (`text-canvas hover:bg-canvas/10`); panel slides from **end-side** (was start); width 80% max-320px (was 86% max-360px).
+  - [components/header-search.tsx](../components/header-search.tsx) — added prominent accent-cyan submit button on the end, wrapped form in `flex items-stretch overflow-hidden rounded-lg shadow-card ring-1 ring-border`. Dropdown/keyboard nav/ARIA combobox contract unchanged.
+  - [components/language-switcher.tsx](../components/language-switcher.tsx) — new `variant="dark"` prop; active pill = canvas on ink, inactive = `text-canvas/75` (AA 8.9:1 on ink).
+  - [components/cookie-consent.tsx](../components/cookie-consent.tsx) — mobile repositioned `inset-x-3 bottom-3 max-w-xl`; desktop docks to `end-4 bottom-4` instead of centered (stops overlapping WhatsApp chat button).
+- **CSP hotfix** in [next.config.mjs](../next.config.mjs) — allow-listed `https://static.cloudflareinsights.com` in script-src + `cloudflareinsights.com + *.cloudflareinsights.com` in connect-src. Fixes the CSP violation on Cloudflare Web Analytics beacon that appeared on every page in staging.
+
+**Tier 2 + 3 (deferred screens inheriting tokens) — pending per-screen polish:**
+Products list + detail, search + filters, cart + checkout + order-confirmed, account + addresses + orders, sign-in + B2B login + B2B signup, admin surfaces — all render on the v2 tokens automatically; spot-polish issues surface-by-surface as they're exercised.
+
+**Design system doc** — [docs/design-system.md](design-system.md) bumped to v2: direction paragraph rewritten, tokens table updated, shell components inventory rewritten, new don't "no bright-blue primary header", change-log extended.
+
+**Regression:**
+- `npx tsc --noEmit` clean
+- `npx vitest run` — 200 / 200 tests green (no changes required to tests)
+- `npx next build` — 123 pages built, layers rebuilt against the new tokens
+
+**Decisions logged this pass:**
+- **ADR-059** [2026-04-23] UI direction v2 — pure-white body + ink shell + structural familiarity from Egyptian retail. Supersedes ADR-031 direction paragraph; preserves its spacing/typography/motion tokens.
+
 ---
 
 ## Release Engineering

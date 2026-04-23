@@ -25,7 +25,7 @@ export function ProductCard({
       href={`/products/${product.slug}`}
       className="group flex flex-col overflow-hidden rounded-lg border border-border bg-paper shadow-card transition-[transform,box-shadow] duration-base ease-out-smooth hover:-translate-y-0.5 hover:shadow-popover"
     >
-      <div className="relative aspect-square overflow-hidden bg-canvas">
+      <div className="relative aspect-square overflow-hidden bg-paper-hover">
         {product.primaryImageUrl ? (
           <Image
             src={product.primaryImageUrl}
@@ -41,7 +41,7 @@ export function ProductCard({
           </div>
         )}
         {product.authenticity === 'COMPATIBLE' ? (
-          <span className="absolute start-2 top-2 rounded-full border border-border bg-canvas/90 px-2 py-0.5 text-[11px] font-medium text-muted-foreground backdrop-blur">
+          <span className="absolute start-2 top-2 rounded-full border border-border bg-background/95 px-2 py-0.5 text-[11px] font-medium text-muted-foreground backdrop-blur">
             {isAr ? 'متوافق' : 'Compatible'}
           </span>
         ) : null}

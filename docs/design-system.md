@@ -1,8 +1,8 @@
 # Print By Falcon — Design System
 
-**Last updated:** 2026-04-19
+**Last updated:** 2026-04-23 (v2 — Sprint 11 UI refiner pass)
 **Status:** Living document — update when the direction evolves.
-**Origin:** Foundation pass of the UI/UX refiner (post-M0, pre-Sprint 5). See [ADR-031](decisions.md) for the direction ADR.
+**Origin:** Foundation pass (v1, ADR-031, 2026-04-19) → v2 structural + palette shift (ADR-059, 2026-04-23).
 
 ---
 
@@ -20,11 +20,11 @@ Five rules that make the system legible to future contributors.
 
 ## 2. Direction
 
-**Trustworthy + technical + utilitarian-premium.** Verbal shorthand: "Apple-Store restraint applied to a Cairo printer-supplies shop." Differentiated from Raya / Noon / 2B — the three dominant Egyptian e-commerce retailers, all of which use warm accents (red/orange/yellow) and dense promo layouts. We borrow their **product-card anatomy, icon+text header actions, and homepage rails pattern** for shopper familiarity, but reject the visual density and warm palette. The result reads more premium-technical than warm-retail, giving us differentiated shelf appeal in search results and social sharing.
+**"Clean technical retail — familiar scaffold, PBF skin."** (ADR-059, v2 — supersedes "Apple-Store restraint on cream" from v1.) Pure-white body + solid ink shell + ink-cyan accent. **Structure** borrowed from Egyptian retail grammar (RayaShop/Applinz/Noon): two-bar header with prominent central search, category strip, trust-laden footer with payment logos + social + newsletter. **Skin** kept distinctly PBF: no Raya-blue, no Raya-yellow, no warm accent — ink `#0F172A` + cyan `#0E7C86` on pure white, neutral grays throughout. The result still reads more premium-technical than warm-retail but with stronger Egyptian-shopper familiarity.
 
 **No brand mascot, no falcon motif.** "Falcon" is a name, not a visual.
 
-**Bilingual first-class.** Arabic (primary, RTL) and English (secondary, LTR). Typography, layout, spacing, and animation all behave symmetrically across directions.
+**Bilingual first-class.** Arabic (primary, RTL) and English (secondary, LTR). Typography, layout, spacing, and animation all behave symmetrically across directions. Hamburger opens on the `end` side (left in RTL / right in LTR) — the standard for Egyptian retail post-ADR-059.
 
 **Dark mode:** explicitly skipped for MVP. Token system leaves room to add it later without rewriting.
 
@@ -40,15 +40,15 @@ All foreground/background pairs below hit **WCAG 2.1 AA** (4.5:1 body / 3:1 larg
 
 | Token | HSL | Hex | Role |
 |---|---|---|---|
-| `--canvas` | `60 23% 97%` | `#FAFAF7` | Page background (warm off-white) |
-| `--paper` | `43 23% 94%` | `#F3F1EC` | Card surface, secondary panel |
-| `--paper-hover` | `44 22% 90%` | `#EBE8E0` | Card hover, button ghost hover |
-| `--ink` | `222 47% 11%` | `#0F172A` | Primary text, primary button fill |
-| `--ink-2` | `215 28% 17%` | `#1F2937` | Primary button hover, secondary ink |
-| `--muted-fg` | `0 0% 42%` | `#6B6B6B` | Secondary text (5.0:1 on canvas) |
-| `--border` | `44 17% 88%` | `#E5E2DA` | Dividers, card outlines (decorative only) |
-| `--border-strong` | `43 7% 53%` | `#8F8A7D` | Input borders, UI-AA borders (3.3:1) |
-| `--accent` | `185 81% 29%` | `#0E7C86` | CTAs, active states (4.7:1 on canvas) |
+| `--canvas` | `0 0% 100%` | `#FFFFFF` | **Page background (pure white)** — primary surface |
+| `--paper` | `0 0% 97%` | `#F7F7F7` | Card surface, panels, muted backgrounds (neutral off-white) |
+| `--paper-hover` | `0 0% 94%` | `#F0F0F0` | Card hover, ghost button hover |
+| `--ink` | `222 47% 11%` | `#0F172A` | **Primary text + Header/Footer solid background** (ADR-059 shell surfaces) |
+| `--ink-2` | `215 28% 17%` | `#1F2937` | Secondary ink + footer copyright-strip bg |
+| `--muted-fg` | `0 0% 40%` | `#666666` | Secondary text (5.7:1 on canvas) |
+| `--border` | `0 0% 90%` | `#E5E5E5` | Dividers, card outlines (decorative only) |
+| `--border-strong` | `0 0% 50%` | `#808080` | Input borders, UI-AA borders (3.1:1 on canvas) |
+| `--accent` | `185 81% 29%` | `#0E7C86` | CTAs, search-submit button, active states (4.7:1 on canvas) |
 | `--accent-strong` | `185 84% 25%` | `#0A6B74` | Body-text links (5.9:1 on canvas) |
 | `--accent-soft` | `184 39% 93%` | `#E6F3F4` | Tinted bg, selection, soft highlights |
 | `--success` | `142 44% 33%` | `#2F7A4B` | Success body text + dot (5.0:1) |
@@ -57,6 +57,8 @@ All foreground/background pairs below hit **WCAG 2.1 AA** (4.5:1 body / 3:1 larg
 | `--warning-soft` | `41 58% 91%` | `#F5ECD9` | Badge background |
 | `--error` | `0 44% 49%` | `#B54747` | Error body text + dot (5.1:1) |
 | `--error-soft` | `0 48% 92%` | `#F4E0E0` | Badge background |
+
+**On-ink pairs (ADR-059 shell).** Text on the ink header/footer uses canvas (`#FFFFFF`, 17.2:1 contrast = AAA body). Muted text on ink uses `text-canvas/70` (9.5:1, AA+). Inactive language-switcher pill on ink uses `text-canvas/75` (8.9:1).
 
 **shadcn semantic aliases.** So existing `<Button>` and `<Card>` work without rewrites, Tailwind exposes shadcn-style aliases on top of the primitives:
 
@@ -186,15 +188,16 @@ Authoritative catalog of shared UI. Update when adding or substantially changing
 | `Dialog` | components/ui/dialog.tsx | Radix-backed |
 | **`ToastProvider` + `useToast`** | [components/ui/toast.tsx](../components/ui/toast.tsx) | **New in this pass.** Dependency-free toast system. Mounted in [app/[locale]/layout.tsx](../app/[locale]/layout.tsx). Call `const { toast } = useToast(); toast({ title, description?, variant? })`. Variants: `default`, `success`, `warning`, `error`. Auto-dismiss 4s (override via `durationMs`). Positioned `top-end`, `animate-slide-up`. |
 
-### 4.2 Layout / shell
+### 4.2 Layout / shell (v2 — ADR-059)
 | Component | Path | Notes |
 |---|---|---|
-| `SiteHeader` | [components/site-header.tsx](../components/site-header.tsx) | Sticky, `bg-canvas/90 backdrop-blur`. Contains logo + desktop nav + search + icon+text actions (cart, account) + language switcher + `<MobileNav>`. |
-| `SiteFooter` | [components/site-footer.tsx](../components/site-footer.tsx) | 4-column on desktop (brand/contact, Shop, Account, Support) + legal row. |
-| **`MobileNav`** | [components/mobile-nav.tsx](../components/mobile-nav.tsx) | **New.** Hamburger trigger + slide-in panel (from start-edge). Expands category children. Full-width ≤768px. |
-| `CategoryMenu` | [components/category-menu.tsx](../components/category-menu.tsx) | Desktop category dropdown. Restyled to new tokens. |
-| `LanguageSwitcher` | [components/language-switcher.tsx](../components/language-switcher.tsx) | Segmented-control styled pill: ink on active, border + muted on inactive. |
-| `HeaderSearch` | components/header-search.tsx | Unchanged this pass; proper ARIA combobox. |
+| `SiteHeader` | [components/site-header.tsx](../components/site-header.tsx) | **Two-bar.** Bar 1 `bg-ink text-canvas` — logo (start) + HeaderSearch (center desktop / own row mobile) + actions cluster (end: LanguageSwitcher/dark, cart, account/sign-in, MobileNav hamburger). Bar 2 `bg-background border-b` (desktop only) — category strip with horizontal scroll + end-side "سجّل شركتك" B2B CTA for signed-out users. |
+| `SiteFooter` | [components/site-footer.tsx](../components/site-footer.tsx) | **Ink-solid.** 4-column grid (brand+contact+4 social icons, Shop, Account, Newsletter-placeholder). Payment-method pills row (Visa/Mastercard/Meeza/Fawry/COD). Support-legal link row. Separate copyright strip `bg-ink-2`. |
+| `MobileNav` | [components/mobile-nav.tsx](../components/mobile-nav.tsx) | Hamburger in end-side of the header actions cluster (Egyptian retail convention per ADR-059). Slides from end. 80% width, max 320px. Expands category children inline. |
+| `CategoryMenu` | [components/category-menu.tsx](../components/category-menu.tsx) | Desktop category dropdown — now secondary to the Bar-2 category strip; still used inside other dropdowns. Inherits tokens. |
+| `LanguageSwitcher` | [components/language-switcher.tsx](../components/language-switcher.tsx) | Segmented pill. `variant="default"` (white surfaces) or `variant="dark"` (ink header). |
+| `HeaderSearch` | [components/header-search.tsx](../components/header-search.tsx) | **Prominent Raya-style: white input + accent-cyan submit button pill on the end side.** Keeps the async suggest-dropdown, ARIA combobox, and keyboard nav from v1. `max-w-2xl` (widens to fill the Bar-1 center). |
+| `CookieConsent` | [components/cookie-consent.tsx](../components/cookie-consent.tsx) | Tightened: `inset-x-3 max-w-xl bottom-3` on mobile; `end-4 bottom-4` on `md:` (docks next to the WhatsApp chat button instead of centering). |
 
 ### 4.3 Catalog
 | Component | Path | Notes |
@@ -274,16 +277,17 @@ Authoritative catalog of shared UI. Update when adding or substantially changing
 
 Enforced by code review. If a change violates these, push back.
 
-1. **No warm accent (red / orange / amber / gold) anywhere structural.** The cyan-on-cream identity dies the moment a red "SALE" banner appears. Promotions: use `bg-accent-soft` pill, weight, or typography — never a second saturated hue.
-2. **No gradients on primary surfaces.** Exception: the hero's single ultra-subtle `radial-gradient` at `[ellipse_at_top,hsl(var(--accent-soft))_0%,hsl(var(--canvas))_60%]` and an absolute-positioned blur blob on the compatibility CTA. Both approved; don't add more.
-3. **No drop shadows > `shadow-popover`.** No `shadow-2xl`, no dramatic hero elevations.
-4. **No `font-family: Cairo` anywhere.** `--font-arabic` binds to IBM Plex Sans Arabic. Grep for stray Cairo usage before merging.
-5. **No icon-only controls** except universal symbols (search, close, cart-count, menu). Every other icon gets a text label.
-6. **No accent-cyan on destructive or warning states.** Cyan = desirable action. Destructive = `variant="destructive"` (error red).
-7. **No `bg-amber-*`, `bg-emerald-*`, `bg-red-*`, etc.** Use `bg-warning-soft`, `bg-success-soft`, `bg-error-soft` — tokens, not Tailwind's raw palette.
-8. **No `text-primary` hover on ink text.** It renders dark-on-dark (primary → ink). Use `hover:text-accent-strong` instead.
-9. **No hardcoded `ml-*` / `mr-*` / `left-*` / `right-*` on layout-critical UI.** Use `ms-*` / `me-*` / `start-*` / `end-*` so RTL mirrors automatically.
-10. **No display font.** Weight + tracking carry display hierarchy. No Fraunces, no Space Grotesk, no Instrument Serif.
+1. **No warm accent (red / orange / amber / gold) anywhere structural.** The cyan-on-white identity dies the moment a red "SALE" banner or Raya-yellow search button appears. Promotions: use `bg-accent-soft` pill, weight, or typography — never a second saturated hue. ADR-059 reaffirms the warm-accent prohibition even though we borrowed structural elements from Raya.
+2. **No bright-blue primary header.** If you're reading ADR-059 and thinking "why not just Raya's blue for the shell", the answer is differentiation — brand mimicry against the dominant Egyptian retailer positions PBF as a cheaper clone. Shell surfaces stay `bg-ink`.
+3. **No gradients on primary surfaces.** Exception: the hero's single ultra-subtle `radial-gradient` at `[ellipse_at_top,hsl(var(--accent-soft))_0%,hsl(var(--canvas))_60%]` and an absolute-positioned blur blob on the compatibility CTA. Both approved; don't add more.
+4. **No drop shadows > `shadow-popover`.** No `shadow-2xl`, no dramatic hero elevations.
+5. **No `font-family: Cairo` anywhere.** `--font-arabic` binds to IBM Plex Sans Arabic. Grep for stray Cairo usage before merging.
+6. **No icon-only controls** except universal symbols (search, close, cart-count, menu, hamburger). Every other icon gets a text label.
+7. **No accent-cyan on destructive or warning states.** Cyan = desirable action. Destructive = `variant="destructive"` (error red).
+8. **No `bg-amber-*`, `bg-emerald-*`, `bg-red-*`, etc.** Use `bg-warning-soft`, `bg-success-soft`, `bg-error-soft` — tokens, not Tailwind's raw palette.
+9. **No `text-primary` hover on ink text.** It renders dark-on-dark (primary → ink). Use `hover:text-accent-strong` instead.
+10. **No hardcoded `ml-*` / `mr-*` / `left-*` / `right-*` on layout-critical UI.** Use `ms-*` / `me-*` / `start-*` / `end-*` so RTL mirrors automatically.
+11. **No display font.** Weight + tracking carry display hierarchy. No Fraunces, no Space Grotesk, no Instrument Serif.
 
 ---
 
@@ -353,3 +357,4 @@ Sprints 5–12 should ship feature work that **conforms to this system** without
 | Date | Change | Reason |
 |---|---|---|
 | 2026-04-19 | Initial design system | Foundation UI/UX polish pass after M0 (Sprint 4 close); ADR-031 |
+| 2026-04-23 | **v2 direction shift.** Pure-white canvas (was cream); neutral-gray paper + borders (was warm); ink-solid header/footer shells; prominent HeaderSearch with accent submit; 4-column footer gains payment-pill row, 4-social-icon row, newsletter placeholder. MobileNav hamburger moved end-side. CookieConsent mobile repositioned. CSP allow-lists Cloudflare Web Analytics. 5 broken footer links removed. | Sprint 11 UI refiner pass (pre-production-deploy); ADR-059 |

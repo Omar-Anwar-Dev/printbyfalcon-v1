@@ -9,11 +9,14 @@ const cspDirectives = [
   // 'unsafe-inline' + 'unsafe-eval' are required for Next.js 15 App Router
   // hydration bootstrap without nonce rotation. Tighten with a nonce-based
   // strict-dynamic CSP post-M1 (parking-lot: Sprint 11 CSP hardening).
-  "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+  // Cloudflare Web Analytics beacon (static.cloudflareinsights.com) is
+  // allow-listed so CF's free analytics work without disabling it in the CF dashboard.
+  "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://static.cloudflareinsights.com",
   "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
   "img-src 'self' data: blob: https:",
   "font-src 'self' data: https://fonts.gstatic.com",
-  "connect-src 'self'",
+  // Cloudflare beacon POSTs its telemetry to cloudflareinsights.com.
+  "connect-src 'self' https://cloudflareinsights.com https://*.cloudflareinsights.com",
   // Paymob hosted iframe for card + Fawry sub-integration (ADR-025).
   "frame-src 'self' https://accept.paymob.com",
   "frame-ancestors 'none'",
