@@ -141,11 +141,21 @@ export default async function CheckoutPage({
   );
 
   return (
-    <div className="container max-w-4xl py-8">
-      <h1 className="mb-6 text-2xl font-semibold">
-        {isAr ? 'إتمام الطلب' : 'Checkout'}
-      </h1>
-      <div className="grid gap-6 md:grid-cols-[1fr_320px]">
+    <main className="container-page max-w-5xl py-10 md:py-14">
+      <header className="mb-8 max-w-3xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+          {isAr ? 'إتمام الطلب' : 'Checkout'}
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {isAr ? 'خطوة واحدة وتم' : 'One step to complete your order'}
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          {isAr
+            ? 'راجع بياناتك واختر طريقة الدفع — الشحن لكل محافظات مصر خلال 1 – 5 أيام عمل.'
+            : 'Review your details and pick a payment method — we ship nationwide in 1 – 5 business days.'}
+        </p>
+      </header>
+      <div className="grid gap-6 md:grid-cols-[1fr_340px]">
         <CheckoutForm
           locale={isAr ? 'ar' : 'en'}
           user={
@@ -208,6 +218,6 @@ export default async function CheckoutPage({
           vatRatePercent={vat.percent}
         />
       </div>
-    </div>
+    </main>
   );
 }

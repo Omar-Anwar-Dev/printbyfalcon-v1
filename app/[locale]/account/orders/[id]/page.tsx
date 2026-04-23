@@ -132,14 +132,16 @@ export default async function OrderDetailPage({
   };
 
   return (
-    <div className="container max-w-3xl py-8">
-      <header className="mb-6 flex flex-wrap items-start justify-between gap-3">
+    <main className="container-page max-w-3xl py-10 md:py-14">
+      <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
             {isAr ? 'تفاصيل الطلب' : 'Order details'}
+          </p>
+          <h1 className="num mt-2 font-mono text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {order.orderNumber}
           </h1>
-          <p className="mt-1 font-mono text-sm">{order.orderNumber}</p>
-          <p className="text-xs text-muted-foreground">
+          <p className="mt-1.5 text-xs text-muted-foreground">
             {new Date(order.createdAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}
           </p>
         </div>
@@ -438,6 +440,6 @@ export default async function OrderDetailPage({
           })}
         </ol>
       </section>
-    </div>
+    </main>
   );
 }

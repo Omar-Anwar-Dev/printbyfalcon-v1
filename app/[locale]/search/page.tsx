@@ -178,9 +178,18 @@ export default async function SearchPage({
   };
 
   return (
-    <div className="container py-8">
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">
+    <main className="container-page py-10 md:py-14">
+      <header className="mb-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+          {pinnedPrinter
+            ? isAr
+              ? 'طابعة محددة'
+              : 'Pinned printer'
+            : isAr
+              ? 'البحث'
+              : 'Search'}
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {pinnedPrinter
             ? isAr
               ? `مستلزمات لـ ${pinnedPrinter.brand.nameAr} ${pinnedPrinter.modelName}`
@@ -193,27 +202,34 @@ export default async function SearchPage({
                 ? 'البحث في الكتالوج'
                 : 'Search catalog'}
         </h1>
-        <p className="text-sm text-muted-foreground">
-          {isAr ? `${total} نتيجة` : `${total} results`}
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          <span className="num">{total}</span>{' '}
+          {isAr ? 'نتيجة' : total === 1 ? 'result' : 'results'}
           {usedFallback ? (
-            <span className="ms-2 text-xs italic">
-              {isAr ? '(تطابق جزئي)' : '(partial match)'}
+            <span className="ms-2 inline-flex items-center rounded-full bg-warning-soft px-2 py-0.5 text-[11px] font-medium text-warning">
+              {isAr ? 'تطابق جزئي' : 'Partial match'}
             </span>
           ) : null}
         </p>
         {detectedPrinter && !pinnedPrinter ? (
-          <div className="mt-3 rounded-md border bg-primary/5 p-3 text-sm">
-            <p className="mb-1">
+          <div className="mt-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-accent/20 bg-accent-soft p-4 text-sm">
+            <p className="text-foreground">
               {isAr
-                ? `هل كنت تبحث عن مستلزمات ${detectedPrinter.brandNameAr} ${detectedPrinter.modelName}؟`
-                : `Looking for consumables for ${detectedPrinter.brandNameEn} ${detectedPrinter.modelName}?`}
+                ? `هل كنت تبحث عن مستلزمات `
+                : `Looking for consumables for `}
+              <span className="font-semibold">
+                {isAr
+                  ? `${detectedPrinter.brandNameAr} ${detectedPrinter.modelName}`
+                  : `${detectedPrinter.brandNameEn} ${detectedPrinter.modelName}`}
+              </span>
+              {isAr ? '؟' : '?'}
             </p>
             <Link
               href={{
                 pathname: '/search',
                 query: { printer: detectedPrinter.slug },
               }}
-              className="inline-block rounded-md bg-primary px-3 py-1 text-xs font-medium text-primary-foreground hover:opacity-90"
+              className="inline-flex h-9 items-center rounded-md bg-accent px-3 text-xs font-semibold text-accent-foreground transition-colors hover:bg-accent-strong"
             >
               {isAr ? 'عرض كل المستلزمات' : 'Show all compatible consumables'}
             </Link>
@@ -247,7 +263,7 @@ export default async function SearchPage({
         />
       </div>
 
-      <div className="grid gap-6 md:grid-cols-[240px_1fr]">
+      <div className="grid gap-8 md:grid-cols-[260px_1fr]">
         <aside className="hidden md:block">
           <SearchFiltersSidebar
             locale={isAr ? 'ar' : 'en'}
@@ -268,11 +284,10 @@ export default async function SearchPage({
 
         <section>
           <nav
-            className="mb-4 flex flex-wrap gap-2 text-sm"
+            className="mb-5 flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-paper p-1 text-sm"
             aria-label={isAr ? 'ترتيب' : 'Sort'}
           >
             {SORTS.map((s) => {
-              // Hide "relevance" if there's no query — it's meaningless.
               if (s === 'relevance' && !hasQuery) return null;
               return (
                 <Link
@@ -281,7 +296,11 @@ export default async function SearchPage({
                     pathname: '/search',
                     query: { ...baseQuery, sort: s, page: '1' },
                   }}
-                  className={`rounded border px-3 py-1 ${s === sort ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                  className={`inline-flex h-8 items-center rounded px-3 font-medium transition-colors ${
+                    s === sort
+                      ? 'bg-background text-foreground shadow-card'
+                      : 'text-muted-foreground hover:text-foreground'
+                  }`}
                 >
                   {sortLabel(s)}
                 </Link>
@@ -292,7 +311,7 @@ export default async function SearchPage({
           {items.length === 0 ? (
             <EmptyState q={q} isAr={isAr} />
           ) : (
-            <ul className="grid grid-cols-2 gap-4 md:grid-cols-3">
+            <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-5">
               {items.map((p) => (
                 <li key={p.id}>
                   <ProductCard
@@ -307,7 +326,7 @@ export default async function SearchPage({
 
           {totalPages > 1 ? (
             <nav
-              className="mt-8 flex items-center justify-center gap-2 text-sm"
+              className="mt-10 flex items-center justify-center gap-3 text-sm"
               aria-label={isAr ? 'الصفحات' : 'Pagination'}
             >
               {page > 1 ? (
@@ -316,15 +335,20 @@ export default async function SearchPage({
                     pathname: '/search',
                     query: { ...baseQuery, sort, page: String(page - 1) },
                   }}
-                  className="rounded border bg-background px-3 py-1 hover:bg-muted"
+                  className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 font-medium text-foreground transition-colors hover:bg-paper-hover"
                 >
-                  {isAr ? '→ السابق' : '← Prev'}
+                  {isAr ? 'السابق →' : '← Prev'}
                 </Link>
-              ) : null}
-              <span className="text-muted-foreground">
-                {isAr
-                  ? `صفحة ${page} من ${totalPages}`
-                  : `Page ${page} of ${totalPages}`}
+              ) : (
+                <span
+                  aria-disabled
+                  className="inline-flex h-9 items-center rounded-md border border-border px-3 font-medium text-muted-foreground opacity-50"
+                >
+                  {isAr ? 'السابق →' : '← Prev'}
+                </span>
+              )}
+              <span className="num text-xs text-muted-foreground">
+                {isAr ? `${page} من ${totalPages}` : `${page} / ${totalPages}`}
               </span>
               {page < totalPages ? (
                 <Link
@@ -332,24 +356,31 @@ export default async function SearchPage({
                     pathname: '/search',
                     query: { ...baseQuery, sort, page: String(page + 1) },
                   }}
-                  className="rounded border bg-background px-3 py-1 hover:bg-muted"
+                  className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 font-medium text-foreground transition-colors hover:bg-paper-hover"
                 >
-                  {isAr ? 'التالي ←' : 'Next →'}
+                  {isAr ? '← التالي' : 'Next →'}
                 </Link>
-              ) : null}
+              ) : (
+                <span
+                  aria-disabled
+                  className="inline-flex h-9 items-center rounded-md border border-border px-3 font-medium text-muted-foreground opacity-50"
+                >
+                  {isAr ? '← التالي' : 'Next →'}
+                </span>
+              )}
             </nav>
           ) : null}
         </section>
       </div>
-    </div>
+    </main>
   );
 }
 
 function EmptyState({ q, isAr }: { q: string; isAr: boolean }) {
   const hasQuery = q.trim().length > 0;
   return (
-    <div className="rounded-md border bg-background p-8 text-center">
-      <p className="mb-4 text-lg font-medium">
+    <div className="rounded-xl border border-border bg-paper p-10 text-center">
+      <p className="text-base font-semibold text-foreground">
         {hasQuery
           ? isAr
             ? `لم نجد منتجات مطابقة لـ "${q}"`
@@ -359,21 +390,24 @@ function EmptyState({ q, isAr }: { q: string; isAr: boolean }) {
             : 'Enter a term to search the catalog'}
       </p>
       {hasQuery ? (
-        <ul className="mx-auto max-w-md list-disc text-start text-sm text-muted-foreground">
-          <li className="mb-1">
+        <ul className="mx-auto mt-4 max-w-md space-y-1.5 text-start text-sm text-muted-foreground">
+          <li className="flex items-start gap-2">
+            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
             {isAr
-              ? 'جرب كلمات بحث أقل أو أعم'
-              : 'Try fewer or more general terms'}
+              ? 'جرّب كلمات بحث أقل أو أعم.'
+              : 'Try fewer or more general terms.'}
           </li>
-          <li className="mb-1">
+          <li className="flex items-start gap-2">
+            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
             {isAr
-              ? 'ابحث برقم موديل الطابعة (مثلاً: HP LaserJet M404)'
-              : 'Search by printer model (e.g., HP LaserJet M404)'}
+              ? 'ابحث بموديل الطابعة (مثلاً: HP LaserJet M404).'
+              : 'Search by printer model (e.g., HP LaserJet M404).'}
           </li>
-          <li>
+          <li className="flex items-start gap-2">
+            <span className="mt-1.5 h-1 w-1 shrink-0 rounded-full bg-muted-foreground" />
             {isAr
-              ? 'امسح الفلاتر وحاول مجدداً'
-              : 'Clear active filters and try again'}
+              ? 'امسح الفلاتر وحاول مجدداً.'
+              : 'Clear active filters and try again.'}
           </li>
         </ul>
       ) : null}

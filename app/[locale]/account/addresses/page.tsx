@@ -32,13 +32,24 @@ export default async function AccountAddressesPage({
     orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
   });
 
+  const isAr = locale === 'ar';
   return (
-    <div className="container max-w-2xl py-8">
-      <h1 className="mb-6 text-2xl font-semibold">
-        {locale === 'ar' ? 'عناويني' : 'My addresses'}
-      </h1>
+    <main className="container-page max-w-2xl py-10 md:py-14">
+      <header className="mb-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+          {isAr ? 'حسابي' : 'Account'}
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {isAr ? 'عناويني' : 'My addresses'}
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          {isAr
+            ? 'حدّ أقصى 5 عناوين. العنوان الافتراضي يُستخدم تلقائيًا في الدفع.'
+            : 'Up to 5 addresses. The default address is used automatically at checkout.'}
+        </p>
+      </header>
       <AddressManager
-        locale={locale === 'ar' ? 'ar' : 'en'}
+        locale={isAr ? 'ar' : 'en'}
         addresses={addresses.map((a) => ({
           id: a.id,
           recipientName: a.recipientName,
@@ -53,6 +64,6 @@ export default async function AccountAddressesPage({
           isDefault: a.isDefault,
         }))}
       />
-    </div>
+    </main>
   );
 }

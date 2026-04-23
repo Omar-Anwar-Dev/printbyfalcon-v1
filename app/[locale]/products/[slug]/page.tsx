@@ -146,44 +146,56 @@ export default async function ProductDetailPage({
   };
 
   return (
-    <div className="container py-8">
+    <main className="container-page py-8 md:py-12">
       <script
         type="application/ld+json"
         // eslint-disable-next-line react/no-danger -- JSON.stringify of a server-built object; schema.org requires a raw <script> payload
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
       />
-      <nav className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-        <Link href="/" className="hover:underline">
+      <nav
+        aria-label={isAr ? 'المسار' : 'Breadcrumbs'}
+        className="mb-6 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
+      >
+        <Link href="/" className="transition-colors hover:text-foreground">
           {t('nav.home')}
         </Link>
-        <span>/</span>
-        <Link href="/products" className="hover:underline">
+        <span className="text-border">/</span>
+        <Link
+          href="/products"
+          className="transition-colors hover:text-foreground"
+        >
           {t('nav.catalog')}
         </Link>
-        <span>/</span>
+        <span className="text-border">/</span>
         <Link
           href={`/categories/${product.category.slug}`}
-          className="hover:underline"
+          className="transition-colors hover:text-foreground"
         >
           {categoryName}
         </Link>
-        <span>/</span>
-        <span className="text-foreground">{name}</span>
+        <span className="text-border">/</span>
+        <span className="truncate text-foreground">{name}</span>
       </nav>
 
-      <div className="grid gap-8 md:grid-cols-2">
+      <div className="grid gap-8 lg:grid-cols-[1.1fr_1fr] lg:gap-12">
         <ProductGallery
           images={product.images}
           locale={isAr ? 'ar' : 'en'}
           productName={name}
         />
 
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">{brandName}</p>
-          <h1 className="text-2xl font-semibold md:text-3xl">{name}</h1>
-          <p className="font-mono text-xs text-muted-foreground">
-            SKU: {product.sku}
-          </p>
+        <div className="space-y-5">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+              {brandName}
+            </p>
+            <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+              {name}
+            </h1>
+            <p className="num mt-1.5 font-mono text-xs text-muted-foreground">
+              SKU: {product.sku}
+            </p>
+          </div>
           <div className="flex flex-wrap items-baseline gap-3">
             <ProductPrice
               finalPriceEgp={displayPriceEgp}
@@ -247,29 +259,31 @@ export default async function ProductDetailPage({
           )}
 
           {description ? (
-            <div className="prose prose-sm mt-6 max-w-none">
-              <h2 className="text-base font-semibold">
+            <div className="mt-2 border-t border-border pt-6">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 {isAr ? 'الوصف' : 'Description'}
               </h2>
-              <p className="whitespace-pre-line text-sm leading-6 text-muted-foreground">
+              <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-foreground">
                 {description}
               </p>
             </div>
           ) : null}
 
           {Object.keys(specs).length > 0 ? (
-            <div className="mt-6">
-              <h2 className="mb-2 text-base font-semibold">
+            <div className="border-t border-border pt-6">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 {isAr ? 'المواصفات' : 'Specifications'}
               </h2>
-              <dl className="overflow-hidden rounded-md border text-sm">
+              <dl className="mt-3 overflow-hidden rounded-md border border-border text-sm">
                 {Object.entries(specs).map(([key, value], idx, arr) => (
                   <div
                     key={key}
-                    className={`grid grid-cols-[1fr_2fr] gap-2 px-3 py-2 ${idx < arr.length - 1 ? 'border-b' : ''}`}
+                    className={`grid grid-cols-[1fr_2fr] gap-3 px-4 py-2.5 ${
+                      idx % 2 === 0 ? 'bg-paper' : 'bg-background'
+                    } ${idx < arr.length - 1 ? 'border-b border-border' : ''}`}
                   >
                     <dt className="font-medium text-muted-foreground">{key}</dt>
-                    <dd>{value}</dd>
+                    <dd className="text-foreground">{value}</dd>
                   </div>
                 ))}
               </dl>
@@ -277,11 +291,11 @@ export default async function ProductDetailPage({
           ) : null}
 
           {product.compatiblePrinters.length > 0 ? (
-            <div className="mt-6">
-              <h2 className="mb-2 text-base font-semibold">
+            <div className="border-t border-border pt-6">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
                 {isAr ? 'طابعات متوافقة' : 'Compatible printers'}
               </h2>
-              <ul className="flex flex-wrap gap-2 text-sm">
+              <ul className="mt-3 flex flex-wrap gap-2 text-sm">
                 {product.compatiblePrinters.map((pm) => (
                   <li key={pm.id}>
                     <Link
@@ -289,7 +303,7 @@ export default async function ProductDetailPage({
                         pathname: '/search',
                         query: { printer: pm.slug },
                       }}
-                      className="inline-block rounded-md border bg-background px-3 py-1 hover:border-primary hover:bg-muted"
+                      className="inline-flex items-baseline gap-1.5 rounded-md border border-border bg-background px-3 py-1.5 text-xs transition-colors hover:border-accent hover:bg-accent-soft"
                       title={
                         isAr
                           ? `كل المستلزمات المتوافقة مع ${isAr ? pm.brandAr : pm.brandEn} ${pm.modelName}`
@@ -298,8 +312,10 @@ export default async function ProductDetailPage({
                     >
                       <span className="text-muted-foreground">
                         {isAr ? pm.brandAr : pm.brandEn}
-                      </span>{' '}
-                      <span className="font-medium">{pm.modelName}</span>
+                      </span>
+                      <span className="font-semibold text-foreground">
+                        {pm.modelName}
+                      </span>
                     </Link>
                   </li>
                 ))}
@@ -310,11 +326,14 @@ export default async function ProductDetailPage({
       </div>
 
       {relatedItems.length > 0 ? (
-        <section className="mt-12">
-          <h2 className="mb-4 text-xl font-semibold">
+        <section className="mt-16 border-t border-border pt-12">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+            {isAr ? 'اكتشف المزيد' : 'Discover more'}
+          </p>
+          <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground sm:text-2xl">
             {isAr ? 'منتجات ذات صلة' : 'Related products'}
           </h2>
-          <ul className="grid grid-cols-2 gap-4 md:grid-cols-4">
+          <ul className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
             {relatedItems.map((p) => (
               <li key={p.id}>
                 <ProductCard
@@ -327,6 +346,6 @@ export default async function ProductDetailPage({
           </ul>
         </section>
       ) : null}
-    </div>
+    </main>
   );
 }
