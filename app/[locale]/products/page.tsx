@@ -56,15 +56,26 @@ export default async function ProductsPage({
           : 'Price: High to Low';
 
   return (
-    <div className="container py-8">
-      <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <main className="container-page py-10 md:py-14">
+      <header className="mb-8 flex flex-wrap items-end justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">{t('nav.catalog')}</h1>
-          <p className="text-sm text-muted-foreground">
-            {isAr ? `${total} منتج` : `${total} products`}
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+            {isAr ? 'تصفح' : 'Browse'}
+          </p>
+          <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {t('nav.catalog')}
+          </h1>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            <span className="num">{total}</span>{' '}
+            {isAr
+              ? `${total === 1 ? 'منتج' : 'منتج'}`
+              : `${total === 1 ? 'product' : 'products'}`}
           </p>
         </div>
-        <nav className="flex flex-wrap gap-2 text-sm">
+        <nav
+          aria-label={isAr ? 'ترتيب' : 'Sort'}
+          className="flex flex-wrap items-center gap-1.5 rounded-md border border-border bg-paper p-1 text-sm"
+        >
           {SORTS.map((s) => (
             <Link
               key={s}
@@ -72,20 +83,31 @@ export default async function ProductsPage({
                 pathname: '/products',
                 query: { sort: s, page: '1' },
               }}
-              className={`rounded border px-3 py-1 ${s === sort ? 'border-primary bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+              className={`inline-flex h-8 items-center rounded px-3 font-medium transition-colors ${
+                s === sort
+                  ? 'bg-background text-foreground shadow-card'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
             >
               {sortLabel(s)}
             </Link>
           ))}
         </nav>
-      </div>
+      </header>
 
       {items.length === 0 ? (
-        <p className="rounded-md border bg-background p-8 text-center text-muted-foreground">
-          {isAr ? 'لا توجد منتجات بعد.' : 'No products yet.'}
-        </p>
+        <div className="mx-auto max-w-xl rounded-xl border border-border bg-paper p-10 text-center">
+          <p className="text-base font-semibold text-foreground">
+            {isAr ? 'لا توجد منتجات بعد.' : 'No products yet.'}
+          </p>
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {isAr
+              ? 'الكتالوج قيد التحضير. جرّب البحث بموديل طابعتك.'
+              : 'The catalog is being populated. Try searching by your printer model.'}
+          </p>
+        </div>
       ) : (
-        <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 lg:grid-cols-4">
+        <ul className="grid grid-cols-2 gap-4 md:grid-cols-3 md:gap-5 lg:grid-cols-4">
           {items.map((p) => (
             <li key={p.id}>
               <ProductCard
@@ -99,22 +121,30 @@ export default async function ProductsPage({
       )}
 
       {totalPages > 1 ? (
-        <nav className="mt-8 flex items-center justify-center gap-2 text-sm">
+        <nav
+          aria-label={isAr ? 'التنقل بين الصفحات' : 'Pagination'}
+          className="mt-10 flex items-center justify-center gap-3 text-sm"
+        >
           {page > 1 ? (
             <Link
               href={{
                 pathname: '/products',
                 query: { sort, page: String(page - 1) },
               }}
-              className="rounded border bg-background px-3 py-1 hover:bg-muted"
+              className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 font-medium text-foreground transition-colors hover:bg-paper-hover"
             >
-              {isAr ? '→ السابق' : '← Prev'}
+              {isAr ? 'السابق →' : '← Prev'}
             </Link>
-          ) : null}
-          <span className="text-muted-foreground">
-            {isAr
-              ? `صفحة ${page} من ${totalPages}`
-              : `Page ${page} of ${totalPages}`}
+          ) : (
+            <span
+              aria-disabled
+              className="inline-flex h-9 items-center rounded-md border border-border px-3 font-medium text-muted-foreground opacity-50"
+            >
+              {isAr ? 'السابق →' : '← Prev'}
+            </span>
+          )}
+          <span className="num text-xs text-muted-foreground">
+            {isAr ? `${page} من ${totalPages}` : `${page} / ${totalPages}`}
           </span>
           {page < totalPages ? (
             <Link
@@ -122,13 +152,20 @@ export default async function ProductsPage({
                 pathname: '/products',
                 query: { sort, page: String(page + 1) },
               }}
-              className="rounded border bg-background px-3 py-1 hover:bg-muted"
+              className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 font-medium text-foreground transition-colors hover:bg-paper-hover"
             >
-              {isAr ? 'التالي ←' : 'Next →'}
+              {isAr ? '← التالي' : 'Next →'}
             </Link>
-          ) : null}
+          ) : (
+            <span
+              aria-disabled
+              className="inline-flex h-9 items-center rounded-md border border-border px-3 font-medium text-muted-foreground opacity-50"
+            >
+              {isAr ? '← التالي' : 'Next →'}
+            </span>
+          )}
         </nav>
       ) : null}
-    </div>
+    </main>
   );
 }

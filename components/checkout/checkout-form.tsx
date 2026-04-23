@@ -546,88 +546,93 @@ export function CheckoutForm({
   }
 
   const summary = (
-    <aside className="space-y-3 rounded-md border bg-background p-4 md:sticky md:top-4 md:self-start">
-      <h2 className="text-base font-semibold">{labels.summary}</h2>
-      <ul className="space-y-2 text-sm">
+    <aside className="h-fit space-y-5 rounded-xl border border-border bg-paper p-5 md:sticky md:top-36 md:self-start">
+      <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+        {labels.summary}
+      </h2>
+      <ul className="space-y-2.5 text-sm">
         {cartItems.map((i) => (
-          <li key={i.id} className="flex items-center gap-2">
+          <li key={i.id} className="flex items-center gap-3">
             {i.thumbUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img
                 src={i.thumbUrl}
                 alt=""
-                className="h-10 w-10 shrink-0 rounded object-cover"
+                className="h-11 w-11 shrink-0 rounded-md object-cover"
               />
             ) : (
-              <div className="h-10 w-10 shrink-0 rounded bg-muted" />
+              <div className="h-11 w-11 shrink-0 rounded-md bg-paper-hover" />
             )}
-            <span className="min-w-0 flex-1 truncate">
-              {isAr ? i.nameAr : i.nameEn} × {i.qty}
+            <span className="min-w-0 flex-1 truncate text-foreground">
+              {isAr ? i.nameAr : i.nameEn}{' '}
+              <span className="num text-muted-foreground">× {i.qty}</span>
             </span>
-            <span className="shrink-0 font-medium">
+            <span className="num shrink-0 whitespace-nowrap font-semibold text-foreground">
               {fmt(i.unitPriceEgp * i.qty, locale)} {labels.egp}
             </span>
           </li>
         ))}
       </ul>
-      <dl className="space-y-1 border-t pt-3 text-sm">
+      <dl className="space-y-1.5 border-t border-border pt-4 text-sm">
         <div className="flex justify-between">
           <dt className="text-muted-foreground">{labels.subtotal}</dt>
-          <dd>
+          <dd className="num font-medium text-foreground">
             {fmt(totals.subtotal, locale)} {labels.egp}
           </dd>
         </div>
         {totals.discount > 0 ? (
           <div className="flex justify-between text-success">
             <dt>{labels.discount}</dt>
-            <dd>
+            <dd className="num font-medium">
               − {fmt(totals.discount, locale)} {labels.egp}
             </dd>
           </div>
         ) : null}
-        <div className="flex justify-between text-muted-foreground">
-          <dt>{labels.shipping}</dt>
-          <dd>
+        <div className="flex justify-between">
+          <dt className="text-muted-foreground">{labels.shipping}</dt>
+          <dd className="num">
             {zoneInfo ? (
               totals.freeShipped ? (
-                <span className="font-medium text-success">
+                <span className="font-semibold text-success">
                   {labels.freeShippingAchieved}
                 </span>
               ) : (
-                <>
+                <span className="text-foreground">
                   {fmt(totals.shipping, locale)} {labels.egp}
-                </>
+                </span>
               )
             ) : (
-              '—'
+              <span className="text-muted-foreground">—</span>
             )}
           </dd>
         </div>
         {totals.codFee > 0 ? (
-          <div className="flex justify-between text-muted-foreground">
-            <dt>{labels.codFee}</dt>
-            <dd>
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">{labels.codFee}</dt>
+            <dd className="num text-foreground">
               {fmt(totals.codFee, locale)} {labels.egp}
             </dd>
           </div>
         ) : null}
         {totals.vat > 0 ? (
-          <div className="flex justify-between text-muted-foreground">
-            <dt>{labels.vat}</dt>
-            <dd>
+          <div className="flex justify-between">
+            <dt className="text-muted-foreground">{labels.vat}</dt>
+            <dd className="num text-foreground">
               {fmt(totals.vat, locale)} {labels.egp}
             </dd>
           </div>
         ) : null}
-        <div className="mt-2 flex justify-between border-t pt-2 font-semibold">
-          <dt>{labels.total}</dt>
-          <dd>
+        <div className="mt-2 flex items-baseline justify-between border-t border-border pt-3">
+          <dt className="text-sm font-semibold uppercase tracking-[0.08em] text-foreground">
+            {labels.total}
+          </dt>
+          <dd className="num text-xl font-bold text-foreground">
             {fmt(totals.total, locale)} {labels.egp}
           </dd>
         </div>
       </dl>
       {zoneInfo && !totals.freeShipped && totals.freeShipThreshold > 0 ? (
-        <p className="text-xs text-muted-foreground">
+        <p className="rounded-md bg-accent-soft px-3 py-2 text-xs text-accent-strong">
           {labels.freeShippingProgress(
             fmt(
               Math.max(0, totals.freeShipThreshold - totals.subtotal),
@@ -650,7 +655,7 @@ export function CheckoutForm({
   return (
     <>
       <form onSubmit={onSubmit} className="space-y-6">
-        <section className="space-y-3 rounded-md border bg-background p-4">
+        <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
           <h2 className="text-base font-semibold">{labels.contact}</h2>
           <div className="grid gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm">
@@ -685,7 +690,7 @@ export function CheckoutForm({
           </div>
         </section>
 
-        <section className="space-y-3 rounded-md border bg-background p-4">
+        <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
           <h2 className="text-base font-semibold">{labels.shippingAddress}</h2>
 
           {savedAddresses.length > 0 ? (
@@ -836,7 +841,7 @@ export function CheckoutForm({
         </section>
 
         {b2b ? (
-          <section className="space-y-3 rounded-md border bg-background p-4">
+          <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
             <h2 className="text-base font-semibold">{labels.b2bIdentity}</h2>
             <p className="text-xs text-muted-foreground">
               {b2b.companyName} · Tier {b2b.tierCode}
@@ -877,7 +882,7 @@ export function CheckoutForm({
         ) : null}
 
         {b2b && b2b.allowPayNow && b2b.allowSubmitForReview ? (
-          <section className="space-y-3 rounded-md border bg-background p-4">
+          <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
             <h2 className="text-base font-semibold">
               {labels.checkoutModeTitle}
             </h2>
@@ -919,7 +924,7 @@ export function CheckoutForm({
         ) : null}
 
         {checkoutMode === 'payNow' ? (
-          <section className="space-y-3 rounded-md border bg-background p-4">
+          <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
             <h2 className="text-base font-semibold">{labels.payment}</h2>
             {totals.codAvailable ? (
               <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
