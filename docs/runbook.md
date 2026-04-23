@@ -350,6 +350,7 @@ curl -sS https://printbyfalcon.com/api/health | jq
 | 2026-04-19 | staging | *(tbd)* | Sprint 3 — Smart search + filters + 200-SKU fixture. |
 | 2026-04-19 | prod | *(tbd)* | Sprint 3 prod. FTS bootstrap + perf:search ready. |
 | 2026-04-19 | prod | `b3c42a3` → rolled back to `30eb5dd` | **Sprint 4 + UI foundation pass.** First-request crash on `/ar` & `/en` (digests 2617824920, 1579566200); branded error boundary rendered correctly. Rolled back via §6.1 in ~3 min — prod currently on `30eb5dd`. Root cause TBD; defensive fix prepared on branch `claude/tender-vaughan-7d2763` (boot-time DB env logging + per-call try/catch + `POSTGRES_PASSWORD` in env examples). See progress.md → Incidents for full writeup. |
+| 2026-04-23 | prod | `61505a8` | **Sprint 11 + UI refiner v2 (Tier 1 + 2 + 3) bundled deploy.** Manual SSH per §4.3. Pre-flight env-check green. Manual backup `pbf-prod-2026-04-23-0350.sql.gz` taken. Prisma schema sync: added `NotificationOptOut` table + `@@index([externalMessageId])`. Boot successful: `env_check.passed` + Ready in 222ms. No errors. Rollback target = `a64f4d8` (Sprint 10) if needed. Full details in progress.md → Release Engineering → 2026-04-23. |
 
 > Owner: append each new deploy to this table as it happens. A one-line note is enough.
 
