@@ -9,20 +9,21 @@
    ───────────────────────────────────────────────────────────────────── */
 @layer base {
   :root {
-    /* Surfaces */
-    --canvas: 60 23% 97%; /* #FAFAF7  page background  */
-    --paper: 43 23% 94%; /* #F3F1EC  card surface     */
-    --paper-hover: 44 22% 90%; /* #EBE8E0  card hover       */
+    /* Surfaces — Sprint 11 UI refiner v2 (ADR-059): pure white body, neutral-gray panels.
+       Replaces ADR-031's warm cream palette (Canvas #FAFAF7 + Paper #F3F1EC). */
+    --canvas: 0 0% 100%; /* #FFFFFF  page background  */
+    --paper: 0 0% 97%; /* #F7F7F7  card surface     */
+    --paper-hover: 0 0% 94%; /* #F0F0F0  card hover       */
 
     /* Text */
-    --ink: 222 47% 11%; /* #0F172A  primary          */
-    --ink-2: 215 28% 17%; /* #1F2937  secondary/hover  */
-    --muted-bg: 43 23% 94%; /* matches paper             */
-    --muted-fg: 0 0% 42%; /* #6B6B6B  secondary text   */
+    --ink: 222 47% 11%; /* #0F172A  primary text + primary bar / footer bg */
+    --ink-2: 215 28% 17%; /* #1F2937  secondary ink, hover, footer copyright row */
+    --muted-bg: 0 0% 97%; /* matches paper             */
+    --muted-fg: 0 0% 40%; /* #666666  secondary text (AA 5.7:1 on white) */
 
-    /* Borders */
-    --border: 44 17% 88%; /* #E5E2DA  dividers         */
-    --border-strong: 43 7% 53%; /* #8F8A7D  inputs, UI-AA    */
+    /* Borders — neutral grays (no warm tint) */
+    --border: 0 0% 90%; /* #E5E5E5  dividers         */
+    --border-strong: 0 0% 50%; /* #808080  inputs, UI-AA    */
 
     /* Accent — ink-cyan */
     --accent: 185 81% 29%; /* #0E7C86  CTAs, active     */

@@ -3,6 +3,7 @@
 import { useEffect, useId, useRef, useState, useTransition } from 'react';
 import { useRouter } from '@/lib/i18n/routing';
 import Image from 'next/image';
+import { Search } from 'lucide-react';
 
 type Suggestion = {
   id: string;
@@ -133,13 +134,14 @@ export function HeaderSearch({ locale }: Props) {
   const isAr = locale === 'ar';
 
   return (
-    <div ref={containerRef} className="relative w-full max-w-md">
+    <div ref={containerRef} className="relative w-full max-w-2xl">
       <form
         role="search"
         onSubmit={(e) => {
           e.preventDefault();
           submit(q);
         }}
+        className="flex items-stretch overflow-hidden rounded-lg bg-background shadow-card ring-1 ring-border"
       >
         <label className="sr-only" htmlFor={`${listboxId}-input`}>
           {labels.ariaLabel}
@@ -163,8 +165,15 @@ export function HeaderSearch({ locale }: Props) {
           aria-activedescendant={
             activeIdx >= 0 ? `${listboxId}-opt-${activeIdx}` : undefined
           }
-          className="w-full rounded-md border bg-background px-3 py-1.5 text-sm outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex-1 border-0 bg-transparent px-4 py-2.5 text-sm text-foreground outline-none placeholder:text-muted-foreground"
         />
+        <button
+          type="submit"
+          aria-label={labels.ariaLabel}
+          className="flex items-center justify-center bg-accent px-5 text-accent-foreground transition-colors hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canvas focus-visible:ring-offset-2 focus-visible:ring-offset-ink"
+        >
+          <Search className="h-5 w-5" strokeWidth={2} aria-hidden />
+        </button>
       </form>
 
       {showDropdown ? (
