@@ -116,7 +116,7 @@ export default async function CartPage({
             </dl>
             <Link
               href="/checkout"
-              className="block w-full rounded-md bg-primary px-4 py-2 text-center font-medium text-primary-foreground hover:opacity-90"
+              className="block w-full rounded-md bg-accent px-4 py-2.5 text-center text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-strong"
             >
               {isAr ? 'المتابعة للدفع' : 'Proceed to checkout'}
             </Link>

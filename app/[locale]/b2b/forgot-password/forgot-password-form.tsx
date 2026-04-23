@@ -28,7 +28,7 @@ export function ForgotPasswordForm({ locale }: { locale: 'ar' | 'en' }) {
 
   if (submitted) {
     return (
-      <div className="rounded-md border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-900">
+      <div className="rounded-md border border-success/30 bg-success-soft p-4 text-sm text-success">
         {isAr
           ? 'لو البريد مسجّل عندنا هنلاقي رسالة في إيميلك خلال دقيقة. الرابط صالح لمدة ساعة.'
           : "If that email is on file you'll find a reset link in your inbox within a minute. The link is valid for one hour."}

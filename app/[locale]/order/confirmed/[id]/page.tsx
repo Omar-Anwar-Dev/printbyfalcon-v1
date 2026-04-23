@@ -87,7 +87,7 @@ export default async function OrderConfirmedPage({
       />
 
       {paymentPending && order.paymentMethod === 'PAYMOB_CARD' ? (
-        <div className="mb-6 rounded-md border border-amber-300 bg-amber-50 p-4 text-sm">
+        <div className="mb-6 rounded-md border border-warning/30 bg-warning-soft p-4 text-sm text-warning">
           {isAr
             ? 'لسه بنستنى تأكيد الدفع من Paymob. ممكن ياخد لحظات.'
             : 'Waiting for Paymob to confirm the payment — usually a few seconds.'}
@@ -95,7 +95,7 @@ export default async function OrderConfirmedPage({
       ) : null}
 
       {paymentFailed ? (
-        <div className="mb-6 rounded-md border border-red-300 bg-red-50 p-4 text-sm">
+        <div className="mb-6 rounded-md border border-error/30 bg-error-soft p-4 text-sm text-error">
           {isAr
             ? 'لم يتم تحصيل الدفع. ممكن تتواصل معنا على واتساب للمساعدة.'
             : 'Payment was not captured. Contact us on WhatsApp for help.'}

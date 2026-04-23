@@ -13,10 +13,13 @@ type Props = {
   className?: string;
 };
 
+// All tiers share the accent-soft pill (design-system.md ADR-059 — no warm
+// accents structural, cyan family is the commercial identifier). Tier letter
+// itself carries the differentiation via the label, not the chip color.
 const TONE: Record<PricingTierCode, string> = {
-  A: 'bg-emerald-100 text-emerald-800 border-emerald-200',
-  B: 'bg-sky-100 text-sky-800 border-sky-200',
-  C: 'bg-violet-100 text-violet-800 border-violet-200',
+  A: 'bg-accent-soft text-accent-strong border-accent/20',
+  B: 'bg-accent-soft text-accent-strong border-accent/20',
+  C: 'bg-accent-soft text-accent-strong border-accent/20',
 };
 
 export function PricingTierBadge({
