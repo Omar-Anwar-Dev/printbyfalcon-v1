@@ -39,19 +39,22 @@ export default async function B2BProfilePage({ params }: Props) {
   });
 
   return (
-    <div className="container max-w-3xl space-y-6 py-8">
-      <div>
-        <h1 className="text-2xl font-semibold">
+    <main className="container-page max-w-3xl space-y-6 py-10 md:py-14">
+      <header>
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+          {isAr ? 'حساب شركة' : 'Business account'}
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {isAr ? 'بيانات الشركة' : 'Company profile'}
         </h1>
-        <p className="text-sm text-muted-foreground">
+        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
           {isAr
             ? 'يمكنك تعديل بيانات التواصل. السجل التجاري والبطاقة الضريبية يعدّلها فريقنا فقط — تواصل معنا لأي تغيير.'
             : 'You can update contact details. Commercial registry and tax card fields are edited by our team only — contact us for changes.'}
         </p>
-      </div>
+      </header>
 
-      <section className="space-y-4 rounded-md border bg-background p-5">
+      <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div>
             <p className="text-lg font-semibold">{company.nameAr}</p>
@@ -149,7 +152,7 @@ export default async function B2BProfilePage({ params }: Props) {
           </Link>
         </div>
       </section>
-    </div>
+    </main>
   );
 }
 

@@ -38,7 +38,20 @@ export default async function B2BBulkOrderPage({
   if (!b2b) redirect(`/${locale}/b2b/profile`);
 
   return (
-    <div className="container max-w-6xl py-8">
+    <main className="container-page max-w-6xl py-10 md:py-14">
+      <header className="mb-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+          {isAr ? 'شركات' : 'Business'}
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {isAr ? 'طلب مُجمَّع' : 'Bulk order'}
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          {isAr
+            ? 'اكتب الكود أو اسم المنتج — الأسعار المتفاوض عليها بتظهر لحظياً.'
+            : 'Type SKUs or product names — your negotiated prices appear instantly.'}
+        </p>
+      </header>
       <BulkOrderTable
         locale={isAr ? 'ar' : 'en'}
         labels={{
@@ -97,6 +110,6 @@ export default async function B2BBulkOrderPage({
             : 'Maximum 50 rows per batch.',
         }}
       />
-    </div>
+    </main>
   );
 }

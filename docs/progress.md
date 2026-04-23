@@ -421,6 +421,48 @@ Follow-up to the v2 direction shift. Tier 1 (shell + tokens) went live on stagin
 - `npx vitest run` — 200 / 200 tests green
 - `npx next build` — 123 pages built
 
+### 2026-04-23 — Pre-deploy pass v2.2 (real Tier 2 per-screen polish)
+
+v2.1 was honestly just a token-compliance cleanup — not per-screen polish. Owner pushed back and asked for the actual Tier 2 pass. This entry documents the real polish pass, surface-by-surface.
+
+**Pattern library applied across Tier 2 screens:**
+- Page header: overline (`text-xs uppercase tracking-[0.12em] text-accent-strong`) + bold H1 (`text-2xl sm:text-3xl font-bold tracking-tight`) + subtitle (muted-foreground)
+- Container: `container-page py-10 md:py-14` (instead of stock `container py-8`)
+- Section cards: `rounded-xl border border-border bg-paper p-5` (instead of `rounded-md border bg-background p-4`)
+- Section heads inside cards: `text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground` with optional icon
+- Commerce CTAs: `bg-accent hover:bg-accent-strong` with trailing `ArrowRight` + `rtl:rotate-180`
+- Numerals: wrapped in `className="num"` + `font-mono` where appropriate (order numbers, SKUs, prices, phone)
+- Empty states: centered card with icon + headline + helpful subtitle + CTA (instead of bare text)
+- Sort pills: grouped in a single `rounded-md bg-paper p-1` container (instead of loose buttons)
+- Pagination: disabled state rendered explicitly (instead of hidden)
+- Mobile: tap targets ≥ h-9 (36px) minimum, text readable, no cramped clusters
+
+**Surfaces polished:**
+
+- **[/sign-in](../app/[locale]/sign-in/page.tsx)** — split layout (form on start side + ink B2B-bridge panel on end side with blur-accent). B2C flow: step-1 phone input font-mono tracking-wider + accent submit; step-2 OTP center-aligned mono tracking-[0.5em] + collapsible name/email details + "Change number" link. Fixed stale "or" label bug. Removed `useLocale()` redeclaration.
+- **[/cart](../app/[locale]/cart/page.tsx)** — Overline+title header with live item count, sticky summary sidebar on `lg:`, trust strip (Genuine + Delivery badges) inside summary, accent CTA with arrow, "Continue shopping" micro-link. Empty state with centered ShoppingBag icon + B2B recent-orders reorder list. [CartItemRow](../components/cart/cart-item-row.tsx) — larger image (w-24), improved qty stepper with grouped border + hover states, remove button with error-soft hover, hover-shadow on row.
+- **[/checkout](../app/[locale]/checkout/page.tsx)** — page header with delivery-promise subtitle, 1fr/340px grid (was 1fr/320px). [CheckoutForm](../components/checkout/checkout-form.tsx) summary `rounded-xl bg-paper` with larger thumbnails, clearer price hierarchy (Total in `text-xl font-bold`), free-shipping progress highlighted in accent-soft pill. All 5 section cards upgraded to `rounded-xl border border-border bg-paper p-5`.
+- **[/order/confirmed/[id]](../app/[locale]/order/confirmed/[id]/page.tsx)** — success/failure CheckCircle2/XCircle icon in circular soft badge beside page title, numbered order-number in mono font. Items card + address card with icon-led section heads. Guest signup CTA is a full ink card with accent button (was bg-primary/5 text-primary clash).
+- **[/products](../app/[locale]/products/page.tsx)** — overline + bold title + live count, sort pills grouped in `bg-paper p-1` container with active shadow-card, empty state with helpful CTA, pagination with explicit disabled states.
+- **[/products/[slug]](../app/[locale]/products/[slug]/page.tsx)** — breadcrumbs tightened (`text-xs` + `text-border` separators), grid ratio 1.1fr/1fr with `lg:gap-12`, brand rendered as overline + bold h1, price hierarchy preserved. Description/specs/compat grouped under section border-tops with uppercase tracking labels. Specs table alternates bg for row rhythm. Compat chips use accent-soft hover.
+- **[/search](../app/[locale]/search/page.tsx)** — matching overline/title/count pattern, printer-detect suggestion upgraded to `accent-soft` card with inline accent button (was `bg-primary/5`). Filter sidebar width 260px (was 240px). Sort pills + pagination match products list. Empty state with bullet-dot list of suggestions.
+- **[/account](../app/[locale]/account/page.tsx)** — welcoming "Hi, {name}" title, 3 section cards with icon-led heads (User/MapPin/Package). Addresses shown as mini-cards; orders list uses divide-y with hover on order number. Empty-orders state has cyan "Start shopping" CTA.
+- **[/account/addresses](../app/[locale]/account/addresses/page.tsx)** — page header + subtitle (5-address cap note).
+- **[/account/orders/[id]](../app/[locale]/account/orders/[id]/page.tsx)** — overline + order-number as mono h1 (stronger visual anchor), improved spacing.
+- **[/b2b/login](../app/[locale]/b2b/login/page.tsx)** — split layout mirroring /sign-in: form left + ink benefits panel right (3 perks: pricing / invoices / bulk).
+- **[/b2b/register](../app/[locale]/b2b/register/page.tsx)** — full page polish with overline + H1 + subtitle, application form inside `rounded-xl bg-paper` container, footer sign-in link.
+- **[/b2b/profile](../app/[locale]/b2b/profile/page.tsx)** — matching header pattern, section card upgraded to xl-border.
+- **[/b2b/bulk-order](../app/[locale]/b2b/bulk-order/page.tsx)** — added page header (overline + H1 + subtitle) above the existing bulk-order table.
+
+**Not polished (deferred):**
+- Admin surfaces — PRD §8 best-effort; separate post-M1 pass.
+- Paymob dev-stub, legacy `/login` redirect — not user-facing.
+
+**Regression:**
+- `npx tsc --noEmit` clean (fixed a locale redeclaration in b2c-sign-in-flow.tsx)
+- `npx vitest run` — 200 / 200 tests green
+- `npx next build` — 123 pages built
+
 ---
 
 ## Release Engineering

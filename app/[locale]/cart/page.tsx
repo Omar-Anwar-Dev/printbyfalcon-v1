@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { ArrowRight, ShoppingBag, Truck, ShieldCheck } from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
 import { prisma } from '@/lib/db';
 import { getActiveCart } from '@/lib/cart/cart';
@@ -60,17 +61,30 @@ export default async function CartPage({
     (acc, i) => acc + Number(i.unitPriceEgpSnapshot) * i.qty,
     0,
   );
+  const itemCount = items.reduce((n, i) => n + i.qty, 0);
 
   return (
-    <div className="container max-w-4xl py-8">
-      <h1 className="mb-6 text-2xl font-semibold">
-        {isAr ? 'سلة التسوق' : 'Shopping cart'}
-      </h1>
+    <main className="container-page py-10 md:py-14">
+      <header className="mb-8 max-w-3xl">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+          {isAr ? 'السلة' : 'Cart'}
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {isAr ? 'سلة التسوق' : 'Shopping cart'}
+        </h1>
+        {items.length > 0 ? (
+          <p className="mt-1.5 text-sm text-muted-foreground">
+            {isAr
+              ? `${itemCount} ${itemCount === 1 ? 'عنصر' : 'عناصر'}`
+              : `${itemCount} ${itemCount === 1 ? 'item' : 'items'}`}
+          </p>
+        ) : null}
+      </header>
 
       {items.length === 0 ? (
         <EmptyCart locale={isAr ? 'ar' : 'en'} />
       ) : (
-        <div className="grid gap-6 md:grid-cols-[1fr_320px]">
+        <div className="grid gap-8 lg:grid-cols-[1fr_360px]">
           <ul className="space-y-3">
             {items.map((i) => (
               <CartItemRow
@@ -98,40 +112,75 @@ export default async function CartPage({
             ))}
           </ul>
 
-          <aside className="space-y-4 rounded-md border bg-background p-4">
-            <h2 className="text-base font-semibold">
+          <aside className="h-fit space-y-5 rounded-xl border border-border bg-paper p-5 lg:sticky lg:top-36">
+            <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               {isAr ? 'ملخص الطلب' : 'Order summary'}
             </h2>
-            <dl className="space-y-1 text-sm">
-              <div className="flex justify-between">
+
+            <dl className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
                 <dt className="text-muted-foreground">
                   {isAr ? 'الإجمالي قبل الضريبة' : 'Subtotal'}
                 </dt>
-                <dd>{formatEgp(subtotal.toFixed(2), isAr ? 'ar' : 'en')}</dd>
+                <dd className="num font-semibold text-foreground">
+                  {formatEgp(subtotal.toFixed(2), isAr ? 'ar' : 'en')}
+                </dd>
               </div>
-              <div className="flex justify-between text-muted-foreground">
-                <dt>{isAr ? 'الشحن' : 'Shipping'}</dt>
-                <dd>{isAr ? 'يُحسب في الخطوة التالية' : 'Calculated next'}</dd>
+              <div className="flex items-center justify-between">
+                <dt className="text-muted-foreground">
+                  {isAr ? 'الشحن' : 'Shipping'}
+                </dt>
+                <dd className="text-xs text-muted-foreground">
+                  {isAr ? 'يُحسب في الخطوة التالية' : 'Calculated next'}
+                </dd>
               </div>
             </dl>
+
             <Link
               href="/checkout"
-              className="block w-full rounded-md bg-accent px-4 py-2.5 text-center text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-strong"
+              className="flex w-full items-center justify-center gap-2 rounded-md bg-accent px-4 py-3 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-strong"
             >
               {isAr ? 'المتابعة للدفع' : 'Proceed to checkout'}
+              <ArrowRight
+                className="h-4 w-4 rtl:rotate-180"
+                strokeWidth={2}
+                aria-hidden
+              />
             </Link>
+
+            <Link
+              href="/products"
+              className="block text-center text-xs text-muted-foreground underline-offset-2 hover:text-foreground hover:underline"
+            >
+              {isAr ? 'متابعة التسوّق' : 'Continue shopping'}
+            </Link>
+
+            {/* Trust strip inside the summary */}
+            <ul className="space-y-2 border-t border-border pt-4 text-xs text-muted-foreground">
+              <li className="flex items-center gap-2">
+                <ShieldCheck
+                  className="h-3.5 w-3.5 shrink-0 text-accent-strong"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+                {isAr ? 'منتجات أصلية بضمان' : 'Genuine products, warranted'}
+              </li>
+              <li className="flex items-center gap-2">
+                <Truck
+                  className="h-3.5 w-3.5 shrink-0 text-accent-strong"
+                  strokeWidth={1.75}
+                  aria-hidden
+                />
+                {isAr ? 'توصيل لكل المحافظات' : 'Nationwide delivery'}
+              </li>
+            </ul>
           </aside>
         </div>
       )}
-    </div>
+    </main>
   );
 }
 
-/**
- * Sprint 8 S8-D7-T1 — B2B-aware empty cart state. If the caller is an ACTIVE
- * B2B user with past orders, show the 3 most recent with one-click reorder.
- * B2C / guests / applicants get the standard "Browse products" fallback.
- */
 async function EmptyCart({ locale }: { locale: 'ar' | 'en' }) {
   const isAr = locale === 'ar';
   const b2b = await getB2BCheckoutContext();
@@ -183,26 +232,56 @@ async function EmptyCart({ locale }: { locale: 'ar' | 'en' }) {
   };
 
   return (
-    <div className="rounded-md border bg-background p-8 text-center">
-      <p className="mb-4 text-lg">
+    <div className="mx-auto max-w-xl rounded-xl border border-border bg-paper p-10 text-center">
+      <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-full bg-background text-muted-foreground shadow-card">
+        <ShoppingBag className="h-6 w-6" strokeWidth={1.75} aria-hidden />
+      </span>
+      <h2 className="mt-4 text-lg font-semibold text-foreground">
         {isAr ? 'سلتك فارغة' : 'Your cart is empty'}
+      </h2>
+      <p className="mt-1.5 text-sm text-muted-foreground">
+        {isAr
+          ? 'ابدأ تسوقك بموديل طابعتك أو تصفّح الكتالوج.'
+          : 'Start by searching your printer model or browsing the catalog.'}
       </p>
 
+      <div className="mt-6 flex flex-wrap justify-center gap-2">
+        <Link
+          href="/products"
+          className="inline-flex items-center gap-2 rounded-md bg-accent px-4 py-2.5 text-sm font-semibold text-accent-foreground transition-colors hover:bg-accent-strong"
+        >
+          {isAr ? 'تسوّق المنتجات' : 'Browse products'}
+          <ArrowRight
+            className="h-4 w-4 rtl:rotate-180"
+            strokeWidth={2}
+            aria-hidden
+          />
+        </Link>
+        {b2b ? (
+          <Link
+            href="/b2b/bulk-order"
+            className="inline-flex items-center gap-2 rounded-md border border-border bg-background px-4 py-2.5 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
+          >
+            {isAr ? 'طلب مُجمَّع' : 'Bulk order'}
+          </Link>
+        ) : null}
+      </div>
+
       {b2b && recent.length > 0 ? (
-        <div className="mb-6 text-start">
-          <h2 className="mb-3 text-sm font-semibold text-muted-foreground">
+        <div className="mt-8 border-t border-border pt-6 text-start">
+          <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-muted-foreground">
             {isAr ? 'أعِد طلبًا سابقًا' : 'Reorder a recent order'}
-          </h2>
+          </h3>
           <ul className="space-y-2">
             {recent.map((o) => (
               <li
                 key={o.id}
-                className="flex flex-wrap items-center justify-between gap-2 rounded-md border bg-muted/20 px-3 py-2"
+                className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-border bg-background px-3 py-2.5"
               >
                 <div className="flex-1 text-sm">
                   <Link
                     href={`/account/orders/${o.id}`}
-                    className="font-mono font-medium hover:underline"
+                    className="num font-mono font-medium text-foreground hover:underline"
                   >
                     {o.orderNumber}
                   </Link>
@@ -225,23 +304,6 @@ async function EmptyCart({ locale }: { locale: 'ar' | 'en' }) {
           </ul>
         </div>
       ) : null}
-
-      <div className="flex flex-wrap justify-center gap-2">
-        <Link
-          href="/products"
-          className="inline-block rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
-        >
-          {isAr ? 'تسوق المنتجات' : 'Browse products'}
-        </Link>
-        {b2b ? (
-          <Link
-            href="/b2b/bulk-order"
-            className="inline-block rounded-md border bg-background px-4 py-2 text-sm hover:bg-muted"
-          >
-            {isAr ? 'طلب مُجمَّع' : 'Bulk order'}
-          </Link>
-        ) : null}
-      </div>
     </div>
   );
 }
