@@ -42,10 +42,10 @@ export default async function CancellationsQueuePage({
   });
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             {isAr ? 'طلبات الإلغاء' : 'Cancellation queue'}
           </h1>
           <p className="text-sm text-muted-foreground">

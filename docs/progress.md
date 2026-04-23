@@ -463,6 +463,46 @@ v2.1 was honestly just a token-compliance cleanup — not per-screen polish. Own
 - `npx vitest run` — 200 / 200 tests green
 - `npx next build` — 123 pages built
 
+### 2026-04-23 — Pre-deploy pass v2.3 (Tier 3 — admin surfaces)
+
+Admin is PRD §8 "best-effort, lower bar" — this pass gives the panel a consistent visual shell without per-page redesign work. 100+ admin files touched across ~30 routes.
+
+**Shipped:**
+
+- **New shared component** — [components/admin/admin-page-header.tsx](../components/admin/admin-page-header.tsx): `<AdminPageHeader>` with overline / bold H1 / subtitle / meta / actions slots. Same visual grammar as storefront headers so admin doesn't feel like a different product.
+- **[/admin](../app/[locale]/admin/page.tsx) dashboard** — converted to `AdminPageHeader` (role chip as the actions slot). `SalesCard` delta colors tokenized (`text-success` / `text-destructive` / muted). `QueueCard` restyled — `accent-soft` for normal, `error-soft` for urgent, with a subtle `ArrowRight` on hover (was a fragile `→` span). Low-stock table cell colors tokenized. Sales-trend chart container upgraded to `rounded-xl border-border bg-paper p-5`.
+- **[/admin/login](../app/[locale]/admin/login/page.tsx)** and **[/admin/change-password](../app/[locale]/admin/change-password/page.tsx)** — rebuilt with an ink-banner header on top of a white card body (ShieldCheck / KeyRound badge), to visually distinguish admin auth from storefront /sign-in while using the same token palette.
+- **Admin list pages got `AdminPageHeader`:** `/admin/orders`, `/admin/products`, `/admin/inventory`, `/admin/customers`, `/admin/settings`. The Settings hub redesigned as a 9-card list with hover arrow (was simple divided rows).
+- **Mass container upgrade** — all 30+ admin pages migrated from `container py-8` → `container-page py-10 md:py-14` for consistent rhythm with storefront.
+- **Header typography sweep** — remaining list pages that didn't get `AdminPageHeader` still had their `<h1 className="text-2xl font-semibold">` upgraded to `text-2xl font-bold tracking-tight text-foreground sm:text-3xl` to match the new hierarchy.
+
+**Token cleanup (51 raw-palette violations fixed):**
+
+Batched sed across 33 admin files to replace raw Tailwind palette with design-system tokens:
+- `text-emerald-*` / `text-green-*` → `text-success`
+- `text-amber-*` → `text-warning`
+- `text-red-*` / `text-rose-*` → `text-error`
+- `text-sky-*` / `text-indigo-*` / `text-violet-*` → `text-accent-strong`
+- `bg-emerald-*` / `bg-green-*` → `bg-success` (or `bg-success-soft` for 50/100 variants)
+- `bg-amber-*` → `bg-warning` / `bg-warning-soft`
+- `bg-red-*` / `bg-rose-*` → `bg-error` / `bg-error-soft`
+- `bg-sky-*` / `bg-violet-*` → `bg-accent` / `bg-accent-soft`
+- `hover:bg-emerald-*`, `hover:bg-red-*` swept too (CTA buttons in B2B approve/reject decision component)
+- `border-*-[number]` → tokenized with `/30` or `/20` opacity
+- `dark:bg-emerald-950/*` → `dark:bg-success-soft` (no dark mode in MVP; keeps tokens consistent if we enable later)
+
+Admin now fully conforms to design-system §3.1 tokens + §7 don'ts #7 + #8 (no raw Tailwind palette, no warm accents).
+
+**Not addressed:**
+
+- Per-page deep polish on admin edit/new forms — defer to post-M1.
+- Admin data tables don't get a dedicated `<AdminTable>` component this pass — would be valuable but outside "best-effort" scope.
+
+**Regression:**
+- `npx tsc --noEmit` clean
+- `npx vitest run` — 200 / 200 tests green
+- `npx next build` — successful
+
 ---
 
 ## Release Engineering

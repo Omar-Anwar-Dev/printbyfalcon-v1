@@ -201,7 +201,7 @@ export function InventoryRowActions({
                 className="h-9 rounded-md border bg-background px-3"
               />
             </label>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {error ? <p className="text-sm text-error">{error}</p> : null}
             <div className="mt-2 flex justify-end gap-2">
               <Button
                 type="button"
@@ -269,7 +269,7 @@ export function InventoryRowActions({
                 className="h-9 rounded-md border bg-background px-3"
               />
             </label>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {error ? <p className="text-sm text-error">{error}</p> : null}
             <div className="mt-2 flex justify-end gap-2">
               <Button
                 type="button"

@@ -56,10 +56,10 @@ export default async function AdminB2BApplicationsPage({
   });
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-semibold">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             {isAr ? 'طلبات الشركات' : 'B2B applications'}
           </h1>
           <p className="text-sm text-muted-foreground">

@@ -94,7 +94,7 @@ export function B2BApplicationDecision({ applicationId, labels }: Props) {
           type="button"
           size="sm"
           onClick={() => setMode('approve')}
-          className="bg-emerald-700 text-white hover:bg-emerald-800"
+          className="bg-success text-white hover:bg-success"
         >
           {labels.approve}
         </Button>
@@ -103,7 +103,7 @@ export function B2BApplicationDecision({ applicationId, labels }: Props) {
           size="sm"
           variant="outline"
           onClick={() => setMode('reject')}
-          className="border-red-200 text-red-700 hover:bg-red-50"
+          className="border-error/30 text-error hover:bg-error-soft"
         >
           {labels.reject}
         </Button>
@@ -215,7 +215,7 @@ export function B2BApplicationDecision({ applicationId, labels }: Props) {
               <Button
                 type="submit"
                 disabled={pending}
-                className="bg-emerald-700 text-white hover:bg-emerald-800"
+                className="bg-success text-white hover:bg-success"
               >
                 {pending ? labels.confirmingApprove : labels.confirm}
               </Button>
@@ -264,7 +264,7 @@ export function B2BApplicationDecision({ applicationId, labels }: Props) {
               <Button
                 type="submit"
                 disabled={pending}
-                className="bg-red-700 text-white hover:bg-red-800"
+                className="bg-error text-white hover:bg-error"
               >
                 {pending ? labels.confirmingReject : labels.confirm}
               </Button>

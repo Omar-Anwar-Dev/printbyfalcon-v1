@@ -24,9 +24,9 @@ export default async function AdminPrinterModelsPage({
   });
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {t('admin.nav.printerModels')}
         </h1>
         <Button asChild>
@@ -77,7 +77,7 @@ export default async function AdminPrinterModelsPage({
                 <td className="p-3">{m._count.compatibilities}</td>
                 <td className="p-3">
                   <span
-                    className={`rounded px-2 py-0.5 text-xs font-medium ${m.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}
+                    className={`rounded px-2 py-0.5 text-xs font-medium ${m.status === 'ACTIVE' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
                   >
                     {m.status}
                   </span>

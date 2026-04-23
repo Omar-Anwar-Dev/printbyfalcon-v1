@@ -15,7 +15,7 @@ export default async function CodSettingsPage({
   const policy = await getCodPolicy();
 
   return (
-    <div className="container max-w-2xl py-8">
+    <div className="container-page max-w-2xl py-10 md:py-14">
       <h1 className="mb-2 text-2xl font-semibold">
         {isAr ? 'سياسة الدفع عند الاستلام' : 'Cash on delivery policy'}
       </h1>

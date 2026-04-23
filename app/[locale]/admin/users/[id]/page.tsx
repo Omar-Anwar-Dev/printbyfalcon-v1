@@ -31,7 +31,7 @@ export default async function AdminUserEditPage({
   const isSelf = user.id === actor.id;
 
   return (
-    <div className="container max-w-2xl py-8">
+    <div className="container-page max-w-2xl py-10 md:py-14">
       <Link
         href="/admin/users"
         className="mb-4 inline-block text-sm text-muted-foreground hover:underline"
@@ -72,11 +72,11 @@ export default async function AdminUserEditPage({
           </dt>
           <dd>
             {user.status === 'ACTIVE' ? (
-              <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+              <span className="rounded bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
                 {isAr ? 'نشط' : 'Active'}
               </span>
             ) : (
-              <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+              <span className="rounded bg-error-soft px-2 py-0.5 text-xs font-medium text-error">
                 {isAr ? 'معطّل' : 'Deactivated'}
               </span>
             )}

@@ -137,12 +137,12 @@ export function ReturnDecisionPanel({
           {isAr ? 'إعادة المخزون' : 'Stock release'}
         </strong>
         {stockReleasedAt ? (
-          <span className="text-green-700">
+          <span className="text-success">
             {isAr ? 'تم إرجاع المخزون في ' : 'Stock was released on '}
             {new Date(stockReleasedAt).toLocaleString(isAr ? 'ar-EG' : 'en-US')}
           </span>
         ) : willApprove ? (
-          <span className="text-amber-800">
+          <span className="text-warning">
             {isAr
               ? 'عند الحفظ بقرار "موافق"، ستُعاد الكميات إلى المخزون تلقائيًا (عملية واحدة فقط لكل استرجاع).'
               : 'Saving with an "Approved" decision releases quantities to inventory (once per return).'}
@@ -159,7 +159,7 @@ export function ReturnDecisionPanel({
           {error}
         </p>
       ) : null}
-      {flash ? <p className="text-sm text-green-700">{flash}</p> : null}
+      {flash ? <p className="text-sm text-success">{flash}</p> : null}
 
       <Button type="submit" disabled={isPending}>
         {isPending

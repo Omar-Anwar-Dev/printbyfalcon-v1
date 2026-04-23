@@ -59,7 +59,7 @@ export default async function EditCategoryPage({
   }));
 
   return (
-    <div className="container max-w-3xl py-8">
+    <div className="container-page max-w-3xl py-10 md:py-14">
       <h1 className="mb-6 text-2xl font-semibold">
         {t('admin.catalog.categories.editTitle')}
       </h1>

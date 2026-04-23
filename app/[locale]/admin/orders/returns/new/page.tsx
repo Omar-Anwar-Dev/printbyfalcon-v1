@@ -71,7 +71,7 @@ export default async function RecordReturnPage({
   }));
 
   return (
-    <div className="container max-w-3xl py-8">
+    <div className="container-page max-w-3xl py-10 md:py-14">
       <Link
         href={`/admin/orders/${order.id}`}
         className="mb-4 inline-block text-sm text-muted-foreground hover:underline"

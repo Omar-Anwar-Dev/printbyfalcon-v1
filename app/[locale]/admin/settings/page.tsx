@@ -1,5 +1,7 @@
+import { ArrowRight } from 'lucide-react';
 import { requireAdmin } from '@/lib/auth';
 import { Link } from '@/lib/i18n/routing';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
 
 export default async function AdminSettingsIndex({
   params,
@@ -77,19 +79,32 @@ export default async function AdminSettingsIndex({
   ];
 
   return (
-    <div className="container max-w-3xl py-8">
-      <h1 className="mb-6 text-2xl font-semibold">
-        {isAr ? 'الإعدادات' : 'Settings'}
-      </h1>
+    <div className="container-page max-w-3xl py-10 md:py-14">
+      <AdminPageHeader
+        overline={isAr ? 'الإدارة' : 'Admin'}
+        title={isAr ? 'الإعدادات' : 'Settings'}
+        subtitle={
+          isAr
+            ? 'تحكّم في الشحن، الدفع، الضريبة، الإشعارات، الاسترجاع، والإعدادات العامة للمتجر.'
+            : 'Shipping, payment, VAT, notifications, returns, and global store config.'
+        }
+      />
       <div className="grid gap-3">
         {items.map((item) => (
           <Link
             key={item.href}
             href={item.href}
-            className="rounded-md border bg-background p-4 transition-colors hover:bg-muted/50"
+            className="group flex items-start justify-between gap-4 rounded-xl border border-border bg-paper p-5 transition-colors hover:border-accent/40 hover:bg-paper-hover"
           >
-            <div className="font-medium">{item.title}</div>
-            <p className="mt-1 text-sm text-muted-foreground">{item.desc}</p>
+            <div className="min-w-0 flex-1">
+              <div className="font-semibold text-foreground">{item.title}</div>
+              <p className="mt-1 text-sm text-muted-foreground">{item.desc}</p>
+            </div>
+            <ArrowRight
+              className="mt-1 h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
+              strokeWidth={1.75}
+              aria-hidden
+            />
           </Link>
         ))}
       </div>

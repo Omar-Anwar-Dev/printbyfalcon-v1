@@ -99,7 +99,7 @@ export function CustomerContactForm({
               : 'Save'}
         </Button>
         {flash ? (
-          <span className="text-sm text-green-700">
+          <span className="text-sm text-success">
             {isAr ? 'تم الحفظ ✓' : 'Saved ✓'}
           </span>
         ) : null}

@@ -184,7 +184,7 @@ export function OrderInvoicePanel({
                 ? 'إعادة إرسال للعميل عبر واتساب'
                 : 'Re-send to customer via WhatsApp'}
             </label>
-            {error ? <p className="text-sm text-red-600">{error}</p> : null}
+            {error ? <p className="text-sm text-error">{error}</p> : null}
             <div className="mt-1 flex justify-end gap-2">
               <Button
                 type="button"

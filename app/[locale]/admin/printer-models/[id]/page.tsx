@@ -22,7 +22,7 @@ export default async function EditPrinterModelPage({
   if (!pm) notFound();
 
   return (
-    <div className="container max-w-3xl py-8">
+    <div className="container-page max-w-3xl py-10 md:py-14">
       <h1 className="mb-6 text-2xl font-semibold">
         {isAr ? 'تعديل موديل الطابعة' : 'Edit printer model'}
       </h1>

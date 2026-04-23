@@ -7,6 +7,7 @@ import {
   AdminOrdersBulkBar,
   type BulkBarCourier,
 } from '@/components/admin/admin-orders-bulk-bar';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import {
   ORDER_STATUS_LABELS,
   type OrderStatusKey,
@@ -149,12 +150,16 @@ export default async function AdminOrdersPage({
       : false;
 
   return (
-    <div className="container py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
-          {isAr ? 'الطلبات' : 'Orders'}
-        </h1>
-      </div>
+    <main className="container-page py-10 md:py-14">
+      <AdminPageHeader
+        overline={isAr ? 'العمليات' : 'Operations'}
+        title={isAr ? 'الطلبات' : 'Orders'}
+        subtitle={
+          isAr
+            ? 'كل الطلبات من جميع القنوات — فلترة بالحالة والتاريخ وطريقة الدفع.'
+            : 'All orders from every channel — filter by status, date, and payment method.'
+        }
+      />
 
       <form method="GET" className="mb-6 grid gap-2 md:grid-cols-4">
         <input
@@ -441,6 +446,6 @@ export default async function AdminOrdersPage({
           </div>
         </nav>
       ) : null}
-    </div>
+    </main>
   );
 }

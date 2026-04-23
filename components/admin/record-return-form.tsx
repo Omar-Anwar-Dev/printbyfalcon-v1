@@ -345,8 +345,8 @@ function PolicyWarning({
   }
 
   return (
-    <div className="rounded-md border border-amber-500 bg-amber-50 p-4">
-      <p className="font-medium text-amber-900">
+    <div className="rounded-md border border-warning/30 bg-warning-soft p-4">
+      <p className="font-medium text-warning">
         {isAr ? 'تنبيه سياسة الاسترجاع:' : 'Return policy warning:'} {msg}
       </p>
       {canOverride ? (
@@ -378,7 +378,7 @@ function PolicyWarning({
           ) : null}
         </div>
       ) : (
-        <p className="mt-2 text-xs text-amber-900">
+        <p className="mt-2 text-xs text-warning">
           {isAr
             ? 'دورك لا يسمح بتجاوز السياسة. اطلب من المالك.'
             : 'Your role cannot override — ask an Owner.'}

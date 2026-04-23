@@ -19,9 +19,9 @@ export default async function AdminCouriersPage({
   });
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {isAr ? 'شركات الشحن' : 'Couriers'}
         </h1>
         <Button asChild>
@@ -84,7 +84,7 @@ export default async function AdminCouriersPage({
                   <span
                     className={`rounded px-2 py-0.5 text-xs font-medium ${
                       c.active
-                        ? 'bg-green-100 text-green-800'
+                        ? 'bg-success-soft text-success'
                         : 'bg-neutral-200 text-neutral-700'
                     }`}
                   >

@@ -12,7 +12,7 @@ export default async function AdminUserInvitePage({
   const isAr = locale === 'ar';
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <Link
         href="/admin/users"
         className="mb-4 inline-block text-sm text-muted-foreground hover:underline"

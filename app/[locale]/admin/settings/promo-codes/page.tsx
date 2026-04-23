@@ -25,9 +25,9 @@ export default async function PromoCodesListPage({
   });
 
   return (
-    <div className="container max-w-4xl py-8">
+    <div className="container-page max-w-4xl py-10 md:py-14">
       <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {isAr ? 'أكواد الخصم' : 'Promo codes'}
         </h1>
         <div className="flex items-center gap-2">
@@ -108,7 +108,7 @@ export default async function PromoCodesListPage({
                   </td>
                   <td className="p-2">
                     {r.active ? (
-                      <span className="rounded-md bg-emerald-100 px-2 py-0.5 text-xs text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300">
+                      <span className="rounded-md bg-success-soft px-2 py-0.5 text-xs text-success dark:bg-success/40 dark:text-success">
                         {isAr ? 'مفعّل' : 'Active'}
                       </span>
                     ) : (
