@@ -18,7 +18,7 @@ export default async function EditPromoCodePage({
   if (!row) notFound();
 
   return (
-    <div className="container max-w-2xl py-8">
+    <div className="container-page max-w-2xl py-10 md:py-14">
       <h1 className="mb-2 text-2xl font-semibold">
         {isAr ? 'تعديل كود الخصم' : 'Edit promo code'}
       </h1>

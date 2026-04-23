@@ -11,7 +11,7 @@ export default async function NewCourierPage({
   const isAr = locale === 'ar';
 
   return (
-    <div className="container max-w-3xl py-8">
+    <div className="container-page max-w-3xl py-10 md:py-14">
       <h1 className="mb-6 text-2xl font-semibold">
         {isAr ? 'شركة شحن جديدة' : 'New courier'}
       </h1>

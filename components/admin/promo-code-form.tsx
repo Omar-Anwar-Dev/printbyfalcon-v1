@@ -118,7 +118,7 @@ export function PromoCodeForm({
       className="space-y-4 rounded-md border bg-background p-4"
     >
       {msg ? (
-        <div className="rounded-md border border-emerald-400/40 bg-emerald-50 p-3 text-sm text-emerald-800 dark:bg-emerald-950/20 dark:text-emerald-300">
+        <div className="rounded-md border border-success/40 bg-success-soft p-3 text-sm text-success dark:bg-success/20 dark:text-success">
           {msg}
         </div>
       ) : null}

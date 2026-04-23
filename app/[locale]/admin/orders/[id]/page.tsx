@@ -102,7 +102,7 @@ export default async function AdminOrderDetailPage({
   const actionLabels = defaultOrderStatusActionLabels(statusLocale);
 
   return (
-    <div className="container max-w-4xl py-8">
+    <div className="container-page max-w-4xl py-10 md:py-14">
       <header className="mb-6">
         <h1 className="font-mono text-2xl font-semibold">
           {order.orderNumber}

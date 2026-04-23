@@ -24,7 +24,7 @@ export default async function AdminReturnPolicySettingsPage({
   ]);
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <Link
         href="/admin/settings"
         className="mb-4 inline-block text-sm text-muted-foreground hover:underline"

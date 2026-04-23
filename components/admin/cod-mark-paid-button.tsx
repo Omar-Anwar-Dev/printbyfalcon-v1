@@ -37,7 +37,7 @@ export function CodMarkPaidButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="w-full rounded-md border border-emerald-500/40 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-900 hover:bg-emerald-100 dark:bg-emerald-950/20 dark:text-emerald-200"
+        className="w-full rounded-md border border-success/40 bg-success-soft px-3 py-2 text-sm font-semibold text-success hover:bg-success-soft dark:bg-success/20 dark:text-success"
       >
         {isAr ? 'تسجيل استلام الدفع نقدًا' : 'Mark COD as paid'}
       </button>
@@ -68,7 +68,7 @@ export function CodMarkPaidButton({
           type="button"
           onClick={confirm}
           disabled={pending}
-          className="rounded-md bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700 disabled:opacity-60"
+          className="rounded-md bg-success px-3 py-1.5 text-xs font-semibold text-white hover:bg-success disabled:opacity-60"
         >
           {isAr ? 'تأكيد' : 'Confirm'}
         </button>

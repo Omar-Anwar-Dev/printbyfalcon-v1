@@ -68,7 +68,7 @@ export default async function CodReconciliationPage({
   const grandTotal = rows.reduce((acc, r) => acc + Number(r.totalEgp), 0);
 
   return (
-    <div className="container max-w-5xl py-8">
+    <div className="container-page max-w-5xl py-10 md:py-14">
       <h1 className="mb-2 text-2xl font-semibold">
         {isAr ? 'تسوية الدفع عند الاستلام' : 'COD reconciliation'}
       </h1>

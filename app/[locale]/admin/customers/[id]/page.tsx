@@ -49,7 +49,7 @@ export default async function AdminCustomerDetailPage({
   const isOwner = actor.adminRole === 'OWNER';
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <Link
         href="/admin/customers"
         className="mb-4 inline-block text-sm text-muted-foreground hover:underline"
@@ -66,11 +66,11 @@ export default async function AdminCustomerDetailPage({
           </p>
         </div>
         {user.status === 'ACTIVE' ? (
-          <span className="rounded bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+          <span className="rounded bg-success-soft px-3 py-1 text-xs font-medium text-success">
             {isAr ? 'نشط' : 'Active'}
           </span>
         ) : (
-          <span className="rounded bg-red-100 px-3 py-1 text-xs font-medium text-red-800">
+          <span className="rounded bg-error-soft px-3 py-1 text-xs font-medium text-error">
             {isAr ? 'معطّل' : 'Deactivated'}
           </span>
         )}

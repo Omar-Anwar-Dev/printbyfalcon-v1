@@ -21,7 +21,7 @@ export default async function ShippingSettingsPage({
   ]);
 
   return (
-    <div className="container max-w-4xl py-8">
+    <div className="container-page max-w-4xl py-10 md:py-14">
       <h1 className="mb-2 text-2xl font-semibold">
         {isAr ? 'الشحن والمحافظات' : 'Shipping & governorates'}
       </h1>

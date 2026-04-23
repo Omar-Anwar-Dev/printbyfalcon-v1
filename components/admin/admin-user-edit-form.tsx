@@ -93,7 +93,7 @@ export function AdminUserEditForm({
               : 'Save role'}
         </Button>
         {savedFlash ? (
-          <span className="text-sm text-green-700">
+          <span className="text-sm text-success">
             {isAr ? 'تم الحفظ ✓' : 'Saved ✓'}
           </span>
         ) : null}

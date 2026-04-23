@@ -39,7 +39,7 @@ export default async function ReturnDetailPage({
   if (!ret) notFound();
 
   return (
-    <div className="container max-w-3xl py-8">
+    <div className="container-page max-w-3xl py-10 md:py-14">
       <Link
         href="/admin/orders/returns"
         className="mb-4 inline-block text-sm text-muted-foreground hover:underline"
@@ -60,7 +60,7 @@ export default async function ReturnDetailPage({
       </p>
 
       {ret.policyOverride ? (
-        <div className="mb-4 rounded-md border border-amber-500 bg-amber-50 p-3 text-sm text-amber-900">
+        <div className="mb-4 rounded-md border border-warning/30 bg-warning-soft p-3 text-sm text-warning">
           <strong>{isAr ? 'تجاوز السياسة:' : 'Policy override:'}</strong>{' '}
           {ret.overrideReason}
         </div>

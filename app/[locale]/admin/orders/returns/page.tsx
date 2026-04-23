@@ -52,10 +52,10 @@ export default async function ReturnsListPage({
   });
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
             {isAr ? 'سجل الإرجاعات' : 'Returns log'}
           </h1>
           <p className="text-sm text-muted-foreground">
@@ -155,7 +155,7 @@ export default async function ReturnsListPage({
                     {r.order.orderNumber}
                   </Link>
                   {r.policyOverride ? (
-                    <div className="mt-1 text-[10px] uppercase text-amber-700">
+                    <div className="mt-1 text-[10px] uppercase text-warning">
                       {isAr ? 'تجاوز سياسة' : 'Policy override'}
                     </div>
                   ) : null}
@@ -164,7 +164,7 @@ export default async function ReturnsListPage({
                 <td className="max-w-[320px] whitespace-pre-line p-3">
                   {r.reason}
                   {r.overrideReason ? (
-                    <div className="mt-1 text-xs text-amber-700">
+                    <div className="mt-1 text-xs text-warning">
                       {isAr ? 'سبب التجاوز:' : 'Override reason:'}{' '}
                       {r.overrideReason}
                     </div>
@@ -180,7 +180,7 @@ export default async function ReturnsListPage({
                 </td>
                 <td className="p-3 text-xs">
                   {r.stockReleasedAt ? (
-                    <span className="rounded bg-green-100 px-2 py-0.5 text-green-800">
+                    <span className="rounded bg-success-soft px-2 py-0.5 text-success">
                       {isAr ? 'أُعيد' : 'Released'}
                     </span>
                   ) : (

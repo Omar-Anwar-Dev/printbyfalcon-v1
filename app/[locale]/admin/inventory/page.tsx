@@ -6,6 +6,7 @@ import {
   effectiveLowStockThreshold,
 } from '@/lib/settings/inventory';
 import { InventoryRowActions } from '@/components/admin/inventory-row-actions';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
 
 const PAGE_SIZE = 50;
 
@@ -112,17 +113,16 @@ export default async function AdminInventoryPage({
   }
 
   return (
-    <div className="container py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
-          {isAr ? 'المخزون' : 'Inventory'}
-        </h1>
-        <div className="text-sm text-muted-foreground">
-          {isAr
-            ? `الحد الافتراضي للتنبيه: ${globalDefault} وحدة`
-            : `Global low-stock threshold: ${globalDefault} units`}
-        </div>
-      </div>
+    <div className="container-page py-10 md:py-14">
+      <AdminPageHeader
+        overline={isAr ? 'العمليات' : 'Operations'}
+        title={isAr ? 'المخزون' : 'Inventory'}
+        subtitle={
+          isAr
+            ? `الحد الافتراضي للتنبيه: ${globalDefault} وحدة. استلم كميات، عدّل الحدود، وراقب المنخفض.`
+            : `Global low-stock threshold: ${globalDefault} units. Receive stock, tune thresholds, watch low inventory.`
+        }
+      />
 
       <form
         method="get"
@@ -207,10 +207,10 @@ export default async function AdminInventoryPage({
                   <span
                     className={`rounded px-2 py-0.5 text-xs font-medium ${
                       r.state === 'OUT'
-                        ? 'bg-red-100 text-red-800'
+                        ? 'bg-error-soft text-error'
                         : r.state === 'LOW'
-                          ? 'bg-amber-100 text-amber-900'
-                          : 'bg-green-100 text-green-800'
+                          ? 'bg-warning-soft text-warning'
+                          : 'bg-success-soft text-success'
                     }`}
                   >
                     {r.state === 'OUT'

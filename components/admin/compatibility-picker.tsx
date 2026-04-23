@@ -115,7 +115,7 @@ export function CompatibilityPicker({
               {labels.save}
             </Button>
             {savedFlash ? (
-              <span className="text-sm text-green-700">{labels.saved}</span>
+              <span className="text-sm text-success">{labels.saved}</span>
             ) : null}
           </div>
         </>

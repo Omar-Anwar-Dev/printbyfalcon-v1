@@ -3,6 +3,7 @@ import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import type { Prisma, UserStatus } from '@prisma/client';
 
 type SearchParams = Promise<{ q?: string; status?: string; page?: string }>;
@@ -60,15 +61,16 @@ export default async function AdminCustomersPage({
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="container py-8">
-      <h1 className="mb-2 text-2xl font-semibold">
-        {isAr ? 'عملاء الأفراد (B2C)' : 'Individual customers (B2C)'}
-      </h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        {isAr
-          ? 'قائمة عملاء B2C — ابحث بالاسم أو الهاتف أو البريد الإلكتروني. المالك يقدر يوقف حساب لو ضروري.'
-          : 'B2C customer list — search by name, phone, or email. Owner can deactivate an account when needed.'}
-      </p>
+    <div className="container-page py-10 md:py-14">
+      <AdminPageHeader
+        overline={isAr ? 'المبيعات' : 'Sales'}
+        title={isAr ? 'عملاء الأفراد (B2C)' : 'Individual customers (B2C)'}
+        subtitle={
+          isAr
+            ? 'قائمة عملاء B2C — ابحث بالاسم أو الهاتف أو البريد الإلكتروني. المالك يقدر يوقف حساب لو ضروري.'
+            : 'B2C customer list — search by name, phone, or email. Owner can deactivate an account when needed.'
+        }
+      />
 
       <form className="mb-4 flex flex-wrap items-end gap-3" action="">
         <div className="min-w-[16rem] flex-1">

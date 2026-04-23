@@ -7,7 +7,7 @@ export default async function NewBrandPage() {
   const t = await getTranslations();
 
   return (
-    <div className="container max-w-3xl py-8">
+    <div className="container-page max-w-3xl py-10 md:py-14">
       <h1 className="mb-6 text-2xl font-semibold">
         {t('admin.catalog.brands.newTitle')}
       </h1>

@@ -81,7 +81,9 @@ export default async function AdminCompanyDetailPage({ params }: Props) {
           <span className="text-foreground">{company.nameAr}</span>
         </nav>
         <div className="flex flex-wrap items-center gap-3">
-          <h1 className="text-2xl font-semibold">{company.nameAr}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {company.nameAr}
+          </h1>
           <PricingTierBadge
             code={company.pricingTier.code}
             defaultDiscountPercent={
@@ -90,7 +92,7 @@ export default async function AdminCompanyDetailPage({ params }: Props) {
             locale={locale}
           />
           {company.status === 'SUSPENDED' ? (
-            <span className="rounded-full bg-red-100 px-2.5 py-1 text-xs font-medium text-red-800">
+            <span className="rounded-full bg-error-soft px-2.5 py-1 text-xs font-medium text-error">
               {isAr ? 'موقوف' : 'Suspended'}
             </span>
           ) : null}

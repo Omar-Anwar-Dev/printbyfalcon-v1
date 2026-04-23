@@ -56,9 +56,9 @@ export default async function AdminUsersPage({
   const roleLabels = isAr ? ROLE_LABEL_AR : ROLE_LABEL_EN;
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {isAr ? 'مستخدمو لوحة الإدارة' : 'Admin users'}
         </h1>
         <Button asChild>
@@ -125,11 +125,11 @@ export default async function AdminUsersPage({
                     </td>
                     <td className="p-3">
                       {a.status === 'ACTIVE' ? (
-                        <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+                        <span className="rounded bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
                           {isAr ? 'نشط' : 'Active'}
                         </span>
                       ) : (
-                        <span className="rounded bg-red-100 px-2 py-0.5 text-xs font-medium text-red-800">
+                        <span className="rounded bg-error-soft px-2 py-0.5 text-xs font-medium text-error">
                           {isAr ? 'معطّل' : 'Deactivated'}
                         </span>
                       )}

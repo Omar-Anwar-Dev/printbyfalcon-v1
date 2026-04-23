@@ -96,9 +96,11 @@ export default async function AdminPendingConfirmationPage({ params }: Props) {
   }
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold">{t.title}</h1>
+        <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {t.title}
+        </h1>
         <p className="mt-1 text-sm text-muted-foreground">{t.subtitle}</p>
       </div>
 

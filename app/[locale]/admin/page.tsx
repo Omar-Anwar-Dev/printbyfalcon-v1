@@ -1,5 +1,6 @@
 import { requireAdmin } from '@/lib/auth';
 import { Link } from '@/lib/i18n/routing';
+import { ArrowRight } from 'lucide-react';
 import {
   Card,
   CardContent,
@@ -7,6 +8,7 @@ import {
   CardHeader,
   CardTitle,
 } from '@/components/ui/card';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { listLowStockProducts } from '@/lib/inventory/low-stock';
 import { canSeeWidget } from '@/lib/admin/role-matrix';
 import {
@@ -69,18 +71,22 @@ export default async function AdminHomePage({
   });
 
   return (
-    <div className="container py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
-          {isAr ? 'لوحة التحكم' : 'Dashboard'}
-        </h1>
-        <span className="text-sm text-muted-foreground">
-          {isAr ? 'مرحبًا' : 'Welcome'}, <strong>{user.name}</strong>
-          <span className="ms-1 rounded bg-muted px-2 py-0.5 text-xs">
+    <main className="container-page py-10 md:py-14">
+      <AdminPageHeader
+        overline={isAr ? 'الإدارة' : 'Admin'}
+        title={isAr ? 'لوحة التحكم' : 'Dashboard'}
+        subtitle={
+          <>
+            {isAr ? 'مرحبًا' : 'Welcome'},{' '}
+            <span className="font-semibold text-foreground">{user.name}</span>
+          </>
+        }
+        actions={
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-accent/20 bg-accent-soft px-2.5 py-1 text-xs font-semibold uppercase tracking-[0.08em] text-accent-strong">
             {user.adminRole}
           </span>
-        </span>
-      </div>
+        }
+      />
 
       {/* Revenue row — Owner only. */}
       {salesToday || salesWeek || salesMonth ? (
@@ -171,7 +177,7 @@ export default async function AdminHomePage({
 
       {/* Sales trend chart — Owner only. */}
       {canSeeWidget(role, 'salesTrend') && salesTrend.length > 0 ? (
-        <section className="mb-6 rounded-md border bg-background p-5">
+        <section className="mb-6 rounded-xl border border-border bg-paper p-5">
           <SalesTrendChart points={salesTrend} isAr={isAr} />
         </section>
       ) : null}
@@ -335,9 +341,7 @@ export default async function AdminHomePage({
                         </td>
                         <td
                           className={`py-2 font-medium tabular-nums ${
-                            row.currentQty <= 0
-                              ? 'text-red-700'
-                              : 'text-amber-700'
+                            row.currentQty <= 0 ? 'text-error' : 'text-warning'
                           }`}
                         >
                           {row.currentQty}
@@ -354,7 +358,7 @@ export default async function AdminHomePage({
           </CardContent>
         </Card>
       ) : null}
-    </div>
+    </main>
   );
 }
 
@@ -373,7 +377,7 @@ function SalesCard({
     data.deltaPct === null
       ? 'text-muted-foreground'
       : data.deltaPct >= 0
-        ? 'text-green-700'
+        ? 'text-success'
         : 'text-destructive';
   const deltaText =
     data.deltaPct === null
@@ -420,29 +424,31 @@ function QueueCard({
   return (
     <Link
       href={href}
-      className={`group block rounded-lg border-2 p-5 transition-colors ${
+      className={`group block rounded-xl border p-5 transition-colors ${
         urgent
-          ? 'border-destructive/50 bg-destructive/5 hover:border-destructive/70'
-          : 'border-primary/20 bg-primary/5 hover:border-primary/40'
+          ? 'border-error/30 bg-error-soft hover:border-error/50'
+          : 'border-accent/20 bg-accent-soft hover:border-accent/40'
       }`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="min-w-0">
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
-          <p className="mt-1 text-3xl font-bold tabular-nums">{count}</p>
+          <p className="num mt-1 text-3xl font-bold tabular-nums text-foreground">
+            {count}
+          </p>
           <p
             className={`mt-1 text-xs ${
-              urgent
-                ? 'font-semibold text-destructive'
-                : 'text-muted-foreground'
+              urgent ? 'font-semibold text-error' : 'text-muted-foreground'
             }`}
           >
             {hint}
           </p>
         </div>
-        <span className="rounded-full bg-muted px-2 py-1 text-xs font-medium text-muted-foreground group-hover:bg-muted/80">
-          →
-        </span>
+        <ArrowRight
+          className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
+          strokeWidth={1.75}
+          aria-hidden
+        />
       </div>
     </Link>
   );

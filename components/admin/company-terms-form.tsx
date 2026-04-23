@@ -148,7 +148,7 @@ export function CompanyTermsForm({ companyId, initial, locale }: Props) {
 
       <div className="flex items-center justify-end gap-3">
         {savedAt ? (
-          <span className="text-xs text-emerald-700">
+          <span className="text-xs text-success">
             {isAr ? 'تم الحفظ ✓' : 'Saved ✓'}
           </span>
         ) : null}

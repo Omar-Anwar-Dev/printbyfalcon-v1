@@ -75,7 +75,7 @@ export function BulkReceiveForm({ locale }: { locale: string }) {
                     <td className="py-2">{r.line}</td>
                     <td className="py-2 font-mono text-xs">{r.sku || '—'}</td>
                     <td
-                      className={`py-2 ${r.ok ? 'text-green-700' : 'text-red-700'}`}
+                      className={`py-2 ${r.ok ? 'text-success' : 'text-error'}`}
                     >
                       {r.ok ? '✓ ' : '✗ '}
                       {r.message}

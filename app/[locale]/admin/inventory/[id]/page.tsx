@@ -90,7 +90,7 @@ export default async function AdminInventoryDetailPage({
   const otherName = isAr ? product.nameEn : product.nameAr;
 
   return (
-    <div className="container py-8">
+    <div className="container-page py-10 md:py-14">
       <div className="mb-4 text-sm">
         <Link href="/admin/inventory" className="hover:underline">
           ← {isAr ? 'المخزون' : 'Inventory'}
@@ -98,7 +98,9 @@ export default async function AdminInventoryDetailPage({
       </div>
       <div className="mb-6 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-2xl font-semibold">{name}</h1>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            {name}
+          </h1>
           <div className="text-sm text-muted-foreground">
             <span className="font-mono">{product.sku}</span>
             <span className="mx-2">·</span>
@@ -184,9 +186,9 @@ export default async function AdminInventoryDetailPage({
                   <td
                     className={`p-3 font-medium tabular-nums ${
                       m.qtyDelta > 0
-                        ? 'text-green-700'
+                        ? 'text-success'
                         : m.qtyDelta < 0
-                          ? 'text-red-700'
+                          ? 'text-error'
                           : ''
                     }`}
                   >

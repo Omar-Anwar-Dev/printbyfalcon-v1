@@ -61,7 +61,7 @@ export function GlobalThresholdForm({
       <div className="mt-4 flex items-center justify-between gap-2">
         <span className="text-xs text-muted-foreground">
           {saved ? (isAr ? 'تم الحفظ' : 'Saved') : ''}
-          {error ? <span className="text-red-600">{error}</span> : null}
+          {error ? <span className="text-error">{error}</span> : null}
         </span>
         <Button type="submit" disabled={pending}>
           {isAr ? 'حفظ' : 'Save'}

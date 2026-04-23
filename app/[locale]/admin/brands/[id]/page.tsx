@@ -17,7 +17,7 @@ export default async function EditBrandPage({
   if (!brand) notFound();
 
   return (
-    <div className="container max-w-3xl py-8">
+    <div className="container-page max-w-3xl py-10 md:py-14">
       <h1 className="mb-6 text-2xl font-semibold">
         {t('admin.catalog.brands.editTitle')}
       </h1>

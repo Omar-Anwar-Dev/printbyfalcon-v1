@@ -1,10 +1,12 @@
 import { getTranslations } from 'next-intl/server';
+import { Plus } from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { Button } from '@/components/ui/button';
 import { ProductRowActions } from '@/components/admin/product-row-actions';
 import { BulkArchiveBar } from '@/components/admin/bulk-archive-bar';
+import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import type { Prisma } from '@prisma/client';
 
 export default async function AdminProductsPage({
@@ -60,15 +62,24 @@ export default async function AdminProductsPage({
   ]);
 
   return (
-    <div className="container py-8">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">
-          {t('admin.catalog.products.title')}
-        </h1>
-        <Button asChild>
-          <Link href="/admin/products/new">+ {t('admin.common.new')}</Link>
-        </Button>
-      </div>
+    <div className="container-page py-10 md:py-14">
+      <AdminPageHeader
+        overline={isAr ? 'الكتالوج' : 'Catalog'}
+        title={t('admin.catalog.products.title')}
+        subtitle={
+          isAr
+            ? 'كل منتجات المتجر — فلترة بالعلامة والفئة والنوع، وأرشفة جماعية.'
+            : 'All products — filter by brand/category/authenticity, bulk archive.'
+        }
+        actions={
+          <Button asChild variant="accent" size="sm">
+            <Link href="/admin/products/new">
+              <Plus className="me-1.5 h-4 w-4" strokeWidth={2} aria-hidden />
+              {t('admin.common.new')}
+            </Link>
+          </Button>
+        }
+      />
       <form method="GET" className="mb-6 grid gap-2 md:grid-cols-5">
         <input
           type="search"
@@ -211,7 +222,7 @@ export default async function AdminProductsPage({
                 </td>
                 <td className="p-3">
                   <span
-                    className={`rounded px-2 py-0.5 text-xs font-medium ${p.status === 'ACTIVE' ? 'bg-green-100 text-green-800' : 'bg-amber-100 text-amber-800'}`}
+                    className={`rounded px-2 py-0.5 text-xs font-medium ${p.status === 'ACTIVE' ? 'bg-success-soft text-success' : 'bg-warning-soft text-warning'}`}
                   >
                     {p.status}
                   </span>
