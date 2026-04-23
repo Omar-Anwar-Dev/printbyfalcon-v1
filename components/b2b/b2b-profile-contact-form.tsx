@@ -93,7 +93,7 @@ export function B2BProfileContactForm({ initial, locale }: Props) {
       ) : null}
       <div className="flex items-center justify-end gap-3">
         {savedAt ? (
-          <span className="text-xs text-emerald-700">
+          <span className="text-xs font-medium text-success">
             {isAr ? 'تم الحفظ ✓' : 'Saved ✓'}
           </span>
         ) : null}

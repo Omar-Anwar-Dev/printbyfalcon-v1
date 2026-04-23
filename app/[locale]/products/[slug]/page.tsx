@@ -193,22 +193,22 @@ export default async function ProductDetailPage({
               listPriceClassName="text-sm"
             />
             {product.authenticity === 'COMPATIBLE' ? (
-              <span className="rounded bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+              <span className="rounded-full border border-border bg-paper px-2.5 py-0.5 text-xs font-medium text-muted-foreground">
                 {isAr ? 'متوافق' : 'Compatible'}
               </span>
             ) : (
-              <span className="rounded bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">
+              <span className="rounded-full border border-success/20 bg-success-soft px-2.5 py-0.5 text-xs font-medium text-success">
                 {isAr ? 'أصلي' : 'Genuine'}
               </span>
             )}
             {resolvedDetail.source === 'tier' ? (
-              <span className="rounded bg-sky-100 px-2 py-0.5 text-xs font-medium text-sky-800">
+              <span className="rounded-full border border-accent/20 bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-strong">
                 {isAr
                   ? `سعر المستوى ${pricingCtx.tier?.code}`
                   : `Tier ${pricingCtx.tier?.code} pricing`}
               </span>
             ) : resolvedDetail.source === 'override' ? (
-              <span className="rounded bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-800">
+              <span className="rounded-full border border-accent/20 bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-strong">
                 {isAr ? 'سعر متفق عليه' : 'Negotiated price'}
               </span>
             ) : null}
@@ -218,7 +218,7 @@ export default async function ProductDetailPage({
             <StockBadge status={stockStatus} locale={isAr ? 'ar' : 'en'} />
             {exactStockQty != null && exactStockQty > 0 ? (
               <span
-                className="rounded-full border border-sky-200 bg-sky-50 px-2.5 py-0.5 text-xs font-medium text-sky-800"
+                className="rounded-full border border-accent/20 bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-strong"
                 dir={isAr ? 'rtl' : 'ltr'}
                 title={
                   isAr
@@ -234,7 +234,7 @@ export default async function ProductDetailPage({
           </div>
 
           {isOutOfStock ? (
-            <p className="rounded-md border border-neutral-300 bg-neutral-50 p-3 text-sm text-neutral-700">
+            <p className="rounded-md border border-border bg-paper p-3 text-sm text-muted-foreground">
               {isAr
                 ? 'هذا المنتج غير متاح حاليًا. تواصل معنا للاستفسار عن موعد التوفر.'
                 : 'This product is currently unavailable. Contact us for restock timing.'}

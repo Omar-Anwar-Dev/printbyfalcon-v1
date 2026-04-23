@@ -245,9 +245,9 @@ export function ReorderButton({
                               <span
                                 className={
                                   line.status === 'available'
-                                    ? 'text-green-700'
+                                    ? 'text-success'
                                     : line.status === 'partial'
-                                      ? 'text-amber-700'
+                                      ? 'text-warning'
                                       : 'text-destructive'
                                 }
                               >
@@ -276,7 +276,7 @@ export function ReorderButton({
                   </div>
                 ) : null}
                 {result ? (
-                  <div className="mt-3 rounded-md border border-green-500/40 bg-green-50 px-3 py-2 text-sm text-green-900">
+                  <div className="mt-3 rounded-md border border-success/30 bg-success-soft px-3 py-2 text-sm text-success">
                     {result}
                   </div>
                 ) : null}

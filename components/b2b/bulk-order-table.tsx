@@ -421,7 +421,7 @@ export function BulkOrderTable({
                           </span>
                         ) : null}
                         {warning ? (
-                          <span className="mt-0.5 block text-xs font-medium text-amber-700">
+                          <span className="mt-0.5 block text-xs font-medium text-warning">
                             {warning}
                           </span>
                         ) : null}
@@ -500,7 +500,7 @@ export function BulkOrderTable({
       ) : null}
 
       {skipped.length > 0 ? (
-        <div className="mt-3 rounded-md border border-amber-500/40 bg-amber-50 px-3 py-2 text-sm">
+        <div className="mt-3 rounded-md border border-warning/30 bg-warning-soft px-3 py-2 text-sm text-warning">
           <p className="font-medium">{labels.skippedHeader}</p>
           <ul className="mt-1 space-y-0.5">
             {skipped.map((s, i) => (
@@ -514,7 +514,7 @@ export function BulkOrderTable({
       ) : null}
 
       {successCount !== null && successCount > 0 ? (
-        <div className="mt-3 rounded-md border border-green-500/40 bg-green-50 px-3 py-2 text-sm text-green-900">
+        <div className="mt-3 rounded-md border border-success/30 bg-success-soft px-3 py-2 text-sm text-success">
           {labels.successToastTemplate.replace('{count}', String(successCount))}
         </div>
       ) : null}

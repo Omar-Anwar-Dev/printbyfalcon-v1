@@ -578,7 +578,7 @@ export function CheckoutForm({
           </dd>
         </div>
         {totals.discount > 0 ? (
-          <div className="flex justify-between text-emerald-700 dark:text-emerald-400">
+          <div className="flex justify-between text-success">
             <dt>{labels.discount}</dt>
             <dd>
               − {fmt(totals.discount, locale)} {labels.egp}
@@ -590,7 +590,7 @@ export function CheckoutForm({
           <dd>
             {zoneInfo ? (
               totals.freeShipped ? (
-                <span className="text-emerald-700 dark:text-emerald-400">
+                <span className="font-medium text-success">
                   {labels.freeShippingAchieved}
                 </span>
               ) : (
@@ -975,8 +975,8 @@ export function CheckoutForm({
         <section className="space-y-2 rounded-md border bg-background p-4">
           <h2 className="text-base font-semibold">{labels.promoCode}</h2>
           {appliedPromo ? (
-            <div className="flex items-center justify-between rounded-md border border-emerald-400/40 bg-emerald-50 p-3 text-sm dark:bg-emerald-950/20">
-              <span className="font-medium text-emerald-800 dark:text-emerald-300">
+            <div className="flex items-center justify-between rounded-md border border-success/30 bg-success-soft p-3 text-sm">
+              <span className="font-medium text-success">
                 {labels.promoApplied(
                   appliedPromo.code,
                   fmt(appliedPromo.discountEgp, locale),
@@ -985,7 +985,7 @@ export function CheckoutForm({
               <button
                 type="button"
                 onClick={onRemovePromo}
-                className="text-xs font-medium text-emerald-900 underline dark:text-emerald-300"
+                className="text-xs font-medium text-success underline underline-offset-2"
               >
                 {labels.remove}
               </button>

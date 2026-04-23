@@ -99,7 +99,11 @@ export function B2CSignInFlow() {
           dir="ltr"
         />
       </div>
-      {devHint ? <p className="text-xs text-amber-600">{devHint}</p> : null}
+      {devHint ? (
+        <p className="rounded border border-warning/20 bg-warning-soft px-2.5 py-1.5 text-xs text-warning">
+          {devHint}
+        </p>
+      ) : null}
       <div className="space-y-2">
         <Label htmlFor="name">{t('auth.registrationNameLabel')}</Label>
         <Input

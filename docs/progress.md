@@ -392,6 +392,35 @@ Products list + detail, search + filters, cart + checkout + order-confirmed, acc
 **Decisions logged this pass:**
 - **ADR-059** [2026-04-23] UI direction v2 — pure-white body + ink shell + structural familiarity from Egyptian retail. Supersedes ADR-031 direction paragraph; preserves its spacing/typography/motion tokens.
 
+### 2026-04-23 — Pre-deploy pass v2.1 (Tier 2 + Tier 3 token cleanup)
+
+Follow-up to the v2 direction shift. Tier 1 (shell + tokens) went live on staging clean; audit surfaced raw-Tailwind palette usage in user-facing surfaces that the foundation pass left on ADR-031 but that break under the ADR-059 "no warm accents structural" principle. Fixed in-place — no new components, no new tokens, just normalizing to `success-soft`/`success`, `warning-soft`/`warning`, `error-soft`/`error`, and `accent-soft`/`accent-strong`.
+
+**Polish applied:**
+
+- [app/[locale]/products/[slug]/page.tsx](../app/[locale]/products/[slug]/page.tsx) — Genuine/Compatible/Tier/Negotiated/ExactStock/OOS-notice pills all normalized to tokens (was `bg-amber-100` / `bg-green-100` / `bg-sky-100` / `bg-violet-100` / `bg-neutral-*`).
+- [app/[locale]/order/confirmed/[id]/page.tsx](../app/[locale]/order/confirmed/[id]/page.tsx) — Paymob-pending waiting notice → `warning-soft`; payment-failed notice → `error-soft`.
+- [app/[locale]/cart/page.tsx](../app/[locale]/cart/page.tsx) — "Proceed to checkout" CTA upgraded from `bg-primary` (ink) to `bg-accent` per commerce-CTA rule in design-system §4 (accent is the commerce accent; primary-ink was too muted against the ink header).
+- [app/[locale]/sign-in/b2c-sign-in-flow.tsx](../app/[locale]/sign-in/b2c-sign-in-flow.tsx) — dev-OTP hint wrapped in `warning-soft` pill (was `text-amber-600`, both a raw-palette violation and too easy to miss against the card).
+- [components/catalog/add-to-cart-button.tsx](../components/catalog/add-to-cart-button.tsx) — button base switched to `bg-accent hover:bg-accent-strong` (was ink); success state uses `bg-success` (was `bg-emerald-600`); "Go to cart" micro-link uses `text-accent-strong` (was primary-ink hover=dark-on-dark bug).
+- [components/checkout/checkout-form.tsx](../components/checkout/checkout-form.tsx) — discount line + free-shipping-achieved badge + promo-applied panel all moved from `text-emerald-700` + `bg-emerald-50` to `text-success` + `bg-success-soft`.
+- [components/b2b/pricing-tier-badge.tsx](../components/b2b/pricing-tier-badge.tsx) — tier A/B/C pills collapsed from 3 different color families (`emerald`/`sky`/`violet`) to single `accent-soft` + `accent-strong`; tier letter in the label still differentiates visually.
+- [components/b2b/bulk-order-table.tsx](../components/b2b/bulk-order-table.tsx) — inline warnings + skipped-rows banner + success-count banner normalized to `warning`/`success` tokens.
+- [components/account/reorder-button.tsx](../components/account/reorder-button.tsx) — line-status colors for reorder preview normalized; result banner tokenized.
+- [components/b2b/b2b-profile-contact-form.tsx](../components/b2b/b2b-profile-contact-form.tsx) — "Saved ✓" confirmation `text-emerald-700` → `text-success`.
+- [app/[locale]/b2b/register/b2b-application-form.tsx](../app/[locale]/b2b/register/b2b-application-form.tsx) — application-accepted success panel tokenized.
+- [app/[locale]/b2b/forgot-password/forgot-password-form.tsx](../app/[locale]/b2b/forgot-password/forgot-password-form.tsx) — reset-link-sent confirmation tokenized.
+
+**Not addressed (deferred):**
+- **Admin surfaces** — 15+ files with similar raw-palette usage. PRD §8 allows admin best-effort; ink-admin is a v1.1 polish pass — deferring keeps this pass focused.
+- **Paymob dev-stub page** — only renders when `PAYMOB_API_KEY` is unset (local dev), not production-reachable. Skipped.
+- **Homepage "trust strip"** — considered but rejected. The existing value-prop strip (authentic / COD / nationwide / WhatsApp) + footer payment pills already carry trust signalling; a dedicated strip on homepage would duplicate without adding value at MVP scale.
+
+**Regression:**
+- `npx tsc --noEmit` clean
+- `npx vitest run` — 200 / 200 tests green
+- `npx next build` — 123 pages built
+
 ---
 
 ## Release Engineering

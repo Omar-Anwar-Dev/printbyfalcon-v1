@@ -61,10 +61,10 @@ export function AddToCartButton({ productId, locale, disabled }: Props) {
         type="button"
         onClick={handleClick}
         disabled={pending || disabled}
-        className={`inline-flex h-11 items-center justify-center rounded-md px-6 font-medium disabled:opacity-50 ${
+        className={`inline-flex h-11 items-center justify-center rounded-md px-6 font-medium transition-colors disabled:opacity-50 ${
           status === 'added'
-            ? 'bg-emerald-600 text-white'
-            : 'bg-primary text-primary-foreground hover:opacity-90'
+            ? 'bg-success text-canvas'
+            : 'bg-accent text-accent-foreground hover:bg-accent-strong'
         }`}
       >
         {pending
@@ -77,7 +77,7 @@ export function AddToCartButton({ productId, locale, disabled }: Props) {
         <button
           type="button"
           onClick={() => router.push('/cart')}
-          className="block text-xs text-primary hover:underline"
+          className="block text-xs text-accent-strong hover:underline"
         >
           {labels.goToCart}
         </button>

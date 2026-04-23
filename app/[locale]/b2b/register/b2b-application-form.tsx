@@ -52,7 +52,7 @@ export function B2BApplicationForm({ locale }: Props) {
 
   if (success) {
     return (
-      <div className="space-y-4 rounded-md border border-green-200 bg-green-50 p-4 text-sm text-green-900">
+      <div className="space-y-4 rounded-md border border-success/30 bg-success-soft p-4 text-sm text-success">
         <p className="font-semibold">{t('b2b.register.success.title')}</p>
         <p>{t('b2b.register.success.body')}</p>
         <Button
