@@ -166,10 +166,11 @@ export async function SiteFooter() {
                 ? 'اشترك لمعرفة آخر العروض والمنتجات الجديدة.'
                 : 'Get the latest deals and new arrivals.'}
             </p>
+            {/* Server Component — no onSubmit handler. Inputs + button are disabled,
+               so the form cannot be submitted until the wiring lands in v1.1. */}
             <form
               className="flex overflow-hidden rounded-md bg-canvas/10 ring-1 ring-canvas/20"
-              onSubmit={(e) => e.preventDefault()}
-              aria-disabled
+              action="#"
             >
               <input
                 type="email"
