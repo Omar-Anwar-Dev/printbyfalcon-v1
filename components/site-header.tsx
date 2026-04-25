@@ -1,10 +1,11 @@
 import { getTranslations } from 'next-intl/server';
-import { ShoppingBag, User, LogIn, Building2 } from 'lucide-react';
+import { ShoppingBag, User, LogIn } from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { HeaderSearch } from '@/components/header-search';
 import { MobileNav } from '@/components/mobile-nav';
 import { BrandMark } from '@/components/brand-mark';
+import { CategoriesNavBar } from '@/components/categories-nav-bar';
 import { getOptionalUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { buildTree, type FlatCategory } from '@/lib/catalog/category-tree';
@@ -180,49 +181,18 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
         </div>
       </div>
 
-      {/* Bar 2 — White categories strip (desktop only) */}
-      <div className="hidden border-b border-border bg-background md:block">
-        <nav
-          aria-label={isAr ? 'الفئات' : 'Categories'}
-          className="container-page relative"
-        >
-          <ul className="flex h-11 items-center gap-1 overflow-x-auto whitespace-nowrap [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-            <li>
-              <Link
-                href="/products"
-                className="inline-flex h-11 items-center px-3 text-sm font-semibold text-foreground transition-colors hover:text-accent-strong"
-              >
-                {t('nav.catalog')}
-              </Link>
-            </li>
-            {topCategories.map((cat) => (
-              <li key={cat.id}>
-                <Link
-                  href={`/categories/${cat.slug}`}
-                  className="inline-flex h-11 items-center px-3 text-sm text-muted-foreground transition-colors hover:text-foreground"
-                >
-                  {isAr ? cat.nameAr : cat.nameEn}
-                </Link>
-              </li>
-            ))}
-            <li className="ms-auto">
-              {!user ? (
-                <Link
-                  href="/b2b/register"
-                  className="inline-flex h-11 items-center gap-1.5 px-3 text-sm font-medium text-accent-strong transition-colors hover:text-accent"
-                >
-                  <Building2
-                    className="h-4 w-4"
-                    strokeWidth={1.75}
-                    aria-hidden
-                  />
-                  {isAr ? 'سجّل شركتك' : 'Register your business'}
-                </Link>
-              ) : null}
-            </li>
-          </ul>
-        </nav>
-      </div>
+      {/* Bar 2 — Categories strip (desktop only, browsing pages only). */}
+      <CategoriesNavBar
+        categories={topCategories.map((c) => ({
+          id: c.id,
+          slug: c.slug,
+          nameAr: c.nameAr,
+          nameEn: c.nameEn,
+        }))}
+        isAr={isAr}
+        catalogLabel={t('nav.catalog')}
+        isSignedIn={!!user}
+      />
     </header>
   );
 }

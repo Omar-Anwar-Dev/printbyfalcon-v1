@@ -56,9 +56,15 @@ export default async function LocaleLayout({ children, params }: Props) {
         {`document.documentElement.lang='${locale}';document.documentElement.dir='${dir}';`}
       </Script>
       <ToastProvider>
-        <div className="flex min-h-screen flex-col" dir={dir} lang={locale}>
+        <div
+          className="flex min-h-screen w-full max-w-full flex-col overflow-x-clip"
+          dir={dir}
+          lang={locale}
+        >
           <SiteHeader locale={locale} />
-          <main className="flex-1">{children}</main>
+          <main className="w-full max-w-full flex-1 overflow-x-clip">
+            {children}
+          </main>
           <SiteFooter />
           {storeInfo.supportWhatsapp ? (
             <WhatsAppChatButton
