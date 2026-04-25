@@ -6,6 +6,10 @@ import {
   Instagram,
   Linkedin,
   MessageCircle,
+  Truck,
+  ShieldCheck,
+  CreditCard,
+  Headphones,
 } from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
 import { BrandMark } from '@/components/brand-mark';
@@ -18,12 +22,19 @@ const WHATSAPP_NUMBER = '+20 111 652 7773';
 const WHATSAPP_URL = 'https://wa.me/201116527773';
 
 /**
- * Compact footer (post pre-M1 polish round 2).
+ * Site footer — full redesign (post pre-M1 polish round 4).
  *
- * Two-column upper block (brand+contact / Account links), then a single
- * combined flex-wrap row for payment methods + legal links, then a slim
- * copyright strip. Total vertical footprint roughly half what the four-row
- * version was.
+ * Three horizontal bands inside one ink panel:
+ *   1. Trust strip — four icon-led promises, equal columns on desktop,
+ *      2×2 grid on mobile, kept visually distinct via a tinted wash.
+ *   2. Main grid — brand block + four link columns (Shop, Account,
+ *      Business, Help). Stacks gracefully on mobile.
+ *   3. Utility row — copyright + payment chips + socials, single line on
+ *      desktop, wraps on mobile.
+ *
+ * Replaces the previous two-row "compact footer" which the owner felt
+ * read as the same as before. This restructures rather than just
+ * tightens — different bands, different content emphasis.
  */
 export async function SiteFooter() {
   const t = await getTranslations();
@@ -31,34 +42,99 @@ export async function SiteFooter() {
   const isAr = locale === 'ar';
   const year = new Date().getFullYear();
 
-  const accountLinks = [
-    { href: '/account', label: t('nav.account') },
+  const trustItems = [
     {
-      href: '/account/addresses',
-      label: isAr ? 'العناوين' : 'Addresses',
+      icon: Truck,
+      title: isAr ? 'شحن لكل المحافظات' : 'Nationwide shipping',
+      body: isAr ? '1 – 5 أيام عمل' : '1 – 5 business days',
     },
     {
-      href: '/b2b/login',
-      label: isAr ? 'حساب شركات' : 'Business login',
+      icon: CreditCard,
+      title: isAr ? 'الدفع عند الاستلام' : 'Cash on delivery',
+      body: isAr ? 'متاح على أغلب الطلبات' : 'Available on most orders',
     },
     {
-      href: '/b2b/register',
-      label: isAr ? 'تسجيل حساب شركة' : 'Register a business',
+      icon: ShieldCheck,
+      title: isAr ? 'منتجات أصلية' : 'Authentic products',
+      body: isAr ? 'بضمان الموزّع الرسمي' : 'Backed by official suppliers',
+    },
+    {
+      icon: Headphones,
+      title: isAr ? 'دعم واتساب' : 'WhatsApp support',
+      body: isAr ? 'فريق مبيعات حقيقي' : 'Real sales team, no bots',
     },
   ];
 
-  const supportLinks = [
+  const linkColumns: Array<{
+    heading: string;
+    links: Array<{ href: string; label: string }>;
+  }> = [
     {
-      href: '/privacy',
-      label: isAr ? 'سياسة الخصوصية' : 'Privacy policy',
+      heading: isAr ? 'تسوّق' : 'Shop',
+      links: [
+        { href: '/products', label: t('nav.catalog') },
+        {
+          href: '/search',
+          label: isAr ? 'ابحث بموديل الطابعة' : 'Search by printer',
+        },
+        {
+          href: '/categories/ink-cartridges',
+          label: isAr ? 'خراطيش الحبر' : 'Ink cartridges',
+        },
+        {
+          href: '/categories/toner',
+          label: isAr ? 'خراطيش التونر' : 'Toner cartridges',
+        },
+      ],
     },
     {
-      href: '/terms',
-      label: isAr ? 'شروط الاستخدام' : 'Terms of service',
+      heading: isAr ? 'حسابي' : 'Account',
+      links: [
+        { href: '/account', label: t('nav.account') },
+        {
+          href: '/account/orders',
+          label: isAr ? 'طلباتي' : 'My orders',
+        },
+        {
+          href: '/account/addresses',
+          label: isAr ? 'العناوين' : 'Addresses',
+        },
+        { href: '/cart', label: t('nav.cart') },
+      ],
     },
     {
-      href: '/cookies',
-      label: isAr ? 'ملفات تعريف الارتباط' : 'Cookie policy',
+      heading: isAr ? 'للشركات' : 'Business',
+      links: [
+        {
+          href: '/b2b/login',
+          label: isAr ? 'تسجيل دخول الشركات' : 'Business login',
+        },
+        {
+          href: '/b2b/register',
+          label: isAr ? 'افتح حساب شركة' : 'Register a business',
+        },
+        {
+          href: '/b2b/bulk-order',
+          label: isAr ? 'طلب بالجملة' : 'Bulk order',
+        },
+      ],
+    },
+    {
+      heading: isAr ? 'مساعدة وقانون' : 'Help & legal',
+      links: [
+        {
+          href: '/privacy',
+          label: isAr ? 'سياسة الخصوصية' : 'Privacy policy',
+        },
+        {
+          href: '/terms',
+          label: isAr ? 'شروط الاستخدام' : 'Terms of service',
+        },
+        {
+          href: '/cookies',
+          label: isAr ? 'ملفات تعريف الارتباط' : 'Cookie policy',
+        },
+      ],
     },
   ];
 
@@ -72,21 +148,44 @@ export async function SiteFooter() {
 
   return (
     <footer className="mt-16 bg-ink text-canvas">
-      <div className="container-page pb-6 pt-10">
-        {/* Top block — brand + account */}
-        <div className="grid gap-8 md:grid-cols-[2fr_1fr]">
-          <div className="space-y-4">
-            <div className="flex items-center gap-2.5 text-base font-bold">
-              <BrandMark size={32} />
-              {t('brand.name')}
+      {/* Band 1 — Trust strip */}
+      <div className="border-b border-canvas/10 bg-canvas/[0.03]">
+        <div className="container-page grid grid-cols-2 gap-x-4 gap-y-5 py-6 sm:grid-cols-4">
+          {trustItems.map((item) => (
+            <div key={item.title} className="flex items-start gap-3">
+              <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-canvas/10 text-canvas">
+                <item.icon className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+              </span>
+              <div className="min-w-0">
+                <p className="text-sm font-semibold leading-snug text-canvas">
+                  {item.title}
+                </p>
+                <p className="text-xs text-canvas/60">{item.body}</p>
+              </div>
             </div>
-            <p className="max-w-md text-sm text-canvas/70">
+          ))}
+        </div>
+      </div>
+
+      {/* Band 2 — Brand + link columns */}
+      <div className="container-page py-10">
+        <div className="grid gap-10 md:grid-cols-12">
+          {/* Brand block — wider on md+ */}
+          <div className="space-y-4 md:col-span-4">
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2.5 text-base font-bold transition-opacity hover:opacity-90"
+            >
+              <BrandMark size={36} />
+              <span>{t('brand.name')}</span>
+            </Link>
+            <p className="max-w-sm text-sm leading-relaxed text-canvas/70">
               {t('brand.tagline')}
             </p>
             <ul className="space-y-2 text-sm text-canvas/70">
               <li className="flex items-center gap-2.5">
                 <MessageCircle
-                  className="h-4 w-4 shrink-0"
+                  className="h-4 w-4 shrink-0 text-canvas/50"
                   strokeWidth={1.75}
                   aria-hidden
                 />
@@ -101,20 +200,20 @@ export async function SiteFooter() {
               </li>
               <li className="flex items-center gap-2.5">
                 <Mail
-                  className="h-4 w-4 shrink-0"
+                  className="h-4 w-4 shrink-0 text-canvas/50"
                   strokeWidth={1.75}
                   aria-hidden
                 />
                 <a
                   href={`mailto:${SUPPORT_EMAIL}`}
-                  className="transition-colors hover:text-canvas"
+                  className="break-all transition-colors hover:text-canvas"
                 >
                   {SUPPORT_EMAIL}
                 </a>
               </li>
               <li className="flex items-start gap-2.5">
                 <MapPin
-                  className="mt-0.5 h-4 w-4 shrink-0"
+                  className="mt-0.5 h-4 w-4 shrink-0 text-canvas/50"
                   strokeWidth={1.75}
                   aria-hidden
                 />
@@ -128,82 +227,74 @@ export async function SiteFooter() {
                 </a>
               </li>
             </ul>
-
-            {/* Social icons */}
-            <div className="flex items-center gap-1.5 pt-1">
-              <SocialIcon
-                href={WHATSAPP_URL}
-                label="WhatsApp"
-                icon={MessageCircle}
-              />
-              <SocialIcon
-                href="https://facebook.com/printbyfalcon"
-                label="Facebook"
-                icon={Facebook}
-              />
-              <SocialIcon
-                href="https://instagram.com/printbyfalcon"
-                label="Instagram"
-                icon={Instagram}
-              />
-              <SocialIcon
-                href="https://linkedin.com/company/printbyfalcon"
-                label="LinkedIn"
-                icon={Linkedin}
-              />
-            </div>
           </div>
 
-          <div>
-            <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-canvas">
-              {isAr ? 'حسابي' : 'Account'}
-            </h3>
-            <ul className="space-y-2">
-              {accountLinks.map((link) => (
-                <li key={link.href}>
-                  <Link
-                    href={link.href}
-                    className="text-sm text-canvas/70 transition-colors hover:text-canvas"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
+          {/* Link columns — 2 cols on small mobile, 4 on tablet/desktop */}
+          <div className="grid grid-cols-2 gap-x-6 gap-y-8 md:col-span-8 md:grid-cols-4">
+            {linkColumns.map((col) => (
+              <div key={col.heading} className="min-w-0">
+                <h3 className="mb-3 text-xs font-semibold uppercase tracking-[0.08em] text-canvas">
+                  {col.heading}
+                </h3>
+                <ul className="space-y-2">
+                  {col.links.map((link) => (
+                    <li key={link.href}>
+                      <Link
+                        href={link.href}
+                        className="block break-words text-sm text-canvas/70 transition-colors hover:text-canvas"
+                      >
+                        {link.label}
+                      </Link>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         </div>
+      </div>
 
-        {/* Combined utility row — payments (start) + legal links (end) */}
-        <div className="mt-8 flex flex-col gap-4 border-t border-canvas/10 pt-5 md:flex-row md:items-center md:justify-between">
+      {/* Band 3 — Utility row */}
+      <div className="border-t border-canvas/10">
+        <div className="container-page flex flex-col gap-4 py-5 md:flex-row md:items-center md:justify-between">
+          {/* Copyright (start) + payments (center) + socials (end) */}
+          <p className="text-xs text-canvas/60">
+            © {year} {t('brand.name')}.{' '}
+            {isAr ? 'جميع الحقوق محفوظة.' : 'All rights reserved.'}
+          </p>
+
           <ul className="flex flex-wrap items-center gap-1.5">
             {paymentMethods.map((label) => (
               <li key={label}>
-                <span className="inline-flex items-center rounded-md bg-canvas px-2.5 py-1 text-[11px] font-semibold text-ink">
+                <span className="inline-flex items-center rounded-md border border-canvas/15 bg-canvas/[0.05] px-2.5 py-1 text-[11px] font-semibold text-canvas">
                   {label}
                 </span>
               </li>
             ))}
           </ul>
-          <ul className="flex flex-wrap items-center gap-x-5 gap-y-1.5 text-xs text-canvas/60">
-            {supportLinks.map((link) => (
-              <li key={link.href}>
-                <Link
-                  href={link.href}
-                  className="transition-colors hover:text-canvas"
-                >
-                  {link.label}
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </div>
-      </div>
 
-      {/* Slim copyright strip */}
-      <div className="border-t border-canvas/10 bg-ink-2 py-3">
-        <div className="container-page text-center text-[11px] text-canvas/60 md:text-start">
-          © {year} {t('brand.name')}.{' '}
-          {isAr ? 'جميع الحقوق محفوظة.' : 'All rights reserved.'}
+          <div className="flex items-center gap-1.5">
+            <SocialIcon
+              href={WHATSAPP_URL}
+              label="WhatsApp"
+              icon={MessageCircle}
+            />
+            <SocialIcon
+              href="https://facebook.com/printbyfalcon"
+              label="Facebook"
+              icon={Facebook}
+            />
+            <SocialIcon
+              href="https://instagram.com/printbyfalcon"
+              label="Instagram"
+              icon={Instagram}
+            />
+            <SocialIcon
+              href="https://linkedin.com/company/printbyfalcon"
+              label="LinkedIn"
+              icon={Linkedin}
+            />
+          </div>
         </div>
       </div>
     </footer>
