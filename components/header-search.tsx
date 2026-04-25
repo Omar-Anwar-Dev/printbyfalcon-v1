@@ -141,7 +141,7 @@ export function HeaderSearch({ locale }: Props) {
           e.preventDefault();
           submit(q);
         }}
-        className="flex items-stretch overflow-hidden rounded-lg bg-background shadow-card ring-1 ring-border"
+        className="flex items-stretch overflow-hidden rounded-lg bg-background ring-1 ring-border/70 transition-shadow focus-within:ring-2 focus-within:ring-accent"
       >
         <label className="sr-only" htmlFor={`${listboxId}-input`}>
           {labels.ariaLabel}

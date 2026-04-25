@@ -11,9 +11,11 @@ import {
   Globe,
   ChevronDown,
   LogIn,
+  LogOut,
   Building2,
 } from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
+import { LogoutButton } from '@/components/auth/logout-button';
 
 type NavCategory = {
   id: string;
@@ -31,6 +33,7 @@ type Labels = {
   accountHeading: string;
   account: string;
   login: string;
+  logout: string;
   cart: string;
   language: string;
   business: string;
@@ -254,19 +257,35 @@ export function MobileNav({
                   </Link>
                 </li>
                 {isSignedIn ? (
-                  <li>
-                    <Link
-                      href="/account"
-                      onClick={close}
-                      className="flex items-center gap-3 px-4 py-3 text-base font-medium text-foreground hover:bg-paper-hover"
-                    >
-                      <User
-                        className="h-5 w-5 text-muted-foreground"
-                        strokeWidth={1.75}
-                      />
-                      {labels.account}
-                    </Link>
-                  </li>
+                  <>
+                    <li>
+                      <Link
+                        href="/account"
+                        onClick={close}
+                        className="flex items-center gap-3 px-4 py-3 text-base font-medium text-foreground hover:bg-paper-hover"
+                      >
+                        <User
+                          className="h-5 w-5 text-muted-foreground"
+                          strokeWidth={1.75}
+                        />
+                        {labels.account}
+                      </Link>
+                    </li>
+                    <li>
+                      <LogoutButton
+                        variant="menu"
+                        label={labels.logout}
+                        showIcon={false}
+                      >
+                        <LogOut
+                          className="h-5 w-5"
+                          strokeWidth={1.75}
+                          aria-hidden
+                        />
+                        <span>{labels.logout}</span>
+                      </LogoutButton>
+                    </li>
+                  </>
                 ) : (
                   <li>
                     <Link
@@ -282,16 +301,18 @@ export function MobileNav({
                     </Link>
                   </li>
                 )}
-                <li>
-                  <Link
-                    href="/b2b/login"
-                    onClick={close}
-                    className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:bg-paper-hover hover:text-foreground"
-                  >
-                    <Building2 className="h-5 w-5" strokeWidth={1.75} />
-                    {labels.business}
-                  </Link>
-                </li>
+                {!isSignedIn ? (
+                  <li>
+                    <Link
+                      href="/b2b/login"
+                      onClick={close}
+                      className="flex items-center gap-3 px-4 py-3 text-sm text-muted-foreground hover:bg-paper-hover hover:text-foreground"
+                    >
+                      <Building2 className="h-5 w-5" strokeWidth={1.75} />
+                      {labels.business}
+                    </Link>
+                  </li>
+                ) : null}
               </ul>
 
               <div className="border-t border-border p-4">

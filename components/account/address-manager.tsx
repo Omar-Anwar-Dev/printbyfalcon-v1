@@ -2,6 +2,7 @@
 
 import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
+import { Pencil, Trash2, Star, Plus, Check, X } from 'lucide-react';
 import {
   addAddressAction,
   deleteAddressAction,
@@ -61,7 +62,7 @@ const GOVS = [
 
 const LABELS = {
   ar: {
-    addBtn: '+ إضافة عنوان',
+    addBtn: 'إضافة عنوان',
     empty: 'لم تضف عنوانًا بعد.',
     default: 'افتراضي',
     edit: 'تعديل',
@@ -72,6 +73,7 @@ const LABELS = {
     confirmDelete: 'حذف هذا العنوان؟',
     recipient: 'اسم المستلم',
     phone: 'الموبايل',
+    phoneHelp: 'مثال: 01113334444 أو +201113334444',
     gov: 'المحافظة',
     city: 'المدينة',
     area: 'المنطقة / الحي',
@@ -83,7 +85,7 @@ const LABELS = {
     limit: 'الحد الأقصى 5 عناوين.',
   },
   en: {
-    addBtn: '+ Add address',
+    addBtn: 'Add address',
     empty: 'No addresses yet.',
     default: 'Default',
     edit: 'Edit',
@@ -94,6 +96,7 @@ const LABELS = {
     confirmDelete: 'Delete this address?',
     recipient: 'Recipient',
     phone: 'Phone',
+    phoneHelp: 'e.g., 01113334444 or +201113334444',
     gov: 'Governorate',
     city: 'City',
     area: 'Area',
@@ -190,13 +193,14 @@ export function AddressManager({ locale, addresses }: Props) {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <button
           type="button"
           onClick={startAdd}
           disabled={atLimit}
-          className="rounded-md bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+          className="inline-flex h-10 items-center gap-2 rounded-md bg-ink px-4 text-sm font-medium text-canvas transition-colors hover:bg-ink-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
         >
+          <Plus className="h-4 w-4" strokeWidth={2} aria-hidden />
           {labels.addBtn}
         </button>
         {atLimit ? (
@@ -226,10 +230,17 @@ export function AddressManager({ locale, addresses }: Props) {
               <input
                 required
                 type="tel"
+                inputMode="tel"
+                autoComplete="tel"
+                dir="ltr"
                 value={form.phone}
                 onChange={(e) => setForm({ ...form, phone: e.target.value })}
-                className="w-full rounded-md border bg-background px-3 py-2"
+                placeholder="01113334444"
+                className="num w-full rounded-md border bg-background px-3 py-2 text-start"
               />
+              <span className="block text-xs text-muted-foreground">
+                {labels.phoneHelp}
+              </span>
             </label>
             <label className="space-y-1 md:col-span-2">
               <span>{labels.gov}</span>
@@ -315,20 +326,22 @@ export function AddressManager({ locale, addresses }: Props) {
             />
             <span>{labels.isDefault}</span>
           </label>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <button
               type="submit"
               disabled={pending}
-              className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+              className="inline-flex h-10 items-center gap-2 rounded-md bg-accent px-4 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             >
+              <Check className="h-4 w-4" strokeWidth={2} aria-hidden />
               {labels.save}
             </button>
             <button
               type="button"
               onClick={cancel}
               disabled={pending}
-              className="rounded-md border bg-background px-4 py-2 text-sm hover:bg-muted"
+              className="inline-flex h-10 items-center gap-2 rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
             >
+              <X className="h-4 w-4" strokeWidth={2} aria-hidden />
               {labels.cancel}
             </button>
           </div>
@@ -336,7 +349,7 @@ export function AddressManager({ locale, addresses }: Props) {
       ) : null}
 
       {addresses.length === 0 ? (
-        <p className="rounded-md border bg-muted/20 p-4 text-center text-sm text-muted-foreground">
+        <p className="rounded-md border border-border bg-paper p-6 text-center text-sm text-muted-foreground">
           {labels.empty}
         </p>
       ) : (
@@ -344,50 +357,63 @@ export function AddressManager({ locale, addresses }: Props) {
           {addresses.map((a) => (
             <li
               key={a.id}
-              className="flex justify-between gap-3 rounded-md border bg-background p-4 text-sm"
+              className="rounded-lg border border-border bg-background p-4 text-sm shadow-card"
             >
-              <div>
-                <div className="mb-1 flex items-center gap-2">
-                  <span className="font-medium">{a.recipientName}</span>
-                  {a.isDefault ? (
-                    <span className="rounded bg-primary/10 px-1.5 py-0.5 text-xs text-primary">
-                      {labels.default}
+              <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="mb-1 flex flex-wrap items-center gap-2">
+                    <span className="font-semibold text-foreground">
+                      {a.recipientName}
                     </span>
-                  ) : null}
+                    {a.isDefault ? (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-accent/20 bg-accent-soft px-2 py-0.5 text-[11px] font-medium text-accent-strong">
+                        <Star className="h-3 w-3" strokeWidth={2} aria-hidden />
+                        {labels.default}
+                      </span>
+                    ) : null}
+                  </div>
+                  <p className="num font-mono text-muted-foreground">
+                    {a.phone}
+                  </p>
+                  <p className="text-foreground">
+                    {a.street}
+                    {a.building ? `, ${a.building}` : ''}
+                    {a.apartment ? `, ${a.apartment}` : ''}
+                  </p>
+                  <p className="text-muted-foreground">
+                    {a.city}
+                    {a.area ? ` — ${a.area}` : ''} — {a.governorate}
+                  </p>
                 </div>
-                <p className="text-muted-foreground">{a.phone}</p>
-                <p>
-                  {a.street}
-                  {a.building ? `, ${a.building}` : ''}
-                  {a.apartment ? `, ${a.apartment}` : ''}
-                </p>
-                <p className="text-muted-foreground">
-                  {a.city}
-                  {a.area ? ` — ${a.area}` : ''} — {a.governorate}
-                </p>
               </div>
-              <div className="flex shrink-0 flex-col items-end gap-2">
+              <div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
                 <button
                   type="button"
                   onClick={() => startEdit(a)}
-                  className="text-xs text-primary hover:underline"
+                  disabled={pending}
+                  className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-foreground transition-colors hover:bg-paper-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
                 >
+                  <Pencil className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                   {labels.edit}
                 </button>
                 {!a.isDefault ? (
                   <button
                     type="button"
                     onClick={() => makeDefault(a.id)}
-                    className="text-xs text-primary hover:underline"
+                    disabled={pending}
+                    className="inline-flex h-9 items-center gap-1.5 rounded-md border border-border bg-background px-3 text-xs font-medium text-accent-strong transition-colors hover:bg-accent-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
                   >
+                    <Star className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                     {labels.makeDefault}
                   </button>
                 ) : null}
                 <button
                   type="button"
                   onClick={() => del(a.id)}
-                  className="text-xs text-destructive hover:underline"
+                  disabled={pending}
+                  className="ms-auto inline-flex h-9 items-center gap-1.5 rounded-md border border-error/30 bg-background px-3 text-xs font-medium text-error transition-colors hover:bg-error-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error disabled:opacity-50"
                 >
+                  <Trash2 className="h-3.5 w-3.5" strokeWidth={2} aria-hidden />
                   {labels.delete}
                 </button>
               </div>

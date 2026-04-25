@@ -18,8 +18,8 @@ export default async function SignInPage() {
       icon: ShieldCheck,
       title: isAr ? 'منتجات أصلية' : 'Genuine products',
       body: isAr
-        ? 'خراطيش ومستلزمات بضمان التاجر الرسمي.'
-        : 'Toner + supplies backed by manufacturer warranty.',
+        ? 'حبر وتونر من موزعين رسميين، من غير تقليد.'
+        : 'Ink and toner from authorized dealers — no knockoffs.',
     },
     {
       icon: Truck,

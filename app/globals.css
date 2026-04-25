@@ -58,6 +58,10 @@
   html {
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
+    /* Prevent stray children (e.g. shadows, decorative offsets, long unwrapped
+       strings on mobile) from triggering horizontal scroll on the document.
+       `clip` keeps sticky positioning working unlike `hidden`. */
+    overflow-x: clip;
   }
 
   body {
@@ -65,6 +69,7 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+    overflow-x: clip;
   }
 
   html[dir='ltr'] body {

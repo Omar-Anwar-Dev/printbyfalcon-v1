@@ -22,6 +22,14 @@ const plexArabic = IBM_Plex_Sans_Arabic({
 export const metadata: Metadata = {
   title: 'Print By Falcon',
   description: 'Egyptian printer and supplies e-commerce',
+  icons: {
+    icon: [
+      // Same source the header/footer BrandMark consumes — drop one PNG and
+      // every surface (header, footer, favicon, Apple touch icon) updates.
+      { url: '/brand/logo-icon.png', sizes: 'any' },
+    ],
+    apple: '/brand/logo-icon.png',
+  },
 };
 
 export default function RootLayout({

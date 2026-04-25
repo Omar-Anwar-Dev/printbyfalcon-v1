@@ -9,6 +9,7 @@ import {
   CreditCard,
 } from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
+import { BrandMark } from '@/components/brand-mark';
 
 /**
  * Four-column footer — Sprint 11 ADR-059 update.
@@ -80,9 +81,7 @@ export async function SiteFooter() {
           {/* Brand + contact block */}
           <div className="space-y-5">
             <div className="flex items-center gap-2.5 text-lg font-bold">
-              <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-canvas text-sm font-bold text-ink">
-                PF
-              </span>
+              <BrandMark size={36} />
               {t('brand.name')}
             </div>
             <p className="max-w-xs text-sm text-canvas/70">

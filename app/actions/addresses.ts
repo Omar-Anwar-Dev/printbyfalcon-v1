@@ -9,6 +9,7 @@ import { z } from 'zod';
 import { Governorate } from '@prisma/client';
 import { prisma } from '@/lib/db';
 import { getOptionalUser } from '@/lib/auth';
+import { egyptianPhoneSchema } from '@/lib/validation/common';
 
 type ActionOk<T> = { ok: true; data: T };
 type ActionErr = { ok: false; errorKey: string };
@@ -18,10 +19,7 @@ const MAX_ADDRESSES_PER_USER = 5;
 
 const addressSchema = z.object({
   recipientName: z.string().trim().min(2).max(80),
-  phone: z
-    .string()
-    .trim()
-    .regex(/^\+?[0-9]{9,15}$/, 'validation.phone.invalid_eg'),
+  phone: egyptianPhoneSchema,
   governorate: z.nativeEnum(Governorate),
   city: z.string().trim().min(1).max(80),
   area: z.string().trim().max(80).optional(),

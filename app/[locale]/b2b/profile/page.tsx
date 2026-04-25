@@ -5,6 +5,7 @@ import { Link } from '@/lib/i18n/routing';
 import { formatEgp } from '@/lib/catalog/price';
 import { PricingTierBadge } from '@/components/b2b/pricing-tier-badge';
 import { B2BProfileContactForm } from '@/components/b2b/b2b-profile-contact-form';
+import { LogoutButton } from '@/components/auth/logout-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -116,40 +117,45 @@ export default async function B2BProfilePage({ params }: Props) {
       />
 
       <section className="rounded-md border bg-background p-5">
-        <h2 className="mb-2 text-base font-semibold">
+        <h2 className="mb-3 text-base font-semibold">
           {isAr ? 'إجراءات الحساب' : 'Account actions'}
         </h2>
         <div className="flex flex-wrap gap-3">
           <Link
             href="/b2b/bulk-order"
-            className="rounded-md bg-accent px-3 py-2 text-sm font-medium text-accent-foreground hover:opacity-90"
+            className="inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-strong"
           >
             {isAr ? 'طلب مُجمَّع (Bulk)' : 'Bulk order'}
           </Link>
           <Link
             href="/b2b/orders"
-            className="rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted"
+            className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
           >
             {isAr ? 'طلبات الشركة' : 'Company orders'}
           </Link>
           <Link
             href="/account/orders"
-            className="rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted"
+            className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
           >
             {isAr ? 'طلباتي' : 'My orders'}
           </Link>
           <Link
             href="/account/change-password"
-            className="rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted"
+            className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
           >
             {isAr ? 'تغيير كلمة المرور' : 'Change password'}
           </Link>
           <Link
             href="/account/addresses"
-            className="rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted"
+            className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
           >
             {isAr ? 'العناوين' : 'Addresses'}
           </Link>
+          <LogoutButton
+            variant="danger"
+            label={isAr ? 'تسجيل الخروج' : 'Sign out'}
+            pendingLabel={isAr ? 'جارٍ الخروج...' : 'Signing out...'}
+          />
         </div>
       </section>
     </main>

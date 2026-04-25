@@ -5,20 +5,26 @@
 import { z } from 'zod';
 
 /**
- * Egyptian mobile number (01X XXXX XXXX). Accepts spaces/dashes; stores as
- * canonical E.164 with +20 prefix.
+ * Egyptian mobile number. Accepts every realistic input form a customer might
+ * type and normalizes to E.164 with +20 prefix:
+ *   - 01113334444   (local, with national trunk 0)
+ *   - 1113334444    (subscriber only, no trunk)
+ *   - 201113334444  (international, no plus)
+ *   - +201113334444 (E.164)
+ *   - +2001113334444 (E.164 with redundant trunk 0 — common typo)
+ * Spaces/dashes/parentheses are stripped before validation.
  */
 export const egyptianPhoneSchema = z
   .string()
   .trim()
-  .transform((raw) => raw.replace(/[\s-]/g, ''))
+  .transform((raw) => raw.replace(/[\s\-()]/g, ''))
   .pipe(
     z
       .string()
-      .regex(/^(?:\+?20)?01[0-25]\d{8}$/, { message: 'phone.invalid_eg' })
+      .regex(/^(?:\+?20)?0?1[0-25]\d{8}$/, { message: 'phone.invalid_eg' })
       .transform((v) => {
-        // Strip optional international prefix, then drop the leading 0 from the
-        // local form (01XXXXXXXXX), then re-prefix with +20 to land on E.164.
+        // Strip optional international prefix, then strip an optional national
+        // trunk 0, then re-prefix with +20 to land on E.164.
         const digits = v.replace(/^\+?20/, '').replace(/^0/, '');
         return `+20${digits}`;
       }),

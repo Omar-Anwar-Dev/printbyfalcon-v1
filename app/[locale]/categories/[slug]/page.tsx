@@ -7,6 +7,7 @@ import {
   type ProductSort,
 } from '@/lib/catalog/queries';
 import { ProductCard } from '@/components/catalog/product-card';
+import { Pagination } from '@/components/ui/pagination';
 import { resolveViewerPrices } from '@/lib/pricing/storefront';
 
 // Dynamic rendering so B2B viewers see tier prices (Sprint 7 ADR-037).
@@ -118,37 +119,15 @@ export default async function CategoryPage({
         </ul>
       )}
 
-      {totalPages > 1 ? (
-        <nav className="mt-8 flex items-center justify-center gap-2 text-sm">
-          {page > 1 ? (
-            <Link
-              href={{
-                pathname: `/categories/${slug}`,
-                query: { sort, page: String(page - 1) },
-              }}
-              className="rounded border bg-background px-3 py-1 hover:bg-muted"
-            >
-              {isAr ? '→ السابق' : '← Prev'}
-            </Link>
-          ) : null}
-          <span className="text-muted-foreground">
-            {isAr
-              ? `صفحة ${page} من ${totalPages}`
-              : `Page ${page} of ${totalPages}`}
-          </span>
-          {page < totalPages ? (
-            <Link
-              href={{
-                pathname: `/categories/${slug}`,
-                query: { sort, page: String(page + 1) },
-              }}
-              className="rounded border bg-background px-3 py-1 hover:bg-muted"
-            >
-              {isAr ? 'التالي ←' : 'Next →'}
-            </Link>
-          ) : null}
-        </nav>
-      ) : null}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        locale={isAr ? 'ar' : 'en'}
+        hrefForPage={(p) => ({
+          pathname: `/categories/${slug}`,
+          query: { sort, page: String(p) },
+        })}
+      />
     </div>
   );
 }

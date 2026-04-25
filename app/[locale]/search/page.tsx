@@ -9,6 +9,7 @@ import { ProductCard } from '@/components/catalog/product-card';
 import { prisma } from '@/lib/db';
 import { SearchFiltersSidebar } from '@/components/catalog/search-filters-sidebar';
 import { MobileFiltersButton } from '@/components/catalog/mobile-filters-button';
+import { Pagination } from '@/components/ui/pagination';
 import { resolveViewerPrices } from '@/lib/pricing/storefront';
 
 export const dynamic = 'force-dynamic';
@@ -324,52 +325,15 @@ export default async function SearchPage({
             </ul>
           )}
 
-          {totalPages > 1 ? (
-            <nav
-              className="mt-10 flex items-center justify-center gap-3 text-sm"
-              aria-label={isAr ? 'الصفحات' : 'Pagination'}
-            >
-              {page > 1 ? (
-                <Link
-                  href={{
-                    pathname: '/search',
-                    query: { ...baseQuery, sort, page: String(page - 1) },
-                  }}
-                  className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 font-medium text-foreground transition-colors hover:bg-paper-hover"
-                >
-                  {isAr ? 'السابق →' : '← Prev'}
-                </Link>
-              ) : (
-                <span
-                  aria-disabled
-                  className="inline-flex h-9 items-center rounded-md border border-border px-3 font-medium text-muted-foreground opacity-50"
-                >
-                  {isAr ? 'السابق →' : '← Prev'}
-                </span>
-              )}
-              <span className="num text-xs text-muted-foreground">
-                {isAr ? `${page} من ${totalPages}` : `${page} / ${totalPages}`}
-              </span>
-              {page < totalPages ? (
-                <Link
-                  href={{
-                    pathname: '/search',
-                    query: { ...baseQuery, sort, page: String(page + 1) },
-                  }}
-                  className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 font-medium text-foreground transition-colors hover:bg-paper-hover"
-                >
-                  {isAr ? '← التالي' : 'Next →'}
-                </Link>
-              ) : (
-                <span
-                  aria-disabled
-                  className="inline-flex h-9 items-center rounded-md border border-border px-3 font-medium text-muted-foreground opacity-50"
-                >
-                  {isAr ? '← التالي' : 'Next →'}
-                </span>
-              )}
-            </nav>
-          ) : null}
+          <Pagination
+            page={page}
+            totalPages={totalPages}
+            locale={isAr ? 'ar' : 'en'}
+            hrefForPage={(p) => ({
+              pathname: '/search',
+              query: { ...baseQuery, sort, page: String(p) },
+            })}
+          />
         </section>
       </div>
     </main>

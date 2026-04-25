@@ -116,8 +116,8 @@ export default async function HomePage({
       icon: ShieldCheck,
       title: isAr ? 'منتجات أصلية' : 'Authentic products',
       body: isAr
-        ? 'خراطيش ومستلزمات أصلية بضمان.'
-        : 'Genuine cartridges & supplies, warranty-backed.',
+        ? 'حبر وتونر ومستلزمات أصلية، من غير تقليد.'
+        : 'Genuine ink, toner, and supplies — no knockoffs.',
     },
     {
       icon: CreditCard,
@@ -154,22 +154,24 @@ export default async function HomePage({
           <div className="flex flex-col justify-center">
             <span className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-border bg-paper px-3 py-1 text-xs font-medium text-muted-foreground">
               <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              {isAr
-                ? 'متجر متخصص للطابعات ومستلزماتها'
-                : 'Egypt’s printer specialists'}
+              Print By Falcon
             </span>
             <h1 className="text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-5xl">
               {isAr ? (
                 <>
-                  خراطيش وطابعات
+                  طابعات وأحبار أصلية
                   <br />
-                  <span className="text-accent-strong">بضمان الأصالة.</span>
+                  <span className="text-accent-strong">
+                    لجميع أنواع الطابعات والأحبار.
+                  </span>
                 </>
               ) : (
                 <>
-                  Toners, inks, and printers —
+                  Authentic printers and inks
                   <br />
-                  <span className="text-accent-strong">picked with care.</span>
+                  <span className="text-accent-strong">
+                    for every printer model.
+                  </span>
                 </>
               )}
             </h1>
