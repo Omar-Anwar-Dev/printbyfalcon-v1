@@ -55,13 +55,21 @@
     @apply border-border;
   }
 
+  /* Single layer of horizontal-overflow containment, applied to both <html>
+     and <body>. `clip` (vs `hidden`) leaves sticky positioning intact and
+     forbids programmatic scrolling. Width is left unconstrained on purpose:
+     setting `max-width: 100vw` interacts badly with mobile browser address
+     bars and visual viewport changes, and the previous attempt at
+     belt-and-suspenders width pinning visibly shifted the layout off-axis
+     on narrow Android devices. See ADR-060. */
+  html,
+  body {
+    overflow-x: clip;
+  }
+
   html {
     -webkit-text-size-adjust: 100%;
     text-rendering: optimizeLegibility;
-    /* Prevent stray children (e.g. shadows, decorative offsets, long unwrapped
-       strings on mobile) from triggering horizontal scroll on the document.
-       `clip` keeps sticky positioning working unlike `hidden`. */
-    overflow-x: clip;
   }
 
   body {
@@ -69,12 +77,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
-    overflow-x: clip;
-    /* Pin body width to viewport — even if a descendant ignores the clip
-       (some older mobile browsers), the body itself can't widen past the
-       screen, so the layout never grows a horizontal scrollbar. */
-    width: 100%;
-    max-width: 100vw;
   }
 
   html[dir='ltr'] body {

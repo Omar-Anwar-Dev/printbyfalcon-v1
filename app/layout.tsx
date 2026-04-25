@@ -1,23 +1,5 @@
 import type { Metadata } from 'next';
-import { Inter, IBM_Plex_Sans_Arabic } from 'next/font/google';
 import './globals.css';
-
-const inter = Inter({
-  subsets: ['latin'],
-  weight: ['400', '500', '600', '700', '800'],
-  variable: '--font-sans',
-  display: 'swap',
-  fallback: ['ui-sans-serif', 'system-ui', 'sans-serif'],
-  adjustFontFallback: true,
-});
-
-const plexArabic = IBM_Plex_Sans_Arabic({
-  subsets: ['arabic'],
-  weight: ['400', '500', '600', '700'],
-  variable: '--font-arabic',
-  display: 'swap',
-  fallback: ['ui-sans-serif', 'system-ui', 'sans-serif'],
-});
 
 export const metadata: Metadata = {
   title: 'Print By Falcon',
@@ -32,18 +14,15 @@ export const metadata: Metadata = {
   },
 };
 
+// `<html>` + `<body>` live in `app/[locale]/layout.tsx` so we can set
+// `lang` + `dir` server-side. Setting them client-side via a script (the
+// previous approach) leaves the document direction unset during the first
+// paint — which on RTL collapses to LTR and shifts the whole layout
+// horizontally on narrow Android viewports. See ADR-060.
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  // The inner [locale] layout sets `lang` + `dir` on <html>.
-  return (
-    <html
-      suppressHydrationWarning
-      className={`${inter.variable} ${plexArabic.variable}`}
-    >
-      <body>{children}</body>
-    </html>
-  );
+  return children;
 }
