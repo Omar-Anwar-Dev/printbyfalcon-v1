@@ -2,6 +2,7 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 import { listActiveProducts, type ProductSort } from '@/lib/catalog/queries';
 import { ProductCard } from '@/components/catalog/product-card';
+import { Pagination } from '@/components/ui/pagination';
 import { resolveViewerPrices } from '@/lib/pricing/storefront';
 
 // Sprint 7: catalog pages render dynamically so B2B tier prices show
@@ -120,52 +121,15 @@ export default async function ProductsPage({
         </ul>
       )}
 
-      {totalPages > 1 ? (
-        <nav
-          aria-label={isAr ? 'التنقل بين الصفحات' : 'Pagination'}
-          className="mt-10 flex items-center justify-center gap-3 text-sm"
-        >
-          {page > 1 ? (
-            <Link
-              href={{
-                pathname: '/products',
-                query: { sort, page: String(page - 1) },
-              }}
-              className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 font-medium text-foreground transition-colors hover:bg-paper-hover"
-            >
-              {isAr ? 'السابق →' : '← Prev'}
-            </Link>
-          ) : (
-            <span
-              aria-disabled
-              className="inline-flex h-9 items-center rounded-md border border-border px-3 font-medium text-muted-foreground opacity-50"
-            >
-              {isAr ? 'السابق →' : '← Prev'}
-            </span>
-          )}
-          <span className="num text-xs text-muted-foreground">
-            {isAr ? `${page} من ${totalPages}` : `${page} / ${totalPages}`}
-          </span>
-          {page < totalPages ? (
-            <Link
-              href={{
-                pathname: '/products',
-                query: { sort, page: String(page + 1) },
-              }}
-              className="inline-flex h-9 items-center rounded-md border border-border bg-background px-3 font-medium text-foreground transition-colors hover:bg-paper-hover"
-            >
-              {isAr ? '← التالي' : 'Next →'}
-            </Link>
-          ) : (
-            <span
-              aria-disabled
-              className="inline-flex h-9 items-center rounded-md border border-border px-3 font-medium text-muted-foreground opacity-50"
-            >
-              {isAr ? '← التالي' : 'Next →'}
-            </span>
-          )}
-        </nav>
-      ) : null}
+      <Pagination
+        page={page}
+        totalPages={totalPages}
+        locale={isAr ? 'ar' : 'en'}
+        hrefForPage={(p) => ({
+          pathname: '/products',
+          query: { sort, page: String(p) },
+        })}
+      />
     </main>
   );
 }

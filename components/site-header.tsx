@@ -4,6 +4,7 @@ import { Link } from '@/lib/i18n/routing';
 import { LanguageSwitcher } from '@/components/language-switcher';
 import { HeaderSearch } from '@/components/header-search';
 import { MobileNav } from '@/components/mobile-nav';
+import { BrandMark } from '@/components/brand-mark';
 import { getOptionalUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
 import { buildTree, type FlatCategory } from '@/lib/catalog/category-tree';
@@ -93,9 +94,7 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
             href="/"
             className="flex shrink-0 items-center gap-2 text-base font-bold tracking-tight text-canvas transition-opacity hover:opacity-90 sm:text-lg"
           >
-            <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-canvas text-sm font-bold text-ink">
-              PF
-            </span>
+            <BrandMark size={36} />
             <span className="hidden sm:inline">{t('brand.name')}</span>
           </Link>
 
@@ -165,6 +164,7 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
                 accountHeading: isAr ? 'الحساب' : 'Account',
                 account: t('nav.account'),
                 login: t('nav.login'),
+                logout: isAr ? 'تسجيل الخروج' : 'Sign out',
                 cart: t('nav.cart'),
                 language: t('common.languageSwitcher'),
                 business: isAr ? 'للشركات' : 'For Business',

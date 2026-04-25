@@ -163,7 +163,9 @@ export default async function CartPage({
                   strokeWidth={1.75}
                   aria-hidden
                 />
-                {isAr ? 'منتجات أصلية بضمان' : 'Genuine products, warranted'}
+                {isAr
+                  ? 'منتجات أصلية، من غير تقليد'
+                  : 'Genuine products, no knockoffs'}
               </li>
               <li className="flex items-center gap-2">
                 <Truck
