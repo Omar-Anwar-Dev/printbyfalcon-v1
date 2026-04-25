@@ -11,37 +11,30 @@ import {
 import { Link } from '@/lib/i18n/routing';
 import { BrandMark } from '@/components/brand-mark';
 
+const STORE_ADDRESS_AR = '12 محمد صدقي باشا، باب اللوق، القاهرة';
+const STORE_ADDRESS_EN = '12 Mohamed Sedky Pasha, Bab Al-Louk, Cairo';
+const STORE_MAPS_URL = 'https://maps.app.goo.gl/6gNmycfpDtsWkGgs8';
+const SUPPORT_EMAIL = 'support@printbyfalcon.com';
+const WHATSAPP_NUMBER = '+20 111 652 7773';
+const WHATSAPP_URL = 'https://wa.me/201116527773';
+
 /**
- * Four-column footer — Sprint 11 ADR-059 update.
+ * Two-column footer (post pre-M1 polish).
  *
- * Changes from foundation pass:
- *   - Background flipped to solid ink (was light paper).
- *   - Broken links removed (/help, /shipping, /returns, /contact, /account/orders)
- *     pending dedicated pages in v1.1. Support contact handled inline.
- *   - Added: payment methods row, social icons row, newsletter-signup placeholder,
- *     separated copyright strip in ink-2.
+ * Left:  brand block + contact info (WhatsApp / email / address) + socials.
+ * Right: customer-account links column.
+ *
+ * Removed in this round:
+ *   - "Shop" column (catalog / printers / consumables / smart-search) —
+ *     duplicates the top nav and pollutes the footer.
+ *   - Newsletter signup placeholder — was disabled "Coming soon — v1.1"
+ *     anyway; brings back when the actual capture pipeline lands.
  */
 export async function SiteFooter() {
   const t = await getTranslations();
   const locale = await getLocale();
   const isAr = locale === 'ar';
   const year = new Date().getFullYear();
-
-  const shopLinks = [
-    { href: '/products', label: t('nav.catalog') },
-    {
-      href: '/categories/printers',
-      label: isAr ? 'الطابعات' : 'Printers',
-    },
-    {
-      href: '/categories/consumables',
-      label: isAr ? 'الحبر والمستلزمات' : 'Ink & supplies',
-    },
-    {
-      href: '/search',
-      label: isAr ? 'البحث الذكي' : 'Smart search',
-    },
-  ];
 
   const accountLinks = [
     { href: '/account', label: t('nav.account') },
@@ -77,14 +70,14 @@ export async function SiteFooter() {
   return (
     <footer className="mt-24 bg-ink text-canvas">
       <div className="container-page pb-10 pt-14">
-        <div className="grid gap-10 md:grid-cols-[1.2fr_1fr_1fr_1.2fr]">
+        <div className="grid gap-10 md:grid-cols-[2fr_1fr]">
           {/* Brand + contact block */}
           <div className="space-y-5">
             <div className="flex items-center gap-2.5 text-lg font-bold">
               <BrandMark size={36} />
               {t('brand.name')}
             </div>
-            <p className="max-w-xs text-sm text-canvas/70">
+            <p className="max-w-md text-sm text-canvas/70">
               {t('brand.tagline')}
             </p>
             <ul className="space-y-2.5 text-sm text-canvas/70">
@@ -95,10 +88,12 @@ export async function SiteFooter() {
                   aria-hidden
                 />
                 <a
-                  href="https://wa.me/201116527773"
+                  href={WHATSAPP_URL}
                   className="num transition-colors hover:text-canvas"
+                  target="_blank"
+                  rel="noopener noreferrer"
                 >
-                  +20 111 652 7773
+                  {WHATSAPP_NUMBER}
                 </a>
               </li>
               <li className="flex items-center gap-2.5">
@@ -108,10 +103,10 @@ export async function SiteFooter() {
                   aria-hidden
                 />
                 <a
-                  href="mailto:hello@printbyfalcon.com"
+                  href={`mailto:${SUPPORT_EMAIL}`}
                   className="transition-colors hover:text-canvas"
                 >
-                  hello@printbyfalcon.com
+                  {SUPPORT_EMAIL}
                 </a>
               </li>
               <li className="flex items-start gap-2.5">
@@ -120,14 +115,21 @@ export async function SiteFooter() {
                   strokeWidth={1.75}
                   aria-hidden
                 />
-                <span>{isAr ? 'القاهرة، مصر' : 'Cairo, Egypt'}</span>
+                <a
+                  href={STORE_MAPS_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-colors hover:text-canvas hover:underline"
+                >
+                  {isAr ? STORE_ADDRESS_AR : STORE_ADDRESS_EN}
+                </a>
               </li>
             </ul>
 
             {/* Social icons */}
             <div className="flex items-center gap-2 pt-1">
               <SocialIcon
-                href="https://wa.me/201116527773"
+                href={WHATSAPP_URL}
                 label="WhatsApp"
                 icon={MessageCircle}
               />
@@ -149,48 +151,10 @@ export async function SiteFooter() {
             </div>
           </div>
 
-          <FooterColumn heading={isAr ? 'تسوق' : 'Shop'} links={shopLinks} />
           <FooterColumn
             heading={isAr ? 'حسابي' : 'Account'}
             links={accountLinks}
           />
-
-          {/* Newsletter column */}
-          <div>
-            <h3 className="mb-4 text-xs font-semibold uppercase tracking-[0.08em] text-canvas">
-              {isAr ? 'اشترك للنشرة' : 'Newsletter'}
-            </h3>
-            <p className="mb-4 text-sm text-canvas/70">
-              {isAr
-                ? 'اشترك لمعرفة آخر العروض والمنتجات الجديدة.'
-                : 'Get the latest deals and new arrivals.'}
-            </p>
-            {/* Server Component — no onSubmit handler. Inputs + button are disabled,
-               so the form cannot be submitted until the wiring lands in v1.1. */}
-            <form
-              className="flex overflow-hidden rounded-md bg-canvas/10 ring-1 ring-canvas/20"
-              action="#"
-            >
-              <input
-                type="email"
-                inputMode="email"
-                placeholder={isAr ? 'بريدك الإلكتروني' : 'your@email.com'}
-                aria-label={isAr ? 'البريد الإلكتروني' : 'Email address'}
-                disabled
-                className="flex-1 bg-transparent px-3 py-2.5 text-sm text-canvas outline-none placeholder:text-canvas/50 disabled:cursor-not-allowed"
-              />
-              <button
-                type="submit"
-                disabled
-                className="bg-accent px-4 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-strong disabled:cursor-not-allowed disabled:opacity-70"
-              >
-                {isAr ? 'اشترك' : 'Subscribe'}
-              </button>
-            </form>
-            <p className="mt-2 text-xs text-canvas/50">
-              {isAr ? 'قريباً — v1.1' : 'Coming soon — v1.1'}
-            </p>
-          </div>
         </div>
 
         {/* Payment methods row */}
