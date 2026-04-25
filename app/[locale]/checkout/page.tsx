@@ -155,7 +155,7 @@ export default async function CheckoutPage({
             : 'Review your details and pick a payment method — we ship nationwide in 1 – 5 business days.'}
         </p>
       </header>
-      <div className="grid gap-6 md:grid-cols-[1fr_340px]">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-[minmax(0,1fr)_340px]">
         <CheckoutForm
           locale={isAr ? 'ar' : 'en'}
           user={

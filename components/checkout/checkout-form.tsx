@@ -657,7 +657,7 @@ export function CheckoutForm({
       <form onSubmit={onSubmit} className="space-y-6">
         <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
           <h2 className="text-base font-semibold">{labels.contact}</h2>
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
             <label className="space-y-1 text-sm">
               <span>{labels.name}</span>
               <input
@@ -742,7 +742,7 @@ export function CheckoutForm({
           ) : null}
 
           {selectedAddressId === null ? (
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm">
                 <span>{labels.recipient}</span>
                 <input
@@ -846,7 +846,7 @@ export function CheckoutForm({
             <p className="text-xs text-muted-foreground">
               {b2b.companyName} · Tier {b2b.tierCode}
             </p>
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
               <label className="space-y-1 text-sm">
                 <span>
                   {labels.placedByLabel}
