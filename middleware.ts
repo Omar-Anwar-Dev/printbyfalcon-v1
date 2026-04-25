@@ -35,7 +35,13 @@ export default function middleware(request: NextRequest): NextResponse {
     }
   }
 
-  return intlMiddleware(request);
+  // Forward the pathname so server components (notably the [locale] layout)
+  // can branch chrome on it — admin routes need to skip the storefront
+  // header/footer/floating WhatsApp/cookie banner.
+  request.headers.set('x-pathname', pathname);
+  const intlResponse = intlMiddleware(request);
+  intlResponse.headers.set('x-pathname', pathname);
+  return intlResponse;
 }
 
 export const config = {

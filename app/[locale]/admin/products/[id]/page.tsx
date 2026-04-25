@@ -74,7 +74,7 @@ export default async function EditProductPage({
   }));
 
   return (
-    <div className="container max-w-5xl space-y-10 py-8">
+    <main className="container-page max-w-5xl space-y-10 py-8">
       <div>
         <h1 className="mb-6 text-2xl font-semibold">
           {t('admin.catalog.products.editTitle')}
@@ -158,6 +158,6 @@ export default async function EditProductPage({
             : 'Add printer models in the "Printer Models" list first.',
         }}
       />
-    </div>
+    </main>
   );
 }

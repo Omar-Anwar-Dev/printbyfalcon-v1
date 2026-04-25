@@ -71,7 +71,7 @@ export default async function AdminCompanyDetailPage({ params }: Props) {
   );
 
   return (
-    <div className="container space-y-6 py-8">
+    <main className="container-page space-y-6 py-8">
       <div>
         <nav className="mb-2 flex items-center gap-2 text-sm text-muted-foreground">
           <Link href="/admin/b2b/companies" className="hover:underline">
@@ -186,7 +186,7 @@ export default async function AdminCompanyDetailPage({ params }: Props) {
           </ul>
         )}
       </section>
-    </div>
+    </main>
   );
 }
 

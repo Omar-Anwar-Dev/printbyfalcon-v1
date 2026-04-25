@@ -3,6 +3,7 @@ import { Inter, IBM_Plex_Sans_Arabic } from 'next/font/google';
 import { NextIntlClientProvider } from 'next-intl';
 import { getMessages, setRequestLocale } from 'next-intl/server';
 import { notFound } from 'next/navigation';
+import { headers } from 'next/headers';
 import { SiteHeader } from '@/components/site-header';
 import { SiteFooter } from '@/components/site-footer';
 import { ToastProvider } from '@/components/ui/toast';
@@ -65,7 +66,18 @@ export default async function LocaleLayout({ children, params }: Props) {
   setRequestLocale(locale);
   const messages = await getMessages();
   const dir = localeDir[locale as (typeof locales)[number]];
-  const storeInfo = await getStoreInfo();
+
+  // Skip the storefront chrome (header, footer, floating WhatsApp, cookie
+  // banner) on /admin routes — admin gets its own ink-shell topbar +
+  // sidebar from `app/[locale]/admin/layout.tsx`. Path is forwarded by
+  // middleware via the `x-pathname` request header.
+  const headersList = await headers();
+  const pathname = headersList.get('x-pathname') ?? '';
+  const isAdminRoute = /^\/(?:ar|en)\/admin(?:\/|$)/.test(pathname);
+
+  const storeInfo = isAdminRoute
+    ? { supportWhatsapp: '' }
+    : await getStoreInfo();
 
   // `<html>` lives here (not in `app/layout.tsx`) so `dir` and `lang` are
   // baked into the server-rendered HTML. Without that, the document defaults
@@ -82,16 +94,22 @@ export default async function LocaleLayout({ children, params }: Props) {
       <body className="flex min-h-screen flex-col bg-background text-foreground antialiased">
         <NextIntlClientProvider messages={messages}>
           <ToastProvider>
-            <SiteHeader locale={locale} />
-            <main className="flex-1">{children}</main>
-            <SiteFooter />
-            {storeInfo.supportWhatsapp ? (
-              <WhatsAppChatButton
-                supportNumber={storeInfo.supportWhatsapp}
-                locale={locale}
-              />
-            ) : null}
-            <CookieConsent locale={locale as 'ar' | 'en'} />
+            {isAdminRoute ? (
+              <div className="flex flex-1 flex-col">{children}</div>
+            ) : (
+              <>
+                <SiteHeader locale={locale} />
+                <main className="flex-1">{children}</main>
+                <SiteFooter />
+                {storeInfo.supportWhatsapp ? (
+                  <WhatsAppChatButton
+                    supportNumber={storeInfo.supportWhatsapp}
+                    locale={locale}
+                  />
+                ) : null}
+                <CookieConsent locale={locale as 'ar' | 'en'} />
+              </>
+            )}
           </ToastProvider>
         </NextIntlClientProvider>
       </body>
