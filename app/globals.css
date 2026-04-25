@@ -79,6 +79,19 @@
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
   }
 
+  /* Form controls have an intrinsic min-width derived from the `size`
+     attribute (default ~20 chars). Inside narrow flex/grid cells on
+     mobile, that min-width refuses to shrink and pushes the parent
+     wider than the viewport — visible as form sections bleeding past
+     the start edge on /checkout. Setting `min-width: 0` lets them
+     honor the cell's available space. See ADR-060. */
+  input,
+  textarea,
+  select,
+  button {
+    min-width: 0;
+  }
+
   html[dir='ltr'] body {
     font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
   }
