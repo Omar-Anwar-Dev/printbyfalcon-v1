@@ -7,6 +7,7 @@ import {
   Search,
   ArrowRight,
 } from 'lucide-react';
+import Image from 'next/image';
 import { Link } from '@/lib/i18n/routing';
 import { Button } from '@/components/ui/button';
 import { ProductCard } from '@/components/catalog/product-card';
@@ -152,28 +153,18 @@ export default async function HomePage({
         />
         <div className="container-page grid gap-10 py-18 sm:py-22 lg:grid-cols-[1.15fr_1fr] lg:gap-16 lg:py-30">
           <div className="flex flex-col justify-center">
-            <span className="mb-5 inline-flex w-fit items-center gap-2 rounded-full border border-border bg-paper px-3 py-1 text-xs font-medium text-muted-foreground">
-              <span className="h-1.5 w-1.5 rounded-full bg-accent" />
-              Print By Falcon
-            </span>
-            <h1 className="text-4xl font-bold leading-[1.05] tracking-tight text-foreground sm:text-5xl lg:text-5xl">
-              {isAr ? (
-                <>
-                  طابعات وأحبار أصلية
-                  <br />
-                  <span className="text-accent-strong">
-                    لجميع أنواع الطابعات والأحبار.
-                  </span>
-                </>
-              ) : (
-                <>
-                  Authentic printers and inks
-                  <br />
-                  <span className="text-accent-strong">
-                    for every printer model.
-                  </span>
-                </>
-              )}
+            <h1 className="mb-2">
+              <span className="sr-only">
+                Print By Falcon — طابعات وأحبار أصلية
+              </span>
+              <Image
+                src="/brand/brand-mark.png"
+                alt=""
+                width={1200}
+                height={620}
+                priority
+                className="h-auto w-full max-w-xl"
+              />
             </h1>
             <p className="mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
               {isAr
