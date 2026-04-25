@@ -70,6 +70,11 @@
     -moz-osx-font-smoothing: grayscale;
     font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
     overflow-x: clip;
+    /* Pin body width to viewport — even if a descendant ignores the clip
+       (some older mobile browsers), the body itself can't widen past the
+       screen, so the layout never grows a horizontal scrollbar. */
+    width: 100%;
+    max-width: 100vw;
   }
 
   html[dir='ltr'] body {
