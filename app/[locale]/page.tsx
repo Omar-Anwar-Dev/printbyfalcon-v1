@@ -7,7 +7,6 @@ import {
   Search,
   ArrowRight,
 } from 'lucide-react';
-import Image from 'next/image';
 import { Link } from '@/lib/i18n/routing';
 import { Button } from '@/components/ui/button';
 import { ProductCard } from '@/components/catalog/product-card';
@@ -153,20 +152,19 @@ export default async function HomePage({
         />
         <div className="container-page grid gap-10 py-18 sm:py-22 lg:grid-cols-[1.15fr_1fr] lg:gap-16 lg:py-30">
           <div className="flex flex-col justify-center">
-            <h1 className="mb-2">
-              <span className="sr-only">
-                Print By Falcon — طابعات وأحبار أصلية
+            <h1 className="font-bold leading-[1.05] tracking-tight">
+              {/* Wordmark — English brand name, always shown */}
+              <span className="block text-4xl text-foreground sm:text-5xl lg:text-6xl">
+                Print <span className="text-accent-strong">By Falcon</span>
               </span>
-              <Image
-                src="/brand/brand-mark.png"
-                alt=""
-                width={1200}
-                height={620}
-                priority
-                className="h-auto w-full max-w-xl"
-              />
+              {/* Bilingual tagline — Arabic always shown alongside the wordmark
+                  to mirror the BrandMark lockup; locale-specific paragraph
+                  copy lives in the subtitle below. */}
+              <span className="mt-3 block text-3xl text-foreground sm:text-4xl lg:text-5xl">
+                طابعات وأحبار <span className="text-accent-strong">أصلية</span>
+              </span>
             </h1>
-            <p className="mt-5 max-w-xl text-base text-muted-foreground sm:text-lg">
+            <p className="mt-6 max-w-xl text-base text-muted-foreground sm:text-lg">
               {isAr
                 ? 'ابحث برقم موديل الطابعة لإيجاد المستلزم المناسب تمامًا. توصيل سريع، دفع عند الاستلام، ودعم واتساب من فريقنا.'
                 : 'Search by printer model to find the exact consumable. Fast delivery, cash on delivery, and WhatsApp support from our team.'}

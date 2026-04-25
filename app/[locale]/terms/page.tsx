@@ -190,8 +190,8 @@ function TermsArabic() {
       <h2>13. التواصل</h2>
       <p>
         لأي سؤال:{' '}
-        <a href="mailto:hello@printbyfalcon.com">hello@printbyfalcon.com</a> —
-        +20 111 652 7773
+        <a href="mailto:support@printbyfalcon.com">support@printbyfalcon.com</a>{' '}
+        — +20 111 652 7773
       </p>
     </main>
   );
@@ -358,8 +358,8 @@ function TermsEnglish() {
       <h2>13. Contact</h2>
       <p>
         For any question:{' '}
-        <a href="mailto:hello@printbyfalcon.com">hello@printbyfalcon.com</a> —
-        +20 111 652 7773
+        <a href="mailto:support@printbyfalcon.com">support@printbyfalcon.com</a>{' '}
+        — +20 111 652 7773
       </p>
     </main>
   );
