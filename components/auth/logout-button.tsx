@@ -16,7 +16,7 @@ const VARIANT_CLASS: Record<Variant, string> = {
     'inline-flex h-10 items-center gap-2 rounded-md border border-error/30 bg-background px-4 text-sm font-medium text-error transition-colors hover:bg-error-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-error disabled:opacity-50',
   menu: 'flex w-full items-center gap-3 px-4 py-3 text-base font-medium text-error transition-colors hover:bg-error-soft focus-visible:outline-none focus-visible:bg-error-soft disabled:opacity-50',
   topbar:
-    'inline-flex h-9 items-center gap-1.5 rounded-md px-3 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50',
+    'inline-flex h-9 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium text-canvas transition-colors hover:bg-canvas/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-canvas focus-visible:ring-offset-2 focus-visible:ring-offset-ink disabled:opacity-50 sm:px-3',
 };
 
 type Props = {

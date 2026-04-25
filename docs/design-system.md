@@ -216,6 +216,19 @@ Authoritative catalog of shared UI. Update when adding or substantially changing
 | Global error | [app/global-error.tsx](../app/global-error.tsx) | Catastrophic fallback (renders own `<html>`/`<body>`, inline styles) |
 | Locale loading | [app/[locale]/loading.tsx](../app/[locale]/loading.tsx) | Default suspense skeleton (hero + 8 product card skeletons with `shimmer`) |
 
+### 4.5 Admin shell (ADR-061)
+| Component | Path | Notes |
+|---|---|---|
+| `AdminLayout` | [app/[locale]/admin/layout.tsx](../app/[locale]/admin/layout.tsx) | Replaces the old light-surface admin shell. Sticky ink topbar (matches storefront Bar-1 language) + desktop sidebar (`w-60`, hidden on mobile) + content slot. Pages keep their own `<main className="container-page …">` so layouts don't nest `<main>`. |
+| `AdminSideNav` (client) | [components/admin/admin-side-nav.tsx](../components/admin/admin-side-nav.tsx) | Desktop sidebar list. Reads `usePathname()`, strips locale prefix, applies `bg-accent-soft text-accent-strong` to the active link. Renders the 6 nav groups from `nav-config.ts`. |
+| `AdminMobileNav` (client) | [components/admin/admin-mobile-nav.tsx](../components/admin/admin-mobile-nav.tsx) | Mirrors storefront `MobileNav` shape: hamburger trigger in topbar (end-side), slide-in drawer from `end`, 80% width / max 320px, body-scroll-lock + Escape-to-close, auto-close on route change. |
+| `AdminNavIcon` | [components/admin/admin-nav-icon.tsx](../components/admin/admin-nav-icon.tsx) | Tiny mapper from `AdminNavIconName` strings (data) to Lucide components (UI). Lets the nav config travel server → client without serializing icon components. |
+| `getAdminNavGroups()` | [lib/admin/nav-config.ts](../lib/admin/nav-config.ts) | Pure data: returns role-filtered, grouped nav links. Six groups: Dashboard / Catalog / Orders & Inventory / Customers / Business (B2B) / Administration. |
+| `AdminPageHeader` | [components/admin/admin-page-header.tsx](../components/admin/admin-page-header.tsx) | Standard overline + h1 + subtitle + actions slot. Used by 5/50 pages today; gradual adoption tracked separately. |
+| `LogoutButton` (`topbar` variant) | [components/auth/logout-button.tsx](../components/auth/logout-button.tsx) | Updated for the ink admin topbar — `text-canvas`, `hover:bg-canvas/10`, focus ring offset against ink. |
+
+**Chrome separation.** `[locale]/layout.tsx` reads `x-pathname` (set by `middleware.ts`) and skips the storefront chrome — `SiteHeader`, `SiteFooter`, floating WhatsApp, cookie banner — on `/ar/admin/*` and `/en/admin/*`. Admin gets ONLY its own shell, not stacked with storefront chrome.
+
 ---
 
 ## 5. Iconography
@@ -358,3 +371,4 @@ Sprints 5–12 should ship feature work that **conforms to this system** without
 |---|---|---|
 | 2026-04-19 | Initial design system | Foundation UI/UX polish pass after M0 (Sprint 4 close); ADR-031 |
 | 2026-04-23 | **v2 direction shift.** Pure-white canvas (was cream); neutral-gray paper + borders (was warm); ink-solid header/footer shells; prominent HeaderSearch with accent submit; 4-column footer gains payment-pill row, 4-social-icon row, newsletter placeholder. MobileNav hamburger moved end-side. CookieConsent mobile repositioned. CSP allow-lists Cloudflare Web Analytics. 5 broken footer links removed. | Sprint 11 UI refiner pass (pre-production-deploy); ADR-059 |
+| 2026-04-26 | **Admin shell rebuild.** New `AdminLayout` (ink topbar + grouped icon sidebar + mobile drawer) replaces the old light-surface admin shell. `[locale]/layout.tsx` now skips storefront chrome on `/admin/*` so admin no longer renders stacked under storefront header/footer. New components: `AdminSideNav`, `AdminMobileNav`, `AdminNavIcon`, `lib/admin/nav-config.ts`. `LogoutButton.topbar` variant updated for ink surface. | Admin layout polish pass (Tier 1+2 scope); ADR-061 |
