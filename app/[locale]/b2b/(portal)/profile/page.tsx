@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation';
 import { requireB2BUser } from '@/lib/auth';
 import { prisma } from '@/lib/db';
-import { Link } from '@/lib/i18n/routing';
 import { formatEgp } from '@/lib/catalog/price';
 import { PricingTierBadge } from '@/components/b2b/pricing-tier-badge';
 import { B2BProfileContactForm } from '@/components/b2b/b2b-profile-contact-form';
@@ -116,26 +115,22 @@ export default async function B2BProfilePage({ params }: Props) {
         locale={locale}
       />
 
-      {/* Portal tabs nav above already covers Profile / Orders / Bulk
-          order; this strip keeps cross-portal links (shared B2C
-          addresses) + the destructive sign-out apart from the tabs. */}
+      {/* Portal tabs nav above covers Profile / Orders / Bulk order.
+          Sign-out is kept apart so the destructive action isn't confused
+          with navigation. The "Manage addresses" link this strip used
+          to carry was a dead end for B2B users — `/account/addresses`
+          is gated on `user.type === 'B2C'` and bounces B2B back to
+          /sign-in. Company shipping is handled in the company profile
+          + per-order at checkout, not via the personal address book. */}
       <section className="rounded-md border border-border bg-background p-5">
         <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
-          {isAr ? 'إجراءات أخرى' : 'Other actions'}
+          {isAr ? 'إجراءات الحساب' : 'Account actions'}
         </h2>
-        <div className="flex flex-wrap gap-3">
-          <Link
-            href="/account/addresses"
-            className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
-          >
-            {isAr ? 'إدارة العناوين' : 'Manage addresses'}
-          </Link>
-          <LogoutButton
-            variant="danger"
-            label={isAr ? 'تسجيل الخروج' : 'Sign out'}
-            pendingLabel={isAr ? 'جارٍ الخروج...' : 'Signing out...'}
-          />
-        </div>
+        <LogoutButton
+          variant="danger"
+          label={isAr ? 'تسجيل الخروج' : 'Sign out'}
+          pendingLabel={isAr ? 'جارٍ الخروج...' : 'Signing out...'}
+        />
       </section>
     </main>
   );
