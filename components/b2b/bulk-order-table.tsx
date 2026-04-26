@@ -64,8 +64,6 @@ function emptyRow(): RowState {
 const ROW_CAP = 50;
 
 type Labels = {
-  pageTitle: string;
-  pageHelp: string;
   rowCap: string;
   columns: {
     sku: string;
@@ -283,11 +281,11 @@ export function BulkOrderTable({
 
   return (
     <div>
-      <header className="mb-6">
-        <h1 className="text-2xl font-semibold">{labels.pageTitle}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{labels.pageHelp}</p>
-        <p className="mt-1 text-xs text-muted-foreground">{labels.rowCap}</p>
-      </header>
+      {/* Page-level <header> lives on the wrapper page so it inherits the
+          portal-tabs nav above; the table here just renders controls +
+          the table. (Sprint 8 originally duplicated the header inside —
+          removed in the M1-eve polish wave.) */}
+      <p className="mb-4 text-xs text-muted-foreground">{labels.rowCap}</p>
 
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap gap-2">

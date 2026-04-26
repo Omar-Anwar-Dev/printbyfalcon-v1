@@ -145,22 +145,28 @@ export default async function OrderConfirmedPage({
           <Package className="h-4 w-4" strokeWidth={1.75} aria-hidden />
           {isAr ? 'المنتجات' : 'Items'}
         </h2>
-        <ul className="space-y-3 text-sm">
-          {order.items.map((i) => (
-            <li key={i.id} className="flex items-start justify-between gap-3">
-              <span className="min-w-0 flex-1">
-                <span className="block font-medium text-foreground">
-                  {isAr ? i.nameArSnapshot : i.nameEnSnapshot}
-                </span>
-                <span className="num mt-0.5 block font-mono text-[11px] text-muted-foreground">
+        <ul className="divide-y divide-border text-sm">
+          {order.items.map((i, idx) => {
+            const isLast = idx === order.items.length - 1;
+            return (
+              <li
+                key={i.id}
+                className={`space-y-1.5 ${idx === 0 ? '' : 'pt-3'} ${isLast ? '' : 'pb-3'}`}
+              >
+                <div className="flex items-baseline justify-between gap-3">
+                  <p className="min-w-0 flex-1 break-words font-medium leading-snug text-foreground">
+                    {isAr ? i.nameArSnapshot : i.nameEnSnapshot}
+                  </p>
+                  <p className="num shrink-0 whitespace-nowrap font-semibold text-foreground">
+                    {formatEgp(i.lineTotalEgp.toString(), isAr ? 'ar' : 'en')}
+                  </p>
+                </div>
+                <p className="num font-mono text-[11px] text-muted-foreground">
                   {i.skuSnapshot} · ×{i.qty}
-                </span>
-              </span>
-              <span className="num shrink-0 whitespace-nowrap font-semibold text-foreground">
-                {formatEgp(i.lineTotalEgp.toString(), isAr ? 'ar' : 'en')}
-              </span>
-            </li>
-          ))}
+                </p>
+              </li>
+            );
+          })}
         </ul>
         <dl className="mt-5 space-y-1.5 border-t border-border pt-4 text-sm">
           <div className="flex justify-between">

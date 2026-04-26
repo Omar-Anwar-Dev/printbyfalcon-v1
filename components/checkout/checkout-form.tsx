@@ -153,7 +153,8 @@ const LABELS = {
       'cart.insufficient_stock':
         'الكمية المتاحة لأحد المنتجات أقل من المطلوب — عدّل السلة وحاول مرة أخرى.',
       'cart.item_unavailable': 'أحد المنتجات في سلتك مش متاح الآن.',
-      'validation.invalid': 'من فضلك تأكد من بيانات الطلب.',
+      'validation.invalid':
+        'فيه حقل ناقص أو غير صحيح. تأكّد من: الاسم الكامل، رقم الموبايل (11 رقم يبدأ بـ 01)، والعنوان (المحافظة والمدينة والشارع).',
       'order.payment_setup_failed': 'حصل مشكلة في إعداد الدفع. حاول تاني.',
       'checkout.pay_now_not_allowed':
         'الشركة بتاعتك مضبوطة على "إرسال الطلب للمراجعة" فقط. تواصل مع ممثل المبيعات لتغيير الإعداد.',
@@ -241,7 +242,8 @@ const LABELS = {
       'cart.insufficient_stock':
         "One of your items doesn't have enough stock — adjust quantities and retry.",
       'cart.item_unavailable': 'One of your items is no longer available.',
-      'validation.invalid': 'Please check the order details.',
+      'validation.invalid':
+        'A field is missing or invalid. Check: full name, mobile (11-digit Egyptian, starts with 01), and address (governorate, city, street).',
       'order.payment_setup_failed': 'Payment setup failed. Please try again.',
       'checkout.pay_now_not_allowed':
         'Your company is configured for Submit-for-Review only. Contact your sales rep to change this.',

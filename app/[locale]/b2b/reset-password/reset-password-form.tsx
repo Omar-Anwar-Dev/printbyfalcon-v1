@@ -1,16 +1,18 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import { resetB2BPasswordAction } from '@/app/actions/auth';
 
 type Props = { token: string; locale: 'ar' | 'en' };
 
 export function ResetPasswordForm({ token, locale }: Props) {
   const isAr = locale === 'ar';
+  const t = useTranslations();
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -23,7 +25,19 @@ export function ResetPasswordForm({ token, locale }: Props) {
     start(async () => {
       const res = await resetB2BPasswordAction(form);
       if (!res.ok) {
-        setError(res.errorKey);
+        // The action returns either a generic Zod error
+        // (`validation.invalid`) or a domain-specific key
+        // (`auth.reset.invalid_or_expired`). For the generic one, we
+        // know the only fields are the two passwords — so swap in a
+        // password-specific message rather than the catch-all
+        // "Invalid value" the global key resolves to.
+        const message =
+          res.errorKey === 'validation.invalid'
+            ? isAr
+              ? 'كلمة المرور غير صالحة — تأكد من المتطلبات أسفل الحقل.'
+              : "Password didn't meet the requirements shown below the field."
+            : t(res.errorKey as never, { default: t('common.error') });
+        setError(message);
         return;
       }
       router.push(`/${locale}/b2b/login?reset=1`);
@@ -46,26 +60,34 @@ export function ResetPasswordForm({ token, locale }: Props) {
         <Label htmlFor="newPassword">
           {isAr ? 'كلمة المرور الجديدة' : 'New password'}
         </Label>
-        <Input
+        <PasswordInput
           id="newPassword"
           name="newPassword"
-          type="password"
           required
+          minLength={10}
           dir="ltr"
           autoComplete="new-password"
+          showLabel={isAr ? 'إظهار كلمة المرور' : 'Show password'}
+          hideLabel={isAr ? 'إخفاء كلمة المرور' : 'Hide password'}
         />
+        <p className="text-xs text-muted-foreground">
+          {isAr
+            ? '10 أحرف على الأقل، بها حروف كبيرة وصغيرة وأرقام.'
+            : 'At least 10 characters, with upper, lower, and a digit.'}
+        </p>
       </div>
       <div className="space-y-2">
         <Label htmlFor="confirmPassword">
           {isAr ? 'تأكيد كلمة المرور' : 'Confirm password'}
         </Label>
-        <Input
+        <PasswordInput
           id="confirmPassword"
           name="confirmPassword"
-          type="password"
           required
           dir="ltr"
           autoComplete="new-password"
+          showLabel={isAr ? 'إظهار كلمة المرور' : 'Show password'}
+          hideLabel={isAr ? 'إخفاء كلمة المرور' : 'Hide password'}
         />
       </div>
       {error ? (
