@@ -1,13 +1,35 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
+import {
+  Building,
+  ListChecks,
+  MapPin,
+  Package,
+  User,
+  type LucideIcon,
+} from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
-import type { LucideIcon } from 'lucide-react';
+
+export type PortalTabIconName =
+  | 'user'
+  | 'map-pin'
+  | 'building'
+  | 'package'
+  | 'list-checks';
 
 export type PortalTab = {
   href: string;
   label: string;
-  icon?: LucideIcon;
+  icon?: PortalTabIconName;
+};
+
+const ICONS: Record<PortalTabIconName, LucideIcon> = {
+  user: User,
+  'map-pin': MapPin,
+  building: Building,
+  package: Package,
+  'list-checks': ListChecks,
 };
 
 /**
@@ -19,6 +41,12 @@ export type PortalTab = {
  *
  * Active tab is detected by `usePathname()` after stripping the locale
  * prefix.
+ *
+ * **Why icon names instead of component refs:** server layouts pass the
+ * tabs payload across the server→client boundary, and Lucide icons are
+ * regular React components (not Client References) — passing them
+ * directly fails serialization at runtime in production builds. The
+ * name → component mapping happens here, inside the client bundle.
  */
 export function PortalTabs({
   tabs,
@@ -36,7 +64,7 @@ export function PortalTabs({
         <ul className="-mx-4 flex items-center gap-1 overflow-x-auto px-4 [scrollbar-width:none] sm:mx-0 sm:px-0 [&::-webkit-scrollbar]:hidden">
           {tabs.map((tab) => {
             const active = isActive(stripped, tab.href);
-            const Icon = tab.icon;
+            const Icon = tab.icon ? ICONS[tab.icon] : null;
             return (
               <li key={tab.href} className="shrink-0">
                 <Link
