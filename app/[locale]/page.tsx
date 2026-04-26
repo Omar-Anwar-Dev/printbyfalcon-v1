@@ -157,11 +157,20 @@ export default async function HomePage({
               <span className="block text-4xl text-foreground sm:text-5xl lg:text-6xl">
                 Print <span className="text-accent-strong">By Falcon</span>
               </span>
-              {/* Bilingual tagline — Arabic always shown alongside the wordmark
-                  to mirror the BrandMark lockup; locale-specific paragraph
-                  copy lives in the subtitle below. */}
+              {/* Localized tagline — emphasis word matches the Arabic
+                  rhythm (last word in AR / first word in EN). */}
               <span className="mt-3 block text-3xl text-foreground sm:text-4xl lg:text-5xl">
-                طابعات وأحبار <span className="text-accent-strong">أصلية</span>
+                {isAr ? (
+                  <>
+                    طابعات وأحبار{' '}
+                    <span className="text-accent-strong">أصلية</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-accent-strong">Authentic</span>{' '}
+                    printers and ink
+                  </>
+                )}
               </span>
             </h1>
             <p className="mt-6 max-w-xl text-base text-muted-foreground sm:text-lg">
