@@ -216,6 +216,13 @@ Authoritative catalog of shared UI. Update when adding or substantially changing
 | Global error | [app/global-error.tsx](../app/global-error.tsx) | Catastrophic fallback (renders own `<html>`/`<body>`, inline styles) |
 | Locale loading | [app/[locale]/loading.tsx](../app/[locale]/loading.tsx) | Default suspense skeleton (hero + 8 product card skeletons with `shimmer`) |
 
+### 4.5 User-portal shells (ADR-062)
+| Component | Path | Notes |
+|---|---|---|
+| `PortalTabs` (client) | [components/portal-tabs.tsx](../components/portal-tabs.tsx) | Generic horizontal tabs nav. Active tab via `usePathname()` (locale prefix stripped). Full-bleed `<nav>` with bottom border; inner list is `container-page` so it lines up with the page content. Scrolls horizontally on narrow viewports. Used by both portals so they share one visual language. |
+| B2C account layout | [app/[locale]/account/layout.tsx](../app/[locale]/account/layout.tsx) | Wraps every `/account/*` page with two tabs (Overview · Addresses). Pages keep their own `<main>`. |
+| B2B portal layout | [app/[locale]/b2b/(portal)/layout.tsx](../app/%5Blocale%5D/b2b/%28portal%29/layout.tsx) | Wraps `/b2b/profile`, `/b2b/orders`, `/b2b/bulk-order` with three tabs (Company profile · Company orders · Bulk order). The `(portal)` route group is the boundary that keeps the tabs from leaking onto B2B auth surfaces (login, register, forgot-password, reset-password). |
+
 ---
 
 ## 5. Iconography
@@ -358,3 +365,4 @@ Sprints 5–12 should ship feature work that **conforms to this system** without
 |---|---|---|
 | 2026-04-19 | Initial design system | Foundation UI/UX polish pass after M0 (Sprint 4 close); ADR-031 |
 | 2026-04-23 | **v2 direction shift.** Pure-white canvas (was cream); neutral-gray paper + borders (was warm); ink-solid header/footer shells; prominent HeaderSearch with accent submit; 4-column footer gains payment-pill row, 4-social-icon row, newsletter placeholder. MobileNav hamburger moved end-side. CookieConsent mobile repositioned. CSP allow-lists Cloudflare Web Analytics. 5 broken footer links removed. | Sprint 11 UI refiner pass (pre-production-deploy); ADR-059 |
+| 2026-04-26 | **User-portal + product layout pass.** New shared `<PortalTabs>` powers a B2C account shell (Overview · Addresses) and a B2B portal shell (Company profile · Company orders · Bulk order, in `app/[locale]/b2b/(portal)/`). 3 B2B pages standardized to `container-page` + `<main>` + overline+h1+subtitle pattern (forgot-password, reset-password, orders). PDP specs grid hardened with `minmax(0,1fr)` + `break-words`. Bulk order table wrapper switched to `overflow-x-auto` + `min-w-[640px]` so mobile scrolls instead of clipping rightmost columns. | Polish pass after admin shell rebuild; ADR-062 |

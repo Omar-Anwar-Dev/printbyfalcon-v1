@@ -325,8 +325,13 @@ export function BulkOrderTable({
         </div>
       </div>
 
-      <div className="overflow-visible rounded-md border bg-background">
-        <table className="w-full text-sm">
+      {/* `overflow-x-auto` lets narrow viewports scroll the table sideways
+          instead of clipping columns; the autocomplete dropdown inside
+          each row uses `position: absolute` so it can extend past the
+          wrapper's bottom — vertical clipping on the last row's dropdown
+          is the accepted trade-off. */}
+      <div className="overflow-x-auto rounded-md border bg-background">
+        <table className="w-full min-w-[640px] text-sm">
           <thead className="bg-muted/50 text-xs uppercase">
             <tr>
               <th className="px-3 py-2 text-start">{labels.columns.sku}</th>

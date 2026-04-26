@@ -116,40 +116,19 @@ export default async function B2BProfilePage({ params }: Props) {
         locale={locale}
       />
 
-      <section className="rounded-md border bg-background p-5">
-        <h2 className="mb-3 text-base font-semibold">
-          {isAr ? 'إجراءات الحساب' : 'Account actions'}
+      {/* Portal tabs nav above already covers Profile / Orders / Bulk
+          order; this strip keeps cross-portal links (shared B2C
+          addresses) + the destructive sign-out apart from the tabs. */}
+      <section className="rounded-md border border-border bg-background p-5">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+          {isAr ? 'إجراءات أخرى' : 'Other actions'}
         </h2>
         <div className="flex flex-wrap gap-3">
-          <Link
-            href="/b2b/bulk-order"
-            className="inline-flex h-10 items-center rounded-md bg-accent px-4 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent-strong"
-          >
-            {isAr ? 'طلب مُجمَّع (Bulk)' : 'Bulk order'}
-          </Link>
-          <Link
-            href="/b2b/orders"
-            className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
-          >
-            {isAr ? 'طلبات الشركة' : 'Company orders'}
-          </Link>
-          <Link
-            href="/account/orders"
-            className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
-          >
-            {isAr ? 'طلباتي' : 'My orders'}
-          </Link>
-          <Link
-            href="/account/change-password"
-            className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
-          >
-            {isAr ? 'تغيير كلمة المرور' : 'Change password'}
-          </Link>
           <Link
             href="/account/addresses"
             className="inline-flex h-10 items-center rounded-md border border-border bg-background px-4 text-sm font-medium text-foreground transition-colors hover:bg-paper-hover"
           >
-            {isAr ? 'العناوين' : 'Addresses'}
+            {isAr ? 'إدارة العناوين' : 'Manage addresses'}
           </Link>
           <LogoutButton
             variant="danger"

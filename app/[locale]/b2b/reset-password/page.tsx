@@ -21,7 +21,7 @@ export default async function B2BResetPasswordPage({
   const isAr = locale === 'ar';
 
   return (
-    <div className="container flex min-h-[70vh] items-center justify-center py-12">
+    <main className="container-page flex min-h-[70vh] items-center justify-center py-12">
       <Card className="w-full max-w-md">
         <CardHeader>
           <CardTitle>
@@ -37,6 +37,6 @@ export default async function B2BResetPasswordPage({
           <ResetPasswordForm token={token ?? ''} locale={locale} />
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

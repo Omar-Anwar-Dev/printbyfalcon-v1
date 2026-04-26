@@ -1357,3 +1357,34 @@ Supersedes: ADR-031 (foundation pass direction — cream canvas, minimal header/
 - The "Don'ts" list in design-system.md needs two updates: the warm-accent prohibition stays (Raya-yellow still rejected); a new rule adds "no bright blue primary" to prevent drift toward Raya-blue if someone reads the structural inspiration too literally.
 - The canvas contrast on shimmer-skeleton animation narrows slightly (#F7F7F7 → #F0F0F0 instead of the prior #F3F1EC → #EBE8E0) — barely perceptible, but if the skeleton loses visibility under load-testing, widen the stop values.
 - Ops verification: CSP header on `/ar` now includes `https://static.cloudflareinsights.com` in script-src — confirm with `curl -I https://staging.printbyfalcon.com/ar | grep -i content-security-policy` after redeploy.
+
+---
+
+## ADR-062: User-portal + product layout pass — shared `PortalTabs`, `(portal)` route group for B2B, structural cleanup
+
+**Date:** 2026-04-26
+**Status:** Accepted (UI polish pass after admin shell rebuild — ADR-061)
+**Context:** Owner asked to fix the layout of B2C account, B2B portal, and product pages. Audit surfaced four kinds of issue:
+1. **No persistent navigation between user-portal sections.** B2C `/account/*` (Overview + Addresses) and B2B `/b2b/profile|orders|bulk-order` were each siloed pages — to hop sections the user had to go back through the site header. The B2B profile page tried to compensate with a six-link "Account actions" strip at the bottom, half of which were already navigable from the storefront chrome.
+2. **Structural drift on a few B2B pages.** `/b2b/forgot-password`, `/b2b/reset-password`, `/b2b/orders` used the bare Tailwind `container` (not the project's `container-page` utility), `<div>` instead of `<main>`, and skipped the standard overline + bold-h1 + subtitle header pattern the rest of the site uses.
+3. **Defensive layout gaps in the product detail page.** The specs `<dl>` used `grid-cols-[1fr_2fr]` without a `minmax(0,1fr)` floor, so a long unbreakable spec value could push the section past viewport on narrow viewports — same root cause as the checkout overflow fixed in ADR-060/PR #37.
+4. **Bulk order table couldn't scroll horizontally on mobile.** The wrapper used `overflow-visible` (because of the autocomplete dropdown's positioning), which combined with `body { overflow-x: clip }` meant rightmost columns were silently CLIPPED on narrow viewports — the user could neither see them nor scroll to them.
+
+**Decision:**
+- **New `<PortalTabs>` (client) at [components/portal-tabs.tsx](../components/portal-tabs.tsx).** Generic horizontal tabs nav with `usePathname()` active state (locale prefix stripped) and horizontal-scroll fallback for narrow viewports. Used by both portals so account and B2B share one visual language.
+- **B2C account shell.** New [app/[locale]/account/layout.tsx](../app/[locale]/account/layout.tsx) wraps every `/account/*` page with two tabs (Overview · Addresses). Pages keep their own `<main>`.
+- **B2B portal shell via route group.** Moved `/b2b/profile`, `/b2b/orders`, `/b2b/bulk-order` into `app/[locale]/b2b/(portal)/` so the new `(portal)/layout.tsx` can wrap only the signed-in portal pages without bleeding portal nav onto auth surfaces (login, register, forgot-password, reset-password). Three tabs: Company profile · Company orders · Bulk order. The B2B profile page's six-link "Account actions" strip slimmed to two essential cross-portal links (manage addresses + sign out) since the tabs cover the rest.
+- **Standardized 3 B2B pages.** `/b2b/forgot-password`, `/b2b/reset-password`, `/b2b/orders` now use `container-page` and `<main>`; `/b2b/orders` gains the project's standard overline + h1 + subtitle header.
+- **PDP specs grid hardened.** `grid-cols-[minmax(0,1fr)_minmax(0,2fr)]` lets both columns shrink below min-content; both cells gain `break-words`. Same defensive pattern as PR #37's checkout grid fix.
+- **Bulk order table fix.** Wrapper changed to `overflow-x-auto` + table gains `min-w-[640px]` so the table scrolls sideways on mobile instead of clipping. Trade-off: the autocomplete dropdown on the LAST row could be vertically clipped (it's `position: absolute` and the wrapper is now a clipping context). Accepted because the alternative — silently hiding the rightmost columns — is worse, and the dropdown clipping only affects the last row's autocomplete in a 50-row-cap form.
+
+**Alternatives considered:**
+- **Add the portal nav inline on every page instead of a layout.** Rejected — duplicates the same JSX in three (B2B) and two (B2C) pages; misses the next page someone adds. Layouts are the right tool.
+- **Don't use a route group; just guard the layout with a pathname check.** Rejected — route groups are the documented Next.js pattern for "shared layout for some sibling routes, not all"; pathname guards add runtime cost and split logic from structure.
+- **Portal the bulk-order autocomplete dropdown to `<body>` so it escapes the wrapper's overflow.** Right long-term, but a real refactor (Radix Popover or react-portal); not in scope for this polish pass. Filed as a follow-up.
+
+**Consequences:**
+- All 5 `/account/*` and `/b2b/{profile,orders,bulk-order}` pages now share a consistent navigation shell — adding a new sub-page only needs to update the tab list in one of the two layout files.
+- Route-group rename (`/b2b/profile` → `/b2b/(portal)/profile`, etc.) is a tracked move in git; the URL shape doesn't change so no incoming links break.
+- Bulk-order autocomplete dropdown vertical clipping on the LAST row is a known minor UX issue; a follow-up PR can portal the dropdown to fix it.
+- A separate pre-existing bug surfaced during the audit: B2B's first-time-login flow redirects to `/account/change-password` which doesn't exist (404). Out of scope for layout polish — flagged in the progress entry.

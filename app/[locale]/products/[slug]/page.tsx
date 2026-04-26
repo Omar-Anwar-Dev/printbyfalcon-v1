@@ -278,12 +278,14 @@ export default async function ProductDetailPage({
                 {Object.entries(specs).map(([key, value], idx, arr) => (
                   <div
                     key={key}
-                    className={`grid grid-cols-[1fr_2fr] gap-3 px-4 py-2.5 ${
+                    className={`grid grid-cols-[minmax(0,1fr)_minmax(0,2fr)] gap-3 px-4 py-2.5 ${
                       idx % 2 === 0 ? 'bg-paper' : 'bg-background'
                     } ${idx < arr.length - 1 ? 'border-b border-border' : ''}`}
                   >
-                    <dt className="font-medium text-muted-foreground">{key}</dt>
-                    <dd className="text-foreground">{value}</dd>
+                    <dt className="break-words font-medium text-muted-foreground">
+                      {key}
+                    </dt>
+                    <dd className="break-words text-foreground">{value}</dd>
                   </div>
                 ))}
               </dl>
