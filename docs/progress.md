@@ -568,6 +568,80 @@ Owner asked to fix the layout of B2C account, B2B portal, and product pages. ADR
 
 **Decisions logged:** **ADR-062** [2026-04-26] User-portal + product layout pass.
 
+### 2026-04-27 — Owner punch-list polish (6 fixes)
+
+Owner sent a marked-up PDF (5 screenshots) flagging six small visual issues from production. Targeted fixes — no new flows or features, no token system changes beyond the selection color. Branch `claude/busy-cori-cdf5bb`; will be queued behind the M1-eve wave for the next prod deploy.
+
+**Shipped:**
+
+1. **Brand rail** — [app/[locale]/page.tsx](../app/%5Blocale%5D/page.tsx). Restyled brand pills from text-only chips to white tiles (`min-w-[112px] h-14`, `shadow-card`, `hover:border-accent` + lift). Each tile renders an optional logo from `public/brand-logos/<slug>.{svg,png,webp}` next to the brand name. Brand query now filters to brands with at least one ACTIVE product, hiding the polluted CSV-import records (`.metres 3`, `.1.5m`, `.page yield 000`) that had no products attached.
+2. **ProductCard hover** — [components/catalog/product-card.tsx](../components/catalog/product-card.tsx) gains `hover:border-accent` on top of the existing translate + popover-shadow lift, so the hovered card becomes visually distinct in a grid.
+3. **Invoice template** — [lib/invoices/template.tsx](../lib/invoices/template.tsx). Logo shrunk 80×40 → 60×28 with `marginBottom 6 → 4`; the wordmark "بريت باي فالكون" is the primary visual anchor again. `COLORS.paper` `#F3F1EC` → `#F7F7F7`, `COLORS.border` `#E5E2DA` → `#E5E5E5`, `COLORS.muted` `#6B6B6B` → `#666666`, accent stepped from `#0E7C86` (accent) → `#0A6B74` (accent-strong) for the title — colors now follow design-system v2 (was warm-cream v1). Recommendation logged for owner: upload `logo-icon.png` (not `logo-full.png`) to admin store-info, since the wordmark is already rendered as text below the logo.
+4. **CookieConsent shadow** — [components/cookie-consent.tsx](../components/cookie-consent.tsx). `shadow-popover` → `shadow-card` (was the only place in the storefront where shadow-popover was paired with a small floating panel; the elevation was reading too dramatic).
+5. **`::selection` color** — [app/globals.css](../app/globals.css). `accent-soft` (#E6F3F4) bg + `ink` fg → `accent` (#0E7C86) bg + `canvas` (#FFFFFF) fg. The pale-cyan selection was invisible inside light-tinted form inputs (Browser-default input bg ≈ light blue + accent-soft ≈ light cyan = no contrast). Strong cyan + white text now reads cleanly on every form surface.
+6. **Category rail** — [app/[locale]/page.tsx](../app/%5Blocale%5D/page.tsx). Cards optionally render full-bleed photos from `public/category-images/<slug>.{webp,jpg,png}` with an ink-gradient overlay (transparent → `ink/40` → `ink/85`) for legibility, plus group-hover `scale-[1.04]` on the image. Falls back to the previous icon-only layout for any category without an image asset — graceful for partial rollouts.
+
+**New module:** [lib/storefront/static-media.ts](../lib/storefront/static-media.ts) — server-boot scan of `public/brand-logos/` and `public/category-images/`, exports `BRAND_LOGOS`, `CATEGORY_IMAGES`, `getBrandLogo()`, `getCategoryImage()`. Same existsSync-at-module-load pattern as `components/brand-mark.tsx`. Both folders ship with READMEs documenting filename convention, format priority (SVG > PNG > WebP for brands; WebP > JPG > PNG for category photos), sizing guidance, and asset-source pointers (Simple Icons CC0 catalog).
+
+**Owner action items (post-merge, before deploy):**
+- Upload a brand logo for each active Brand from `/admin/brands/<id>` (new uploader appears above the form, drops the file into `/storage/brand-logos/`). Until populated the rail renders text-only pills (still better than the v1 chip).
+- Upload a category image for each top Category from `/admin/categories/<id>`. Until populated the rail keeps the icon fallback.
+- Confirm the admin store-info logo is `logo-icon.png` (not `logo-full.png`) so invoice headers don't double-print the brand name.
+
+**Regression:**
+- `npx tsc --noEmit` — clean
+- `npx eslint <changed files>` — clean
+- `npm run lint` — clean (only the pre-existing `lib/db.ts` console-warning, unrelated)
+- `npx vitest run` — 200/200 green
+
+### 2026-04-27 — Catalog media: dynamic Brand logos + Category images (admin-managed)
+
+Owner pushed back on the static-folder approach from the punch-list pass: brands and categories evolve over time, so visual assets must be admin-managed. Switched both surfaces to DB-driven, mirroring the existing store-logo upload flow (Sprint 9 ADR-048).
+
+**Schema** ([prisma/schema.prisma](../prisma/schema.prisma)):
+- `Brand.logoFilename String?` — filename under `/storage/brand-logos/`
+- `Category.imageFilename String?` — filename under `/storage/category-images/`
+
+Both optional and nullable; `prisma db push` + `post-push.ts` will add them on the next container start with no backfill needed.
+
+**Storage layer** ([lib/storage/paths.ts](../lib/storage/paths.ts)):
+- New helpers: `brandLogoDir/DiskPath/Url`, `categoryImageDir/DiskPath/Url`
+- `safeResolveStoragePath` allowlist refactored to a `PUBLIC_STORAGE_SUBTREES` array; gains `brand-logos/` + `category-images/` (so the dev `/storage/[...path]` route + Nginx alias serve them)
+- New module [lib/storage/single-image.ts](../lib/storage/single-image.ts) — generic single-image processor reused by both upload flows. Validates buffer size, sniffs format with sharp, passes SVG through as-is (preserves vector wordmarks), re-encodes raster (jpeg/png/webp/avif/gif) to WebP at a configurable max dimension. Caller picks `targetDir`, `filenameStem`, `maxDimensionPx` (default 400 for logos, 1200 for category photos), `maxBytes` (default 2 MB, 5 MB for category photos). Same security posture as `lib/storage/images.ts` (sharp re-encoding neutralizes image-borne payloads).
+
+**Server actions** ([app/actions/admin-catalog-media.ts](../app/actions/admin-catalog-media.ts)) — gated on OWNER + OPS per ADR-016, audited via `AuditLog`, idempotent on retry (prior file deleted only after the new row is committed):
+- `uploadCatalogBrandLogoAction(brandId, formData)` / `clearCatalogBrandLogoAction(brandId)`
+- `uploadCategoryImageAction(categoryId, formData)` / `clearCategoryImageAction(categoryId)`
+
+Distinct from `uploadBrandLogoAction` in `admin-store-info.ts` (which handles the *store's own* logo for invoices).
+
+**Admin UI**:
+- [components/admin/entity-image-uploader.tsx](../components/admin/entity-image-uploader.tsx) — reusable `<EntityImageUploader>` widget. Generic over upload + clear actions and URL builder so it never imports `lib/storage/paths.ts` (Node built-ins won't bundle into a client component — same workaround as `store-info-form.tsx`). Auto-uploads on file pick (no extra "Submit" button), shows preview / clear / status text, refreshes the route on success.
+- [components/admin/brand-logo-uploader.tsx](../components/admin/brand-logo-uploader.tsx) and [components/admin/category-image-uploader.tsx](../components/admin/category-image-uploader.tsx) — thin wrappers that pre-fill labels (AR/EN), help text, accept-list, preview sizing, and the bound server actions for each entity. Brand uploader allows SVG + raster; Category uploader hides SVG (poor fit for hero photos) and uses a wider preview tile.
+- Brand edit page ([app/[locale]/admin/brands/[id]/page.tsx](../app/%5Blocale%5D/admin/brands/%5Bid%5D/page.tsx)) and Category edit page ([app/[locale]/admin/categories/[id]/page.tsx](../app/%5Blocale%5D/admin/categories/%5Bid%5D/page.tsx)) now render the uploader above the form. Only present in edit mode (entity must exist first); same convention as product image uploads.
+
+**Storefront** ([app/[locale]/page.tsx](../app/%5Blocale%5D/page.tsx)):
+- Homepage queries select `logoFilename` (Brand) and `imageFilename` (Category)
+- Render via `brandLogoUrl(...)` and `categoryImageUrl(...)` from the storage paths module — same `/storage/...` URL shape as product images, served by the existing dev route + Nginx alias
+- Graceful fallback unchanged: brands without a logo render text-only pills; categories without an image render the icon-only card design
+
+**Cleanup**:
+- Deleted `lib/storefront/static-media.ts` + `public/brand-logos/{README.md,.gitkeep}` + `public/category-images/{README.md,.gitkeep}` — obsoleted by the DB-driven flow.
+
+**Owner action items (post-merge, before deploy):**
+- For each active brand, edit it from `/admin/brands` and upload its logo (the new section above the form). SVG preferred for crisp rendering at any zoom — Simple Icons covers HP / Canon / Epson / Brother / Samsung / Kyocera / Generic under CC0.
+- For each top-level category that should appear on the home rail, edit from `/admin/categories` and upload a hero photo (1200×900-ish, JPG/WebP/PNG ≤ 5 MB).
+- The previous `/public/brand-logos/<svg>` files become inert — the storefront no longer reads them. Safe to delete from disk; no PR needed since the path was never tracked in git.
+
+**Regression:**
+- `npx prisma generate` — clean (new fields typed in `@prisma/client`)
+- `npx tsc --noEmit` — clean
+- `npx eslint <changed files>` — clean
+- `npx vitest run` — 200/200 green
+- `prisma db push` + `post-push.ts` will add the two nullable columns automatically on the next container start. No backfill SQL needed.
+
+**Out of scope (intentional):** image variant pipeline (the static `/storage/products/<id>/{thumb,medium,original}-...webp` flow is overkill for one-tile-per-entity assets). One file, one DB column, server-rendered URL.
+
 ---
 
 ## Release Engineering

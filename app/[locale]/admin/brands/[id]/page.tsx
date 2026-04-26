@@ -3,6 +3,7 @@ import { getTranslations } from 'next-intl/server';
 import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import { BrandForm } from '@/components/admin/brand-form';
+import { BrandLogoUploader } from '@/components/admin/brand-logo-uploader';
 
 export default async function EditBrandPage({
   params,
@@ -10,17 +11,22 @@ export default async function EditBrandPage({
   params: Promise<{ id: string; locale: string }>;
 }) {
   await requireAdmin(['OWNER', 'OPS']);
-  const { id } = await params;
+  const { id, locale } = await params;
   const t = await getTranslations();
 
   const brand = await prisma.brand.findUnique({ where: { id } });
   if (!brand) notFound();
 
   return (
-    <div className="container-page max-w-3xl py-10 md:py-14">
-      <h1 className="mb-6 text-2xl font-semibold">
+    <div className="container-page max-w-3xl space-y-6 py-10 md:py-14">
+      <h1 className="text-2xl font-semibold">
         {t('admin.catalog.brands.editTitle')}
       </h1>
+      <BrandLogoUploader
+        brandId={brand.id}
+        initialFilename={brand.logoFilename}
+        locale={locale}
+      />
       <BrandForm
         id={brand.id}
         initial={{

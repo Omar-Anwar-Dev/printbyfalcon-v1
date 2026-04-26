@@ -1,3 +1,4 @@
+import Image from 'next/image';
 import {
   ShieldCheck,
   Truck,
@@ -16,6 +17,7 @@ import {
   type ProductListItem,
 } from '@/lib/catalog/queries';
 import { buildTree, type FlatCategory } from '@/lib/catalog/category-tree';
+import { brandLogoUrl, categoryImageUrl } from '@/lib/storage/paths';
 
 type TopCategory = {
   id: string;
@@ -24,6 +26,7 @@ type TopCategory = {
   slug: string;
   nameAr: string;
   nameEn: string;
+  imageFilename: string | null;
 };
 
 type BrandRow = {
@@ -31,6 +34,7 @@ type BrandRow = {
   slug: string;
   nameAr: string;
   nameEn: string;
+  logoFilename: string | null;
 };
 
 // Force dynamic rendering. Avoids any build-time SSG weirdness where the
@@ -90,6 +94,7 @@ export default async function HomePage({
             slug: true,
             nameAr: true,
             nameEn: true,
+            imageFilename: true,
           },
         }),
       [],
@@ -98,9 +103,23 @@ export default async function HomePage({
       'brands.findMany',
       () =>
         prisma.brand.findMany({
-          where: { status: 'ACTIVE' },
+          // Only brands that actually carry an active product. This filters
+          // out polluted records left over from CSV imports where spec
+          // values (".metres 3", ".1.5m", ".page yield 000") were
+          // mis-parsed as brand names — they have no products and
+          // shouldn't surface on the home rail.
+          where: {
+            status: 'ACTIVE',
+            products: { some: { status: 'ACTIVE' } },
+          },
           orderBy: { nameEn: 'asc' },
-          select: { id: true, slug: true, nameAr: true, nameEn: true },
+          select: {
+            id: true,
+            slug: true,
+            nameAr: true,
+            nameEn: true,
+            logoFilename: true,
+          },
           take: 10,
         }),
       [],
@@ -279,31 +298,77 @@ export default async function HomePage({
             title={isAr ? 'الفئات' : 'Shop by category'}
           />
           <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {topCategories.map((cat) => (
-              <li key={cat.id}>
-                <Link
-                  href={`/categories/${cat.slug}`}
-                  className="group flex aspect-[5/4] flex-col justify-between rounded-lg border border-border bg-paper p-4 shadow-card transition-[transform,box-shadow] duration-base ease-out-smooth hover:-translate-y-0.5 hover:shadow-popover"
-                >
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent-soft text-accent-strong">
-                    <Printer className="h-5 w-5" strokeWidth={1.75} />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {isAr ? cat.nameAr : cat.nameEn}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {isAr ? 'استعرض' : 'Explore'}
-                      <ArrowRight
-                        className="ms-1 inline h-3 w-3 translate-x-0 transition-transform duration-base ease-out-smooth group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
-                        strokeWidth={1.75}
-                        aria-hidden
-                      />
-                    </p>
-                  </div>
-                </Link>
-              </li>
-            ))}
+            {topCategories.map((cat) => {
+              const imageUrl = cat.imageFilename
+                ? categoryImageUrl(cat.imageFilename)
+                : null;
+              const name = isAr ? cat.nameAr : cat.nameEn;
+              return (
+                <li key={cat.id}>
+                  <Link
+                    href={`/categories/${cat.slug}`}
+                    aria-label={name}
+                    className={
+                      imageUrl
+                        ? 'group relative flex aspect-[5/4] flex-col justify-end overflow-hidden rounded-lg border border-border shadow-card transition-[transform,box-shadow,border-color] duration-base ease-out-smooth hover:-translate-y-0.5 hover:border-accent hover:shadow-popover'
+                        : 'group flex aspect-[5/4] flex-col justify-between rounded-lg border border-border bg-paper p-4 shadow-card transition-[transform,box-shadow,border-color] duration-base ease-out-smooth hover:-translate-y-0.5 hover:border-accent hover:shadow-popover'
+                    }
+                  >
+                    {imageUrl ? (
+                      <>
+                        <Image
+                          src={imageUrl}
+                          alt=""
+                          fill
+                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
+                          className="object-cover transition-transform duration-slow ease-out-smooth group-hover:scale-[1.04]"
+                          unoptimized
+                        />
+                        {/* Dark gradient overlay so the title stays readable
+                            against any photo. Strongest at the bottom where
+                            the label sits. */}
+                        <span
+                          aria-hidden
+                          className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/40 to-transparent"
+                        />
+                        <div className="relative p-4 text-canvas">
+                          <p className="text-sm font-semibold drop-shadow">
+                            {name}
+                          </p>
+                          <p className="mt-0.5 text-xs text-canvas/80">
+                            {isAr ? 'استعرض' : 'Explore'}
+                            <ArrowRight
+                              className="ms-1 inline h-3 w-3 translate-x-0 transition-transform duration-base ease-out-smooth group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                          </p>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent-soft text-accent-strong">
+                          <Printer className="h-5 w-5" strokeWidth={1.75} />
+                        </span>
+                        <div>
+                          <p className="text-sm font-semibold text-foreground">
+                            {name}
+                          </p>
+                          <p className="mt-0.5 text-xs text-muted-foreground">
+                            {isAr ? 'استعرض' : 'Explore'}
+                            <ArrowRight
+                              className="ms-1 inline h-3 w-3 translate-x-0 transition-transform duration-base ease-out-smooth group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
+                              strokeWidth={1.75}
+                              aria-hidden
+                            />
+                          </p>
+                        </div>
+                      </>
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
@@ -345,17 +410,44 @@ export default async function HomePage({
             <p className="text-center text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               {isAr ? 'علامات تجارية نتعامل معها' : 'Brands we carry'}
             </p>
-            <ul className="mt-6 flex flex-wrap items-center justify-center gap-2">
-              {brandRows.map((brand) => (
-                <li key={brand.id}>
-                  <Link
-                    href={`/products?brand=${brand.slug}`}
-                    className="inline-flex items-center rounded-full border border-border bg-canvas px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-border-strong hover:bg-paper-hover"
-                  >
-                    {isAr ? brand.nameAr : brand.nameEn}
-                  </Link>
-                </li>
-              ))}
+            <ul className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              {brandRows.map((brand) => {
+                const logoUrl = brand.logoFilename
+                  ? brandLogoUrl(brand.logoFilename)
+                  : null;
+                const name = isAr ? brand.nameAr : brand.nameEn;
+                return (
+                  <li key={brand.id}>
+                    <Link
+                      href={`/products?brand=${brand.slug}`}
+                      aria-label={name}
+                      className="group flex h-14 min-w-[112px] items-center justify-center gap-2.5 rounded-lg border border-border bg-canvas px-4 text-sm font-medium text-foreground shadow-card transition-[border-color,box-shadow,transform] duration-base ease-out-smooth hover:-translate-y-0.5 hover:border-accent hover:shadow-popover"
+                    >
+                      {logoUrl ? (
+                        <span className="relative inline-flex h-6 w-16 shrink-0 items-center justify-center">
+                          <Image
+                            src={logoUrl}
+                            alt=""
+                            fill
+                            sizes="64px"
+                            className="object-contain"
+                            unoptimized
+                          />
+                        </span>
+                      ) : null}
+                      <span
+                        className={
+                          logoUrl
+                            ? 'text-xs font-semibold uppercase tracking-[0.06em] text-muted-foreground transition-colors group-hover:text-foreground'
+                            : 'text-sm font-semibold capitalize text-foreground'
+                        }
+                      >
+                        {name}
+                      </span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </section>

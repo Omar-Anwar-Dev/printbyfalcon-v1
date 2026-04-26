@@ -74,20 +74,56 @@ export function brandAssetUrl(filename: string): string {
 }
 
 /**
+ * Catalog brand logos — one file per Brand entity, shown on the storefront
+ * brand rail. Distinct from `brand/` (which is the *store's own* logo).
+ */
+export function brandLogoDir(): string {
+  return path.join(storageRoot(), 'brand-logos');
+}
+
+export function brandLogoDiskPath(filename: string): string {
+  return path.join(brandLogoDir(), filename);
+}
+
+export function brandLogoUrl(filename: string): string {
+  return `${STORAGE_URL_PREFIX}/brand-logos/${filename}`;
+}
+
+/**
+ * Category images — one file per Category, shown on the storefront category
+ * rail and the category landing header.
+ */
+export function categoryImageDir(): string {
+  return path.join(storageRoot(), 'category-images');
+}
+
+export function categoryImageDiskPath(filename: string): string {
+  return path.join(categoryImageDir(), filename);
+}
+
+export function categoryImageUrl(filename: string): string {
+  return `${STORAGE_URL_PREFIX}/category-images/${filename}`;
+}
+
+/**
  * Resolve a public URL path (e.g. "products/abc/thumb-xyz.webp") to an absolute
  * disk path, with traversal protection. Returns null if the requested path
- * escapes STORAGE_ROOT or doesn't start with "products/".
+ * escapes STORAGE_ROOT or isn't in one of the publicly-served subtrees.
  */
+const PUBLIC_STORAGE_SUBTREES = [
+  'products/',
+  'brand/',
+  'brand-logos/',
+  'category-images/',
+];
+
 export function safeResolveStoragePath(publicPath: string): string | null {
   const normalized = path.posix.normalize(publicPath).replace(/^\/+/, '');
   if (normalized.startsWith('..') || normalized.includes('\0')) return null;
 
-  // Only expose products/ and brand/ subtrees publicly. Invoices (future)
-  // get a separate gate with auth checks.
-  if (
-    !normalized.startsWith('products/') &&
-    !normalized.startsWith('brand/')
-  ) {
+  // Only expose the allowlisted subtrees publicly. Invoices (future) get a
+  // separate gate with auth checks.
+  if (!PUBLIC_STORAGE_SUBTREES.some((p) => normalized.startsWith(p))) {
     return null;
   }
 

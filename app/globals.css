@@ -116,9 +116,12 @@
     unicode-bidi: isolate;
   }
 
+  /* Strong, always-visible selection — accent-soft was too pale on
+     light input backgrounds (issue: users couldn't see what they
+     selected inside text fields). */
   ::selection {
-    background-color: hsl(var(--accent-soft));
-    color: hsl(var(--ink));
+    background-color: hsl(var(--accent));
+    color: hsl(var(--canvas));
   }
 
   @media (prefers-reduced-motion: reduce) {

@@ -188,6 +188,11 @@ model Brand {
   nameEn    String
   slug      String        @unique
   status    CatalogStatus @default(ACTIVE)
+  // Optional brand wordmark / icon shown on the storefront brand rail and
+  // anywhere a brand needs visual identity. Filename only; resolved via
+  // brandLogoUrl() in lib/storage/paths.ts. Uploaded through the admin
+  // brand edit page, processed by lib/storage/single-image.ts.
+  logoFilename String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
@@ -207,6 +212,10 @@ model Category {
   slug      String        @unique
   position  Int           @default(0)
   status    CatalogStatus @default(ACTIVE)
+  // Optional hero photo shown on the storefront category rail and the
+  // category landing header. Filename only; resolved via categoryImageUrl()
+  // in lib/storage/paths.ts. Uploaded through the admin category edit page.
+  imageFilename String?
   createdAt DateTime      @default(now())
   updatedAt DateTime      @updatedAt
 
