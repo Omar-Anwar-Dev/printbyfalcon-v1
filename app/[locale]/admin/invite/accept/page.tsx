@@ -52,7 +52,7 @@ export default async function AdminInviteAcceptPage({
   const roleLabel = ROLE_LABEL[invite.role];
 
   return (
-    <div className="container max-w-md py-12">
+    <main className="container-page max-w-md py-12">
       <h1 className="mb-2 text-2xl font-semibold">
         {isAr ? 'إتمام تفعيل حسابك' : 'Finish setting up your account'}
       </h1>
@@ -62,19 +62,19 @@ export default async function AdminInviteAcceptPage({
           : `You're invited to join as "${roleLabel.en}" on ${invite.email}. Pick your name and a password to activate.`}
       </p>
       <AdminInviteAcceptForm token={token} isAr={isAr} />
-    </div>
+    </main>
   );
 }
 
 function ErrorCard({ isAr, message }: { isAr: boolean; message: string }) {
   return (
-    <div className="container max-w-md py-12">
+    <main className="container-page max-w-md py-12">
       <div className="rounded-md border border-destructive bg-destructive/5 p-6">
         <h1 className="mb-2 text-lg font-semibold text-destructive">
           {isAr ? 'خطأ' : 'Error'}
         </h1>
         <p className="text-sm">{message}</p>
       </div>
-    </div>
+    </main>
   );
 }

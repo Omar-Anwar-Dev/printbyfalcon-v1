@@ -498,6 +498,42 @@ Admin now fully conforms to design-system §3.1 tokens + §7 don'ts #7 + #8 (no 
 - Per-page deep polish on admin edit/new forms — defer to post-M1.
 - Admin data tables don't get a dedicated `<AdminTable>` component this pass — would be valuable but outside "best-effort" scope.
 
+### 2026-04-26 — Admin shell rebuild (Tier 1 + Tier 2)
+
+Owner asked to fix the admin layout broadly: dashboard + every admin page. Audit surfaced four structural problems beyond per-page polish — duplicated chrome, no mobile nav, flat un-iconned link list, and the admin topbar didn't share the storefront's ink-shell language. ADR-061 captures the full reasoning + alternatives.
+
+**Shipped:**
+
+- **`[locale]/layout.tsx` skips storefront chrome on `/admin/*`** — reads `x-pathname` (now set in [middleware.ts](../middleware.ts)) and short-circuits `SiteHeader` + `SiteFooter` + `WhatsAppChatButton` + `CookieConsent` for admin routes. Admin pages no longer render with the storefront header stacked on top of the admin topbar.
+- **New [app/[locale]/admin/layout.tsx](../app/[locale]/admin/layout.tsx)** — sticky `bg-ink text-canvas` topbar (matches storefront Bar 1 language: `BrandMark` + admin label on start, language switcher / email / logout / mobile nav trigger on end) + desktop sidebar (`w-60`, hidden on mobile, sticky to viewport top under the topbar) + page-content slot. Layout no longer wraps children in `<main>` so pages keep their own `container-page` `<main>` without nesting.
+- **New nav stack** — split into:
+  - [lib/admin/nav-config.ts](../lib/admin/nav-config.ts): pure data (icon names + labels + role gates), 6 groups (Dashboard / Catalog / Orders & Inventory / Customers / Business / Administration), role-filtered + empty-group-dropped before render.
+  - [components/admin/admin-side-nav.tsx](../components/admin/admin-side-nav.tsx) (client): desktop sidebar list with active state via `usePathname()`, locale prefix stripped before matching.
+  - [components/admin/admin-mobile-nav.tsx](../components/admin/admin-mobile-nav.tsx) (client): mobile drawer mirroring the storefront `MobileNav` shape — hamburger trigger in topbar, slide-from-end panel (80% width / max 320px), body-scroll-lock + Escape close + auto-close on route change.
+  - [components/admin/admin-nav-icon.tsx](../components/admin/admin-nav-icon.tsx): server-safe icon-name → Lucide-component mapper.
+  - Old [components/admin/admin-nav.tsx](../components/admin/admin-nav.tsx) deleted.
+- **`LogoutButton.topbar` variant** updated for the ink admin topbar — `text-canvas`, `hover:bg-canvas/10`, focus ring offset against ink.
+- **Container-page sweep** — the 4 admin pages that didn't use `container-page` now do:
+  - [/admin/unauthorized](../app/[locale]/admin/unauthorized/page.tsx)
+  - [/admin/invite/accept](../app/[locale]/admin/invite/accept/page.tsx) (both branches: form + ErrorCard)
+  - [/admin/products/[id]](../app/[locale]/admin/products/[id]/page.tsx)
+  - [/admin/b2b/companies/[id]](../app/[locale]/admin/b2b/companies/[id]/page.tsx)
+- **Table sweep** — all 16 admin pages with `<table>` already had `overflow-x-auto rounded-md border` wrappers (verified). No table changes needed.
+
+**Verified locally on 360px viewport:**
+- `docW == viewW` (no horizontal overflow) on `/ar/admin/login`.
+- 1 `<header>` element, 0 `<footer>` elements (storefront chrome correctly skipped).
+- `<main>` element present (admin login page's own `<main>`).
+
+**Regression:** typecheck clean, `next lint` clean, vitest 200/200, `next build` green.
+
+**Not addressed (deferred to a separate Tier-3 sweep):**
+- Migrating the 45/50 admin pages that still roll inline `<header>` patterns over to `<AdminPageHeader>` — mechanical, no design risk, separate PR.
+- Mobile-card alternative for data tables (real design work, not layout).
+- Per-page polish on admin edit/new forms.
+
+**Decisions logged:** **ADR-061** [2026-04-26] Admin shell rewrite — chrome separation via path detection, ink topbar, grouped icon sidebar, mobile drawer.
+
 **Regression:**
 - `npx tsc --noEmit` clean
 - `npx vitest run` — 200 / 200 tests green

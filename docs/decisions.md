@@ -1360,6 +1360,39 @@ Supersedes: ADR-031 (foundation pass direction — cream canvas, minimal header/
 
 ---
 
+## ADR-061: Admin shell rewrite — ink topbar + grouped icon sidebar + mobile drawer + chrome separation
+
+**Date:** 2026-04-26
+**Status:** Accepted (UI polish pass, post-PR #37)
+**Context:** Owner asked for "ضبط الـlayout بتاع الـdashboard وصفحات الـadmin كلها." Audit surfaced four structural problems with the existing admin shell:
+1. The storefront `<SiteHeader>` + `<SiteFooter>` + floating WhatsApp + cookie banner from `[locale]/layout.tsx` were rendering on top of every admin page, producing **two stacked headers** and irrelevant chrome (WhatsApp button, cookie banner) on internal tools.
+2. The admin sidebar was `hidden md:block` with **no mobile equivalent** — admin was unreachable on a phone.
+3. The 15 nav links sat in a flat list with no icons, no active state, and no grouping.
+4. The header didn't share the storefront's ink-shell language (it used the bare `<container>` Tailwind class on a light surface), so the admin felt visually disowned from the rest of the site.
+
+**Decision:**
+- **Chrome separation via path detection.** `[locale]/layout.tsx` reads `x-pathname` (set by middleware) and skips storefront chrome on `/ar/admin/*` + `/en/admin/*`. Considered route groups (`(storefront)/` + `(admin)/`) but rejected as too disruptive for the scope — would require moving 17 folders. The path-detection branch is 5 lines and reversible.
+- **Admin topbar = ink shell.** Sticky `bg-ink text-canvas` bar matching the storefront's bar 1, with `BrandMark` + admin label on the start side and language-switcher (dark variant) + email + logout + mobile-nav trigger on the end side. Brings admin under the same brand language as the storefront without merging the two layouts.
+- **Sidebar = grouped + iconned + active-state.** Nav data lives in `lib/admin/nav-config.ts` as pure data (icon names, not JSX) so the same payload travels server → client. `<AdminSideNav>` (client) renders the desktop list with `usePathname()` driving an active state (`bg-accent-soft text-accent-strong`). `<AdminMobileNav>` (client) reuses the same data inside a slide-from-end drawer that mirrors the storefront's `MobileNav` pattern (80% width, max 320px, `end-0`, slide-in-end animation, body-scroll-locked while open, auto-close on route change).
+- **Six groups instead of one flat list:** Dashboard (no heading, lead) / Catalog / Orders & Inventory / Customers / Business (B2B) / Administration. Each group is filtered by role server-side; empty groups are dropped before render.
+- **`LogoutButton` `topbar` variant updated** from light-surface to ink-surface colors (`text-canvas` + `hover:bg-canvas/10` + offset focus ring).
+- **`<main>` discipline.** The admin layout no longer wraps children in `<main>` — pages keep their own `<main className="container-page …">` so we don't nest `<main>` elements and pages stay independently styleable.
+
+**Alternatives considered:**
+- **Route groups (`app/[locale]/(storefront)/` + `(admin)/`).** Rejected for this pass — the structural payoff is the same as path detection (one layout per surface), and the migration cost (renaming/moving 17 storefront folders + special handling for `error.tsx` / `loading.tsx` / `not-found.tsx`) is too large for the benefit. If we add a third surface (e.g., a customer-portal shell distinct from storefront), revisit.
+- **Always-visible mobile sidebar (no drawer).** Rejected — the admin nav is 15 items deep, a sticky vertical bar would eat the entire viewport height on mobile.
+- **Render the storefront chrome on admin and just style around it.** Rejected — the WhatsApp floating button and cookie banner are storefront-shopper UI, irrelevant to internal admin work; rendering them is noise.
+- **Pass icon components directly through nav-config.** Rejected — would force the data file to be a server component, can't serialize Lucide components for client consumption. Pure-data + a tiny `AdminNavIcon` mapper keeps the config trivially testable.
+
+**Consequences:**
+- All 50 admin routes inherit the new shell automatically — only the 4 pages that didn't use `container-page` (`unauthorized`, `invite/accept`, `products/[id]`, `b2b/companies/[id]`) needed inline edits to wrap themselves consistently.
+- All admin tables already had `overflow-x-auto rounded-md border` wrappers from prior passes — no further table sweep needed in this pass.
+- Per-page `<AdminPageHeader>` adoption is still spotty (5/50 pages use it; 45 still roll inline `<header>` patterns). Tracked as a separate Tier 3 follow-up — mechanical migration, no design risk.
+- Mobile-card alternative for data tables remains deferred (real design work, not layout).
+- Middleware now sets `x-pathname` on every request — minor request-header overhead, negligible.
+
+---
+
 ## ADR-062: User-portal + product layout pass — shared `PortalTabs`, `(portal)` route group for B2B, structural cleanup
 
 **Date:** 2026-04-26
