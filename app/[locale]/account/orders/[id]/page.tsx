@@ -2,6 +2,7 @@ import { notFound, redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { prisma } from '@/lib/db';
 import { getOptionalUser } from '@/lib/auth';
+import { Link } from '@/lib/i18n/routing';
 import { formatEgp } from '@/lib/catalog/price';
 import {
   ORDER_STATUS_LABELS,
@@ -131,8 +132,34 @@ export default async function OrderDetailPage({
     archivedHeader: isAr ? 'أصناف مؤرشفة' : 'Archived items',
   };
 
+  // B2B users land here from /b2b/orders → without a portal-tabs nav
+  // above (the /account/* layout drops it for B2B), they need a way
+  // back. B2C users get the account tabs nav above; no breadcrumb needed.
+  const showB2BBack = user.type === 'B2B';
+
   return (
     <main className="container-page max-w-3xl py-10 md:py-14">
+      {showB2BBack ? (
+        <nav
+          aria-label={isAr ? 'فتات التنقّل' : 'Breadcrumb'}
+          className="mb-4 text-xs"
+        >
+          <ol className="flex flex-wrap items-center gap-1.5 text-muted-foreground">
+            <li>
+              <Link
+                href="/b2b/orders"
+                className="transition-colors hover:text-accent-strong"
+              >
+                {isAr ? 'طلبات الشركة' : 'Company orders'}
+              </Link>
+            </li>
+            <li aria-hidden>/</li>
+            <li className="text-foreground">
+              {isAr ? 'تفاصيل الطلب' : 'Order details'}
+            </li>
+          </ol>
+        </nav>
+      ) : null}
       <header className="mb-8 flex flex-wrap items-start justify-between gap-4">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">

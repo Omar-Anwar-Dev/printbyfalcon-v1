@@ -25,7 +25,13 @@ export default async function AccountAddressesPage({
 }) {
   const { locale } = await params;
   const user = await getOptionalUser();
-  if (!user || user.type !== 'B2C') redirect(`/${locale}/sign-in`);
+  if (!user) redirect(`/${locale}/sign-in`);
+  // B2B has no personal address book — company shipping is in the
+  // company profile + per-order at checkout. Send them to their portal
+  // home instead of bouncing to /sign-in (which would log them out
+  // mentally even though the session is still valid).
+  if (user.type === 'B2B') redirect(`/${locale}/b2b/profile`);
+  if (user.type !== 'B2C') redirect(`/${locale}`);
 
   const addresses = await prisma.address.findMany({
     where: { userId: user.id },
