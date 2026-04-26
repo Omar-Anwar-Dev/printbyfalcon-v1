@@ -62,25 +62,20 @@ export default async function B2BOrdersPage({ params, searchParams }: Props) {
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
-    <div className="container py-8">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold">
-            {isAr ? 'طلبات الشركة' : 'Company orders'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isAr
-              ? 'كل الطلبات التي أجراها حساب الشركة.'
-              : 'All orders placed under this company account.'}
-          </p>
-        </div>
-        <Link
-          href="/b2b/profile"
-          className="rounded-md border bg-background px-3 py-2 text-sm hover:bg-muted"
-        >
-          {isAr ? 'بيانات الشركة' : 'Company profile'}
-        </Link>
-      </div>
+    <main className="container-page py-10 md:py-14">
+      <header className="mb-8">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+          {isAr ? 'حساب شركة' : 'Business account'}
+        </p>
+        <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+          {isAr ? 'طلبات الشركة' : 'Company orders'}
+        </h1>
+        <p className="mt-1.5 text-sm text-muted-foreground">
+          {isAr
+            ? 'كل الطلبات التي أجراها حساب الشركة.'
+            : 'All orders placed under this company account.'}
+        </p>
+      </header>
 
       {orders.length === 0 ? (
         <div className="rounded-md border bg-background p-8 text-center text-muted-foreground">
@@ -220,6 +215,6 @@ export default async function B2BOrdersPage({ params, searchParams }: Props) {
           ) : null}
         </>
       )}
-    </div>
+    </main>
   );
 }

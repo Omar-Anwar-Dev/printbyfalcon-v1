@@ -539,6 +539,35 @@ Owner asked to fix the admin layout broadly: dashboard + every admin page. Audit
 - `npx vitest run` — 200 / 200 tests green
 - `npx next build` — successful
 
+### 2026-04-26 — User-portal + product layout pass
+
+Owner asked to fix the layout of B2C account, B2B portal, and product pages. ADR-062 captures the full reasoning + alternatives. This is a sibling pass to the admin shell rebuild (ADR-061) — both came out of the same review cycle.
+
+**Shipped:**
+
+- **New shared `<PortalTabs>`** ([components/portal-tabs.tsx](../components/portal-tabs.tsx)) — generic horizontal tabs nav. `usePathname()` active state with locale prefix stripped. Full-bleed `<nav>` with bottom border; inner list is `container-page` so tabs align with page content underneath. Scrolls horizontally on narrow viewports so a 4–5 tab list never breaks the layout.
+- **B2C account shell** — new [app/[locale]/account/layout.tsx](../app/%5Blocale%5D/account/layout.tsx) wraps every `/account/*` page with two tabs (Overview · Addresses). Pages keep their own `<main>` so we don't nest `<main>` elements.
+- **B2B portal shell via route group** — moved `/b2b/profile`, `/b2b/orders`, `/b2b/bulk-order` into `app/[locale]/b2b/(portal)/`. The new `(portal)/layout.tsx` adds three tabs (Company profile · Company orders · Bulk order). The `(portal)` boundary is what keeps the tabs from leaking onto B2B auth surfaces (login, register, forgot-password, reset-password). URL shape unchanged — route groups are folder-only.
+- **B2B profile "Account actions" strip slimmed** — was six links (Bulk order, Company orders, My orders, Change password, Addresses, Sign out); the first three are now in the tabs nav above, "Change password" pointed to a non-existent page, so the strip drops to two essential cross-portal links (Manage addresses + Sign out).
+- **3 B2B pages standardized:**
+  - [/b2b/forgot-password](../app/%5Blocale%5D/b2b/forgot-password/page.tsx) — `container` + `<div>` → `container-page` + `<main>`.
+  - [/b2b/reset-password](../app/%5Blocale%5D/b2b/reset-password/page.tsx) — same.
+  - [/b2b/(portal)/orders](../app/%5Blocale%5D/b2b/%28portal%29/orders/page.tsx) — `container` + `<div>` + inline h1 → `container-page` + `<main>` + standard overline + bold-h1 + subtitle header. The redundant "Company profile" link in its top-right cluster (now in the portal tabs) was dropped.
+- **PDP specs grid hardened** — [/products/[slug]](../app/%5Blocale%5D/products/%5Bslug%5D/page.tsx) — `grid-cols-[1fr_2fr]` → `grid-cols-[minmax(0,1fr)_minmax(0,2fr)]` plus `break-words` on both cells. Same defensive pattern as PR #37's checkout grid fix; prevents a long unbreakable spec value from pushing the section past viewport on narrow Android.
+- **Bulk order table mobile fix** — [components/b2b/bulk-order-table.tsx](../components/b2b/bulk-order-table.tsx) wrapper changed from `overflow-visible` to `overflow-x-auto`, table gains `min-w-[640px]`. Mobile now scrolls the table sideways instead of silently clipping the rightmost columns. Trade-off documented in ADR-062: the autocomplete dropdown on the LAST row may be vertically clipped because the wrapper is now a clipping context.
+
+**Pre-existing bug surfaced (out of scope, flagged for follow-up):**
+- B2B first-time-login flow at [b2b-login-form.tsx:?](../app/%5Blocale%5D/login/b2b-login-form.tsx) and the old [b2b/profile](../app/%5Blocale%5D/b2b/%28portal%29/profile/page.tsx) "Change password" link both pointed to `/account/change-password`, which doesn't exist (404). This polish PR removes the broken link from the profile page; the redirect in `b2b-login-form` still lands on a 404. Needs a separate fix — either build the page or change the redirect.
+
+**Regression:**
+- `npx tsc --noEmit` clean
+- `npx next lint` clean (pre-existing `lib/db.ts` console-warning only)
+- `npx vitest run` — 200 / 200 tests green
+- `npx next build` — successful; route group correctly produces `/b2b/profile`, `/b2b/orders`, `/b2b/bulk-order` as expected (no `(portal)` segment in URLs)
+- Local dev verified at 375px viewport: `/ar/b2b/login` and `/ar/b2b/forgot-password` render with `docW == viewW` and `<main>` element present.
+
+**Decisions logged:** **ADR-062** [2026-04-26] User-portal + product layout pass.
+
 ---
 
 ## Release Engineering
