@@ -6,11 +6,13 @@ import { useState, useTransition } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { PasswordInput } from '@/components/ui/password-input';
 import { loginB2BAction } from '@/app/actions/auth';
 
 export function B2BLoginForm() {
   const t = useTranslations();
   const locale = useLocale();
+  const isAr = locale === 'ar';
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -51,13 +53,14 @@ export function B2BLoginForm() {
       </div>
       <div className="space-y-2">
         <Label htmlFor="password">{t('auth.passwordLabel')}</Label>
-        <Input
+        <PasswordInput
           id="password"
           name="password"
-          type="password"
           required
           autoComplete="current-password"
           dir="ltr"
+          showLabel={isAr ? 'إظهار كلمة المرور' : 'Show password'}
+          hideLabel={isAr ? 'إخفاء كلمة المرور' : 'Hide password'}
         />
       </div>
       {error ? (

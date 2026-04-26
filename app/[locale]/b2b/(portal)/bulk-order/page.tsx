@@ -46,19 +46,15 @@ export default async function B2BBulkOrderPage({
         <h1 className="mt-2 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
           {isAr ? 'طلب مُجمَّع' : 'Bulk order'}
         </h1>
-        <p className="mt-1.5 text-sm text-muted-foreground">
+        <p className="mt-1.5 max-w-2xl text-sm text-muted-foreground">
           {isAr
-            ? 'اكتب الكود أو اسم المنتج — الأسعار المتفاوض عليها بتظهر لحظياً.'
-            : 'Type SKUs or product names — your negotiated prices appear instantly.'}
+            ? 'أداة الطلب السريع: اكتب الكود أو اسم المنتج في كل صف، اختر من الاقتراحات، ثم حدّد الكمية. الأسعار المتفاوض عليها لشركتك تظهر فوراً، وفي الآخر اضغط "أضف الكل للسلة" لإكمال الطلب من السلة عادي.'
+            : 'Quick-entry tool: type a SKU or product name on each row, pick from the suggestions, then set the quantity. Your company\'s negotiated prices show up instantly, and once you\'re done click "Add all to cart" to finish checkout normally.'}
         </p>
       </header>
       <BulkOrderTable
         locale={isAr ? 'ar' : 'en'}
         labels={{
-          pageTitle: isAr ? 'طلب مُجمَّع' : 'Bulk order',
-          pageHelp: isAr
-            ? 'اكتب الكود أو جزء من اسم المنتج في كل سطر — الأسعار المتفاوض عليها بتظهر مباشرة.'
-            : 'Type a SKU or part of a name on each row — your negotiated prices appear instantly.',
           rowCap: isAr
             ? 'حد الإدخال: 50 صف لكل عملية.'
             : 'Entry cap: 50 rows per submission.',
