@@ -639,6 +639,47 @@ GitHub → repo Settings → Environments → **New environment** → name `prod
 - **Staging password exposure in chat (2026-04-20).** During debugging, the staging `POSTGRES_PASSWORD` (`9722ebf1905d9657d9fc7ef80a586d12`) was exposed via screenshot. Low-severity — staging has no real customer data, but should be rotated at next convenient window by editing `.env.staging` + `down -v` + `up --build`.
 - **Prod `.env.production` may have the same `POSTGRES_PASSWORD`-vs-`DATABASE_URL` sync issue in latent form** — prod has been working because prod Postgres was initialized with whatever password was there at the time, and current `DATABASE_URL` matches that. If we ever run `down -v` on prod, the mismatch would bite. **Mitigation:** add a startup-time env consistency check to `scripts/post-push.ts` — if `POSTGRES_PASSWORD` is set and doesn't match the password in `DATABASE_URL`, log a loud warning. Tracked for Sprint 11 (production-readiness sweep).
 
+### 2026-04-26 — M1-eve polish wave queued for prod deploy (PRs #35–42, main @ 2c67dba)
+
+Eight back-to-back polish PRs landed on `main` since prod was last cut at 5542e25 (2026-04-20). Owner asked to ship them to production manually. **Not yet deployed** — this entry captures the wave + the procedure so the deploy can be triggered cold from this doc.
+
+**What's queued (oldest → newest):**
+
+| PR | Commit | Summary |
+|---|---|---|
+| [#35](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/pull/35) | `8089152` | Mobile RTL layout shift root-cause fix — moved `<html>` + `<body>` from `app/layout.tsx` into `app/[locale]/layout.tsx` so `dir`/`lang` are baked into server-rendered HTML; cleaned up redundant overflow-x clips; first footer redesign attempt. |
+| [#36](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/pull/36) | `dfde098` | Form-section overflow fix (`min-width: 0` on inputs/selects/textareas/buttons globally) + minimalist single-band footer. |
+| [#37](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/pull/37) | `a45d08d` | Checkout grid hardening — `grid-cols-[minmax(0,1fr)_…]` so cells can shrink below min-content. ADR-060. |
+| [#38](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/pull/38) | `081effa` | Admin shell rebuild — ink topbar + grouped icon sidebar + mobile drawer + chrome separation via `x-pathname` header. ADR-061. |
+| [#39](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/pull/39) | `edd80aa` | User portals + product pages — shared `<PortalTabs>`, `(portal)` route group for B2B, PDP specs hardened, bulk-order table mobile fix. ADR-062. |
+| [#40](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/pull/40) | `e755ca0` | Hotfix for #39 — pass icon NAMES (not Lucide refs) across server→client boundary; add `setRequestLocale` to nested portal layouts. |
+| [#41](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/pull/41) | `7fa1116` | b2b/profile cleanup — drop the dead `/account/addresses` link (B2C-only route). |
+| [#42](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/pull/42) | `2c67dba` | Home hero subline localized — `/en` no longer shows the Arabic tagline. |
+
+**Pre-flight checklist** (do all of this before clicking "Run workflow"):
+- [ ] `https://staging.printbyfalcon.com/api/health` returns `{"ok": true}`.
+- [ ] Walk the runbook §5 smoke checklist on staging end-to-end (storefront, B2C auth+cart+checkout, admin login, B2B portal tabs).
+- [ ] Mobile sanity on Brave / Samsung A36: `/ar`, `/ar/products`, `/ar/checkout` (with item in cart), `/ar/b2b/login`, `/ar/admin/login` — no overflow, no duplicate site header on admin, hero subline reads in current locale.
+- [ ] GlitchTip: no new errors on staging in the last 15 min.
+
+**Deploy procedure** (matches runbook §4.2):
+1. **Trigger.** GitHub → Actions → [**Deploy to Production**](https://github.com/Omar-Anwar-Dev/printbyfalcon-v1/actions/workflows/deploy-production.yml) → **Run workflow** → branch `main` → tick the staging-verified checkbox → **Run workflow**.
+2. **Approve.** The `production` Environment protection rule will park the run in "Waiting for review." Owner clicks **Review deployments** → tick `production` → optional comment ("M1-eve polish wave: PRs #35–42") → **Approve and deploy**.
+3. **Wait** ~2–3 min for SSH + container rebuild. The workflow's post-deploy health probe runs 5 attempts × 10s — green = done.
+4. **Verify.** `curl -sS https://printbyfalcon.com/api/health | jq` returns `{"ok": true}`. Re-run the runbook §5 smoke checklist against `https://printbyfalcon.com`.
+5. **Watch GlitchTip** for 15 minutes. Error rate should stay at baseline.
+6. **Log the deploy in §10** of the runbook (date, prev SHA `5542e25` → new SHA `2c67dba`, notes).
+
+**Rollback** (runbook §6.1) — if step 4 or 5 fails: re-trigger the same workflow on the prior commit (`5542e25`) by passing it as a branch/tag. No DB schema changes in this wave, so fast rollback works.
+
+**Why this wave is low-risk for prod:**
+- All 8 PRs are UI/structural; none touch business logic, payments, OTP, Whats360, Paymob, or the Prisma schema.
+- Each PR was verified locally (tsc + lint + vitest 200/200 + next build green) before merge.
+- The wave includes its own hotfix (#40) for the only runtime crash we found in this round (server→client component-ref serialization in PortalTabs).
+- Staging has been live on this code since #42 merged at 01:51 UTC on 2026-04-26; no incident bell rang.
+
+**Owner sign-off required before deploy** — the staging-verified checkbox + the production Environment approval are both manual gates by design (ADR-031 principle 4: "manual the scary").
+
 ---
 
 ## Sprint 5 kickoff resolutions (2026-04-20)
