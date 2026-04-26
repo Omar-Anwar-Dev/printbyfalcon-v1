@@ -6,6 +6,7 @@ import {
   CategoryForm,
   type CategoryOption,
 } from '@/components/admin/category-form';
+import { CategoryImageUploader } from '@/components/admin/category-image-uploader';
 import {
   buildTree,
   descendantIds,
@@ -59,10 +60,15 @@ export default async function EditCategoryPage({
   }));
 
   return (
-    <div className="container-page max-w-3xl py-10 md:py-14">
-      <h1 className="mb-6 text-2xl font-semibold">
+    <div className="container-page max-w-3xl space-y-6 py-10 md:py-14">
+      <h1 className="text-2xl font-semibold">
         {t('admin.catalog.categories.editTitle')}
       </h1>
+      <CategoryImageUploader
+        categoryId={category.id}
+        initialFilename={category.imageFilename}
+        locale={locale}
+      />
       <CategoryForm
         id={category.id}
         initial={{

@@ -67,12 +67,17 @@ export type InvoiceData = {
   paymentStatusLabel: string;
 };
 
+// Aligned with docs/design-system.md v2 (ADR-059): pure-white body,
+// neutral-gray panels, ink-cyan accent. Replaces the v1 warm-cream
+// paper (#F3F1EC) + warm border (#E5E2DA) that no longer match the
+// site's visual identity.
 const COLORS = {
   ink: '#0F172A',
-  muted: '#6B6B6B',
-  paper: '#F3F1EC',
-  border: '#E5E2DA',
-  accent: '#0E7C86',
+  muted: '#666666',
+  paper: '#F7F7F7',
+  border: '#E5E5E5',
+  accent: '#0A6B74',
+  accentSoft: '#E6F3F4',
   amendedWatermark: 'rgba(181, 71, 71, 0.14)',
   amendedBorder: '#B54747',
 };
@@ -212,10 +217,12 @@ const styles = StyleSheet.create({
   },
   ltr: { direction: 'ltr' },
   logo: {
-    width: 80,
-    height: 40,
+    // Compact lockup so the wordmark "بريت باي فالكون" remains the
+    // primary visual anchor; the icon supports it instead of dominating.
+    width: 60,
+    height: 28,
     objectFit: 'contain',
-    marginBottom: 6,
+    marginBottom: 4,
   },
 });
 
