@@ -59,7 +59,7 @@ export function CookieConsent({ locale }: Props) {
     <div
       role="region"
       aria-label={isAr ? 'إشعار ملفات تعريف الارتباط' : 'Cookie notice'}
-      className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-xl rounded-lg border border-border bg-background p-4 shadow-popover md:inset-x-auto md:bottom-4 md:end-4 md:start-auto"
+      className="fixed inset-x-3 bottom-3 z-50 mx-auto max-w-xl rounded-lg border border-border bg-background p-4 shadow-card md:inset-x-auto md:bottom-4 md:end-4 md:start-auto"
       dir={isAr ? 'rtl' : 'ltr'}
     >
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

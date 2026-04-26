@@ -16,6 +16,7 @@ import {
   type ProductListItem,
 } from '@/lib/catalog/queries';
 import { buildTree, type FlatCategory } from '@/lib/catalog/category-tree';
+import { categoryIcon } from '@/lib/catalog/category-visuals';
 
 type TopCategory = {
   id: string;
@@ -278,32 +279,47 @@ export default async function HomePage({
             overline={isAr ? 'تصفح' : 'Browse'}
             title={isAr ? 'الفئات' : 'Shop by category'}
           />
-          <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {topCategories.map((cat) => (
-              <li key={cat.id}>
-                <Link
-                  href={`/categories/${cat.slug}`}
-                  className="group flex aspect-[5/4] flex-col justify-between rounded-lg border border-border bg-paper p-4 shadow-card transition-[transform,box-shadow] duration-base ease-out-smooth hover:-translate-y-0.5 hover:shadow-popover"
-                >
-                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent-soft text-accent-strong">
-                    <Printer className="h-5 w-5" strokeWidth={1.75} />
-                  </span>
-                  <div>
-                    <p className="text-sm font-semibold text-foreground">
-                      {isAr ? cat.nameAr : cat.nameEn}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {isAr ? 'استعرض' : 'Explore'}
-                      <ArrowRight
-                        className="ms-1 inline h-3 w-3 translate-x-0 transition-transform duration-base ease-out-smooth group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
+          <ul className="mt-8 grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-6">
+            {topCategories.map((cat) => {
+              const Icon = categoryIcon(cat.slug);
+              return (
+                <li key={cat.id}>
+                  <Link
+                    href={`/categories/${cat.slug}`}
+                    className="group relative flex aspect-[5/4] flex-col justify-between overflow-hidden rounded-xl border border-border bg-gradient-to-br from-paper via-canvas to-accent-soft/40 p-4 shadow-card transition-[transform,box-shadow,border-color] duration-base ease-out-smooth hover:-translate-y-0.5 hover:border-accent hover:shadow-popover"
+                  >
+                    {/* Soft accent blob in the background corner — adds
+                        visual interest without committing to per-category
+                        imagery (Category model has no image field today;
+                        this is the lightweight upgrade from plain gray). */}
+                    <span
+                      aria-hidden
+                      className="pointer-events-none absolute -end-6 -top-6 h-20 w-20 rounded-full bg-accent/15 blur-2xl transition-transform duration-base ease-out-smooth group-hover:scale-125"
+                    />
+                    <span className="relative inline-flex h-12 w-12 items-center justify-center rounded-lg bg-canvas text-accent-strong shadow-card ring-1 ring-border">
+                      <Icon
+                        className="h-6 w-6"
                         strokeWidth={1.75}
                         aria-hidden
                       />
-                    </p>
-                  </div>
-                </Link>
-              </li>
-            ))}
+                    </span>
+                    <div className="relative">
+                      <p className="text-sm font-semibold text-foreground">
+                        {isAr ? cat.nameAr : cat.nameEn}
+                      </p>
+                      <p className="mt-0.5 inline-flex items-center text-xs text-muted-foreground transition-colors duration-base ease-out-smooth group-hover:text-accent-strong">
+                        {isAr ? 'استعرض' : 'Explore'}
+                        <ArrowRight
+                          className="ms-1 inline h-3 w-3 translate-x-0 transition-transform duration-base ease-out-smooth group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
+                          strokeWidth={1.75}
+                          aria-hidden
+                        />
+                      </p>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
@@ -345,17 +361,38 @@ export default async function HomePage({
             <p className="text-center text-xs font-semibold uppercase tracking-[0.12em] text-muted-foreground">
               {isAr ? 'علامات تجارية نتعامل معها' : 'Brands we carry'}
             </p>
-            <ul className="mt-6 flex flex-wrap items-center justify-center gap-2">
-              {brandRows.map((brand) => (
-                <li key={brand.id}>
-                  <Link
-                    href={`/products?brand=${brand.slug}`}
-                    className="inline-flex items-center rounded-full border border-border bg-canvas px-4 py-2 text-sm font-medium text-foreground transition-colors hover:border-border-strong hover:bg-paper-hover"
-                  >
-                    {isAr ? brand.nameAr : brand.nameEn}
-                  </Link>
-                </li>
-              ))}
+            {/* Letter-chip + name pill. Until the Brand model adds a
+                logoUrl field, the chip is a stable visual anchor that
+                makes the rail feel branded without per-brand assets;
+                when an admin later uploads a logo per brand, swap the
+                chip's glyph for an <Image>. */}
+            <ul className="mt-6 flex flex-wrap items-center justify-center gap-3">
+              {brandRows.map((brand) => {
+                const displayName = isAr ? brand.nameAr : brand.nameEn;
+                // Pick the first ASCII letter of either name so Arabic
+                // brand records still get a meaningful glyph.
+                const glyph =
+                  (brand.nameEn || brand.slug || '?')
+                    .replace(/[^A-Za-z]/g, '')
+                    .charAt(0)
+                    .toUpperCase() || '•';
+                return (
+                  <li key={brand.id}>
+                    <Link
+                      href={`/products?brand=${brand.slug}`}
+                      className="group inline-flex items-center gap-2.5 rounded-full border border-border bg-canvas py-1.5 pe-4 ps-1.5 text-sm font-medium text-foreground transition-[border-color,background-color,box-shadow] duration-base ease-out-smooth hover:border-accent hover:bg-canvas hover:shadow-card"
+                    >
+                      <span
+                        aria-hidden
+                        className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-accent-soft font-semibold text-accent-strong transition-colors duration-base ease-out-smooth group-hover:bg-accent group-hover:text-accent-foreground"
+                      >
+                        {glyph}
+                      </span>
+                      <span className="truncate">{displayName}</span>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           </div>
         </section>

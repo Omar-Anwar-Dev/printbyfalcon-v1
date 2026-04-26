@@ -116,8 +116,12 @@
     unicode-bidi: isolate;
   }
 
+  /* `--accent-soft` (~ #E6F3F4) was nearly invisible against pure-white
+     surfaces — a selected range read as no selection at all. Switched
+     to the accent itself at ~30% opacity so the highlight is clearly
+     visible on white inputs and panels but still on-brand. */
   ::selection {
-    background-color: hsl(var(--accent-soft));
+    background-color: hsl(var(--accent) / 0.3);
     color: hsl(var(--ink));
   }
 

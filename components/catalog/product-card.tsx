@@ -23,7 +23,7 @@ export function ProductCard({
   return (
     <Link
       href={`/products/${product.slug}`}
-      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-paper shadow-card transition-[transform,box-shadow] duration-base ease-out-smooth hover:-translate-y-0.5 hover:shadow-popover"
+      className="group flex flex-col overflow-hidden rounded-lg border border-border bg-paper shadow-card transition-[transform,box-shadow,border-color] duration-base ease-out-smooth hover:-translate-y-0.5 hover:border-accent hover:shadow-popover"
     >
       <div className="relative aspect-square overflow-hidden bg-paper-hover">
         {product.primaryImageUrl ? (

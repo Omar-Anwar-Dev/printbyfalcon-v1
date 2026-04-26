@@ -67,12 +67,16 @@ export type InvoiceData = {
   paymentStatusLabel: string;
 };
 
+// Mirrors `--canvas/--paper/--border/--ink/--accent` from the v2 design
+// system (ADR-059). Previous palette here was the warm cream from
+// ADR-031 — the invoice now reads as the same brand as the storefront.
 const COLORS = {
   ink: '#0F172A',
-  muted: '#6B6B6B',
-  paper: '#F3F1EC',
-  border: '#E5E2DA',
+  muted: '#666666',
+  paper: '#F7F7F7',
+  border: '#E5E5E5',
   accent: '#0E7C86',
+  accentSoft: '#E6F3F4',
   amendedWatermark: 'rgba(181, 71, 71, 0.14)',
   amendedBorder: '#B54747',
 };
@@ -212,7 +216,11 @@ const styles = StyleSheet.create({
   },
   ltr: { direction: 'ltr' },
   logo: {
-    width: 80,
+    // Slimmer logo block — full-width brand mark was disproportionately
+    // large in the header (took the same vertical real estate as the
+    // invoice number on the opposite column). 40×40 reads as a tidy
+    // brand badge instead.
+    width: 40,
     height: 40,
     objectFit: 'contain',
     marginBottom: 6,
