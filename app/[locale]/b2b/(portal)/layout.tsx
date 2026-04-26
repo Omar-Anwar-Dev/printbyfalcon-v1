@@ -1,6 +1,5 @@
-import { getLocale } from 'next-intl/server';
-import { Building, Package, ListChecks } from 'lucide-react';
-import { PortalTabs } from '@/components/portal-tabs';
+import { setRequestLocale } from 'next-intl/server';
+import { PortalTabs, type PortalTab } from '@/components/portal-tabs';
 
 /**
  * B2B portal shell — wraps the three signed-in portal pages
@@ -11,30 +10,41 @@ import { PortalTabs } from '@/components/portal-tabs';
  * Lives in a `(portal)` route group so the B2B auth surfaces (login,
  * register, forgot-password, reset-password) stay outside this shell —
  * they're for unauthenticated visitors and shouldn't show portal nav.
+ *
+ * Locale + tab icons:
+ *   - `params.locale` is read directly (not via `getLocale()`) so we can
+ *     also pass it to `setRequestLocale()` — required for next-intl APIs
+ *     in nested layouts under static-rendering boundaries.
+ *   - Icons go across the server→client boundary as NAME strings
+ *     (`PortalTabIconName`), not Lucide component references — passing
+ *     the components directly fails serialization in production.
  */
 export default async function B2BPortalLayout({
   children,
+  params,
 }: {
   children: React.ReactNode;
+  params: Promise<{ locale: string }>;
 }) {
-  const locale = await getLocale();
+  const { locale } = await params;
+  setRequestLocale(locale);
   const isAr = locale === 'ar';
 
-  const tabs = [
+  const tabs: PortalTab[] = [
     {
       href: '/b2b/profile',
       label: isAr ? 'بيانات الشركة' : 'Company profile',
-      icon: Building,
+      icon: 'building',
     },
     {
       href: '/b2b/orders',
       label: isAr ? 'طلبات الشركة' : 'Company orders',
-      icon: Package,
+      icon: 'package',
     },
     {
       href: '/b2b/bulk-order',
       label: isAr ? 'طلب مُجمَّع' : 'Bulk order',
-      icon: ListChecks,
+      icon: 'list-checks',
     },
   ];
 
