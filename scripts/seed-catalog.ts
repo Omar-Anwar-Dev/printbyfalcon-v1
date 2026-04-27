@@ -40,27 +40,49 @@ const prisma = new PrismaClient();
 // Sprint 11 so edge cases (BOM, duplicate SKUs, missing headers, Arabic
 // Unicode quirks) can be unit-tested without instantiating PrismaClient.
 
+// Bilingual defaults for known brands + categories. CSV imports reference
+// brands/categories by slug; without these maps a fresh import seeded the
+// placeholder rows with `nameAr=slug, nameEn=slug` and the storefront header
+// rendered literal slugs ("ink-cartridges") instead of human names. Unknown
+// slugs still fall through to the slug placeholder so the admin can edit.
+const BRAND_DEFAULTS: Record<string, { nameAr: string; nameEn: string }> = {
+  hp: { nameAr: 'HP', nameEn: 'HP' },
+  canon: { nameAr: 'Canon', nameEn: 'Canon' },
+  epson: { nameAr: 'Epson', nameEn: 'Epson' },
+  brother: { nameAr: 'Brother', nameEn: 'Brother' },
+  samsung: { nameAr: 'Samsung', nameEn: 'Samsung' },
+  xerox: { nameAr: 'Xerox', nameEn: 'Xerox' },
+  kyocera: { nameAr: 'Kyocera', nameEn: 'Kyocera' },
+  generic: { nameAr: 'عام', nameEn: 'Generic' },
+};
+
+const CATEGORY_DEFAULTS: Record<string, { nameAr: string; nameEn: string }> = {
+  'ink-cartridges': { nameAr: 'خراطيش حبر', nameEn: 'Ink Cartridges' },
+  'toner-cartridges': { nameAr: 'خراطيش تونر', nameEn: 'Toner Cartridges' },
+  printers: { nameAr: 'طابعات', nameEn: 'Printers' },
+  'paper-media': { nameAr: 'ورق ومستلزمات', nameEn: 'Paper & Media' },
+  'parts-accessories': {
+    nameAr: 'قطع غيار وإكسسوارات',
+    nameEn: 'Parts & Accessories',
+  },
+  uncategorized: { nameAr: 'غير مصنّف', nameEn: 'Uncategorized' },
+};
+
 async function ensureBrand(slug: string) {
   const existing = await prisma.brand.findUnique({ where: { slug } });
   if (existing) return existing;
+  const defaults = BRAND_DEFAULTS[slug] ?? { nameAr: slug, nameEn: slug };
   return prisma.brand.create({
-    data: {
-      slug,
-      nameAr: slug,
-      nameEn: slug,
-    },
+    data: { slug, ...defaults },
   });
 }
 
 async function ensureCategory(slug: string) {
   const existing = await prisma.category.findUnique({ where: { slug } });
   if (existing) return existing;
+  const defaults = CATEGORY_DEFAULTS[slug] ?? { nameAr: slug, nameEn: slug };
   return prisma.category.create({
-    data: {
-      slug,
-      nameAr: slug,
-      nameEn: slug,
-    },
+    data: { slug, ...defaults },
   });
 }
 
