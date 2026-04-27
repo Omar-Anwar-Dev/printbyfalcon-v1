@@ -332,6 +332,35 @@ async function main() {
     },
   });
 
+  // Sprint 5 bootstrap: at least one active courier is required for the
+  // "Mark Handed to Courier" admin action — the modal's courier dropdown
+  // gates the submit button. Without a seeded default, every fresh DB lands
+  // ops on a "no active couriers" wall the first time they try to ship.
+  // Owner edits / replaces these via /admin/couriers; idempotent on nameEn.
+  const DEFAULT_COURIERS: Array<{
+    nameAr: string;
+    nameEn: string;
+    phone: string | null;
+    position: number;
+  }> = [
+    { nameAr: 'بوسطة', nameEn: 'Bosta', phone: null, position: 1 },
+    {
+      nameAr: 'مندوب داخلي',
+      nameEn: 'In-house Driver',
+      phone: null,
+      position: 2,
+    },
+  ];
+  for (const c of DEFAULT_COURIERS) {
+    const existing = await prisma.courier.findFirst({
+      where: { nameEn: c.nameEn },
+      select: { id: true },
+    });
+    if (!existing) {
+      await prisma.courier.create({ data: c });
+    }
+  }
+
   // Backfill searchVector for every product. Safe to run every boot — it's a
   // single UPDATE that rewrites identical bytes when nothing changed.
   const rewritten = await prisma.$executeRawUnsafe(`
