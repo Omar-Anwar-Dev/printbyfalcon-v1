@@ -47,7 +47,7 @@ export function ChangePasswordForm({
   }
 
   return (
-    <form className="space-y-4" onSubmit={onSubmit}>
+    <form method="post" className="space-y-4" onSubmit={onSubmit}>
       <div className="space-y-2">
         <Label htmlFor="currentPassword">{labels.current}</Label>
         <PasswordInput

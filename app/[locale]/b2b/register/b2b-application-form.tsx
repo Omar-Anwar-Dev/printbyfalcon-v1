@@ -67,7 +67,7 @@ export function B2BApplicationForm({ locale }: Props) {
   }
 
   return (
-    <form className="space-y-5" onSubmit={onSubmit} noValidate>
+    <form method="post" className="space-y-5" onSubmit={onSubmit} noValidate>
       <fieldset className="space-y-4">
         <legend className="mb-2 text-sm font-semibold text-foreground">
           {t('b2b.register.section.company')}
