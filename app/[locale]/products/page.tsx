@@ -4,6 +4,7 @@ import { listActiveProducts, type ProductSort } from '@/lib/catalog/queries';
 import { ProductCard } from '@/components/catalog/product-card';
 import { Pagination } from '@/components/ui/pagination';
 import { resolveViewerPrices } from '@/lib/pricing/storefront';
+import { prisma } from '@/lib/db';
 
 // Sprint 7: catalog pages render dynamically so B2B tier prices show
 // correctly per-viewer. Guest / B2C renders identically fast either way
@@ -22,25 +23,51 @@ function parsePage(raw: unknown): number {
   const n = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number.NaN;
   return Number.isFinite(n) && n > 0 ? n : 1;
 }
+function parseSlug(raw: unknown): string | undefined {
+  if (typeof raw !== 'string') return undefined;
+  const s = raw.trim().toLowerCase();
+  // Slugs are lowercase alphanumerics + dashes — anything else is junk we skip
+  // rather than passing to the DB query.
+  return /^[a-z0-9-]+$/.test(s) ? s : undefined;
+}
 
 export default async function ProductsPage({
   params,
   searchParams,
 }: {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ page?: string; sort?: string }>;
+  searchParams: Promise<{
+    page?: string;
+    sort?: string;
+    brand?: string;
+    category?: string;
+  }>;
 }) {
   const { locale } = await params;
   const sp = await searchParams;
   const page = parsePage(sp.page);
   const sort = parseSort(sp.sort);
+  const brandSlug = parseSlug(sp.brand);
+  const categorySlug = parseSlug(sp.category);
   const isAr = locale === 'ar';
   const t = await getTranslations();
 
-  const { items, total, totalPages } = await listActiveProducts({
-    page,
-    sort,
-  });
+  const [{ items, total, totalPages }, activeBrand, activeCategory] =
+    await Promise.all([
+      listActiveProducts({ page, sort, brandSlug, categorySlug }),
+      brandSlug
+        ? prisma.brand.findUnique({
+            where: { slug: brandSlug },
+            select: { nameAr: true, nameEn: true },
+          })
+        : Promise.resolve(null),
+      categorySlug
+        ? prisma.category.findUnique({
+            where: { slug: categorySlug },
+            select: { nameAr: true, nameEn: true },
+          })
+        : Promise.resolve(null),
+    ]);
   const { priceById } = await resolveViewerPrices(items);
 
   const sortLabel = (s: ProductSort) =>
@@ -55,6 +82,33 @@ export default async function ProductsPage({
         : isAr
           ? 'السعر: الأعلى أولاً'
           : 'Price: High to Low';
+
+  // Sort + pagination links must preserve any active brand/category filter
+  // so the user doesn't lose their context when paging or re-sorting.
+  const baseQuery = {
+    ...(brandSlug ? { brand: brandSlug } : {}),
+    ...(categorySlug ? { category: categorySlug } : {}),
+  };
+
+  const activeFilters: { label: string; clearHref: object }[] = [];
+  if (activeBrand) {
+    activeFilters.push({
+      label: `${isAr ? 'العلامة' : 'Brand'}: ${isAr ? activeBrand.nameAr : activeBrand.nameEn}`,
+      clearHref: {
+        pathname: '/products',
+        query: { ...(categorySlug ? { category: categorySlug } : {}) },
+      },
+    });
+  }
+  if (activeCategory) {
+    activeFilters.push({
+      label: `${isAr ? 'التصنيف' : 'Category'}: ${isAr ? activeCategory.nameAr : activeCategory.nameEn}`,
+      clearHref: {
+        pathname: '/products',
+        query: { ...(brandSlug ? { brand: brandSlug } : {}) },
+      },
+    });
+  }
 
   return (
     <main className="container-page py-10 md:py-14">
@@ -82,7 +136,7 @@ export default async function ProductsPage({
               key={s}
               href={{
                 pathname: '/products',
-                query: { sort: s, page: '1' },
+                query: { ...baseQuery, sort: s, page: '1' },
               }}
               className={`inline-flex h-8 items-center rounded px-3 font-medium transition-colors ${
                 s === sort
@@ -95,6 +149,27 @@ export default async function ProductsPage({
           ))}
         </nav>
       </header>
+
+      {activeFilters.length > 0 ? (
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium text-muted-foreground">
+            {isAr ? 'الفلاتر النشطة:' : 'Active filters:'}
+          </span>
+          {activeFilters.map((f) => (
+            <Link
+              key={f.label}
+              href={f.clearHref}
+              className="inline-flex items-center gap-1.5 rounded-full border border-accent/40 bg-accent-soft px-3 py-1 text-xs font-medium text-accent-strong transition-colors hover:border-accent hover:bg-accent/10"
+            >
+              <span>{f.label}</span>
+              <span aria-hidden className="text-accent-strong/60">
+                ×
+              </span>
+              <span className="sr-only">{isAr ? 'إزالة' : 'Remove'}</span>
+            </Link>
+          ))}
+        </div>
+      ) : null}
 
       {items.length === 0 ? (
         <div className="mx-auto max-w-xl rounded-xl border border-border bg-paper p-10 text-center">
@@ -127,7 +202,7 @@ export default async function ProductsPage({
         locale={isAr ? 'ar' : 'en'}
         hrefForPage={(p) => ({
           pathname: '/products',
-          query: { sort, page: String(p) },
+          query: { ...baseQuery, sort, page: String(p) },
         })}
       />
     </main>

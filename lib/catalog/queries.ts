@@ -42,10 +42,14 @@ export async function listActiveProducts({
   page = 1,
   sort = 'newest',
   categoryId,
+  brandSlug,
+  categorySlug,
 }: {
   page?: number;
   sort?: ProductSort;
   categoryId?: string;
+  brandSlug?: string;
+  categorySlug?: string;
 } = {}): Promise<{
   items: ProductListItem[];
   total: number;
@@ -58,8 +62,12 @@ export async function listActiveProducts({
   const where = {
     status: 'ACTIVE' as const,
     ...(categoryId ? { categoryId } : {}),
-    brand: { status: 'ACTIVE' as const },
-    category: { status: 'ACTIVE' as const },
+    ...(brandSlug
+      ? { brand: { slug: brandSlug, status: 'ACTIVE' as const } }
+      : { brand: { status: 'ACTIVE' as const } }),
+    ...(categorySlug
+      ? { category: { slug: categorySlug, status: 'ACTIVE' as const } }
+      : { category: { status: 'ACTIVE' as const } }),
   };
 
   const [total, rows, globalThreshold] = await Promise.all([
