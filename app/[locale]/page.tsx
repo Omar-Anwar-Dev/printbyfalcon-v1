@@ -179,14 +179,19 @@ export default async function HomePage({
               {/* Localized tagline — emphasis word matches the Arabic
                   rhythm (last word in AR / first word in EN). */}
               <span className="mt-3 block text-3xl text-foreground sm:text-4xl lg:text-5xl">
+                {/* The space between the plain text and the colored emphasis
+                    sits INSIDE one of the spans (not as a bare {' '} sibling)
+                    so the accessibility tree concatenates the heading with
+                    a real space — `{' '}` between adjacent inline children
+                    gets collapsed in some screen-reader engines. */}
                 {isAr ? (
                   <>
-                    طابعات وأحبار{' '}
+                    {'طابعات وأحبار '}
                     <span className="text-accent-strong">أصلية</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-accent-strong">Authentic</span>{' '}
+                    <span className="text-accent-strong">{'Authentic '}</span>
                     printers and ink
                   </>
                 )}
