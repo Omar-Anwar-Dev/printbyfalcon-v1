@@ -37,7 +37,7 @@ export function ForgotPasswordForm({ locale }: { locale: 'ar' | 'en' }) {
   }
 
   return (
-    <form className="space-y-4" onSubmit={submit}>
+    <form method="post" className="space-y-4" onSubmit={submit}>
       <div className="space-y-2">
         <Label htmlFor="email">{isAr ? 'بريد العمل' : 'Work email'}</Label>
         <Input

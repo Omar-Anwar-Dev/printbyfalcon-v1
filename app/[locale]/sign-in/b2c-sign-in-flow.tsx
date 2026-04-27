@@ -57,7 +57,7 @@ export function B2CSignInFlow() {
 
   if (step === 'phone') {
     return (
-      <form className="space-y-5" onSubmit={onRequestOtp}>
+      <form method="post" className="space-y-5" onSubmit={onRequestOtp}>
         <div className="space-y-2">
           <Label htmlFor="phone">{t('auth.phoneLabel')}</Label>
           <Input
@@ -91,7 +91,7 @@ export function B2CSignInFlow() {
   const isAr = locale === 'ar';
 
   return (
-    <form className="space-y-5" onSubmit={onVerifyOtp}>
+    <form method="post" className="space-y-5" onSubmit={onVerifyOtp}>
       <div className="rounded-md border border-border bg-paper px-3 py-2.5 text-sm">
         <span className="text-muted-foreground">{t('auth.otpSent')}</span>{' '}
         <span className="num font-medium text-foreground">{phone}</span>

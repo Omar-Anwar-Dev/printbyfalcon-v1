@@ -55,7 +55,7 @@ export function ResetPasswordForm({ token, locale }: Props) {
   }
 
   return (
-    <form className="space-y-4" onSubmit={submit}>
+    <form method="post" className="space-y-4" onSubmit={submit}>
       <div className="space-y-2">
         <Label htmlFor="newPassword">
           {isAr ? 'كلمة المرور الجديدة' : 'New password'}

@@ -39,7 +39,7 @@ export function B2BLoginForm() {
   }
 
   return (
-    <form className="space-y-4" onSubmit={onSubmit}>
+    <form method="post" className="space-y-4" onSubmit={onSubmit}>
       <div className="space-y-2">
         <Label htmlFor="email">{t('auth.emailLabel')}</Label>
         <Input
