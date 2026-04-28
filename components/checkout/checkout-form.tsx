@@ -656,7 +656,7 @@ export function CheckoutForm({
 
   return (
     <>
-      <form onSubmit={onSubmit} className="space-y-6">
+      <form method="post" onSubmit={onSubmit} className="space-y-6">
         <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
           <h2 className="text-base font-semibold">{labels.contact}</h2>
           <div className="grid grid-cols-[minmax(0,1fr)] gap-3 md:grid-cols-2">
