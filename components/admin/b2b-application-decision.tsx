@@ -111,7 +111,7 @@ export function B2BApplicationDecision({ applicationId, labels }: Props) {
 
       {mode === 'approve' ? (
         <Modal title={labels.approveTitle} onClose={close}>
-          <form onSubmit={submitApprove} className="space-y-4">
+          <form method="post" onSubmit={submitApprove} className="space-y-4">
             <div className="space-y-2">
               <label
                 htmlFor={`tier-${applicationId}`}
@@ -226,7 +226,7 @@ export function B2BApplicationDecision({ applicationId, labels }: Props) {
 
       {mode === 'reject' ? (
         <Modal title={labels.rejectTitle} onClose={close}>
-          <form onSubmit={submitReject} className="space-y-4">
+          <form method="post" onSubmit={submitReject} className="space-y-4">
             <div className="space-y-2">
               <label
                 htmlFor={`reason-${applicationId}`}

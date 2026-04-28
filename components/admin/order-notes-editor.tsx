@@ -61,7 +61,7 @@ export function OrderNotesEditor({
   };
 
   return (
-    <form onSubmit={submit} className="space-y-3">
+    <form method="post" onSubmit={submit} className="space-y-3">
       <div className="space-y-1">
         <Label htmlFor="internalNotes">{labels.internal}</Label>
         <p className="text-xs text-muted-foreground">{labels.internalHelp}</p>

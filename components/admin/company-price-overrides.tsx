@@ -236,7 +236,7 @@ function CsvImportPanel({
       <summary className="cursor-pointer px-3 py-2 text-sm font-medium">
         {isAr ? 'استيراد من CSV' : 'Bulk import from CSV'}
       </summary>
-      <form onSubmit={onSubmit} className="space-y-3 p-3">
+      <form method="post" onSubmit={onSubmit} className="space-y-3 p-3">
         <p className="text-xs text-muted-foreground">
           {isAr
             ? 'الشكل: sku,customPriceEgp — صف واحد لكل منتج. السطر الأول (header) اختياري. الأسطر التي تبدأ بـ # تُتجاهل.'

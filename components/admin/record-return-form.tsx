@@ -117,7 +117,7 @@ export function RecordReturnForm({
   }
 
   return (
-    <form className="space-y-6" onSubmit={onSubmit}>
+    <form method="post" className="space-y-6" onSubmit={onSubmit}>
       {policyFailed ? (
         <PolicyWarning
           check={policyCheck}

@@ -66,7 +66,7 @@ export function CourierForm({
   };
 
   return (
-    <form onSubmit={submit} className="max-w-2xl space-y-5">
+    <form method="post" onSubmit={submit} className="max-w-2xl space-y-5">
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2">
           <Label htmlFor="nameAr">{labels.nameAr}</Label>

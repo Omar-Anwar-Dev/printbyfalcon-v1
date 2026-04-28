@@ -164,7 +164,7 @@ export function OrderInvoicePanel({
                 : 'A new version is created with a fresh number; the current version is preserved in history.'}
             </DialogDescription>
           </DialogHeader>
-          <form onSubmit={submit} className="grid gap-3">
+          <form method="post" onSubmit={submit} className="grid gap-3">
             <label className="grid gap-1 text-sm">
               <span className="font-medium">
                 {isAr
