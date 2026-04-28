@@ -31,21 +31,23 @@ docker image prune -f
 
 echo "[$(date -Is)] deploy-production complete — was $PREV_SHA, now $NEW_SHA"
 
-# Authoritative health probe — runs ON the VPS so it bypasses Cloudflare's
-# bot-management challenge. The public probe at https://printbyfalcon.com
-# returns Cloudflare's "Just a moment..." JS challenge to non-browser
-# clients (HTTP 403), which broke the GH Actions post-deploy probe and
-# blocked every prod deploy after the CF tier was upgraded. The internal
-# probe hits the app container directly via the host-side reverse proxy
-# (Nginx → 127.0.0.1:3000) so we get the actual app's /api/health JSON.
-echo "[$(date -Is)] internal health probe (bypasses Cloudflare)"
+# Authoritative health probe — runs ON the VPS, hits the **app container**
+# directly on its localhost-bound port (compose maps it to 127.0.0.1:3000).
+#
+# Why not via Nginx: the previous attempt (PR #58) routed through
+# `http://127.0.0.1/` with `Host: printbyfalcon.com`, but Nginx is configured
+# with a HTTP→HTTPS 301 redirect for that hostname (correct prod behavior),
+# so curl got 301 on every retry and the deploy still failed. Hitting :3000
+# directly skips Nginx (and therefore CF) entirely — the app's `/api/health`
+# endpoint is unauthenticated and returns 200 + JSON when the container is
+# healthy.
+echo "[$(date -Is)] internal health probe (app container :3000, bypasses Nginx + Cloudflare)"
 sleep 15  # let containers finish boot
 HEALTH_OK=0
 for i in 1 2 3 4 5; do
   HTTP_CODE=$(curl -sS -o /tmp/pbf-health.json -w "%{http_code}" \
     --max-time 10 \
-    -H 'Host: printbyfalcon.com' \
-    http://127.0.0.1/api/health || true)
+    http://127.0.0.1:3000/api/health || true)
   echo "[$(date -Is)] internal health attempt $i — HTTP $HTTP_CODE"
   cat /tmp/pbf-health.json 2>/dev/null || true
   echo
