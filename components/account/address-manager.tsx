@@ -10,6 +10,14 @@ import {
   updateAddressAction,
   type AddressInput,
 } from '@/app/actions/addresses';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 
 type Address = {
   id: string;
@@ -70,7 +78,10 @@ const LABELS = {
     makeDefault: 'جعله افتراضي',
     save: 'حفظ',
     cancel: 'إلغاء',
-    confirmDelete: 'حذف هذا العنوان؟',
+    confirmDeleteTitle: 'حذف هذا العنوان؟',
+    confirmDeleteBody:
+      'هذا العنوان سيُحذف نهائياً من حسابك. الطلبات السابقة بتحتفظ بنسخة من العنوان فلن تتأثر.',
+    confirmDeleteCta: 'نعم، احذف',
     recipient: 'اسم المستلم',
     phone: 'الموبايل',
     phoneHelp: 'مثال: 01113334444 أو +201113334444',
@@ -93,7 +104,10 @@ const LABELS = {
     makeDefault: 'Make default',
     save: 'Save',
     cancel: 'Cancel',
-    confirmDelete: 'Delete this address?',
+    confirmDeleteTitle: 'Delete this address?',
+    confirmDeleteBody:
+      "This address will be removed from your account. Past orders keep their own snapshot, so they're unaffected.",
+    confirmDeleteCta: 'Yes, delete',
     recipient: 'Recipient',
     phone: 'Phone',
     phoneHelp: 'e.g., 01113334444 or +201113334444',
@@ -129,6 +143,7 @@ export function AddressManager({ locale, addresses }: Props) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<AddressInput>(EMPTY);
+  const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
 
   function startAdd() {
     setForm(EMPTY);
@@ -174,9 +189,15 @@ export function AddressManager({ locale, addresses }: Props) {
   }
 
   function del(id: string) {
-    if (!confirm(labels.confirmDelete)) return;
+    setDeleteCandidate(id);
+  }
+
+  function confirmDel() {
+    if (!deleteCandidate) return;
+    const id = deleteCandidate;
     startTransition(async () => {
       await deleteAddressAction(id);
+      setDeleteCandidate(null);
       router.refresh();
     });
   }
@@ -421,6 +442,36 @@ export function AddressManager({ locale, addresses }: Props) {
           ))}
         </ul>
       )}
+
+      <Dialog
+        open={deleteCandidate !== null}
+        onOpenChange={(o) => (o ? null : setDeleteCandidate(null))}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{labels.confirmDeleteTitle}</DialogTitle>
+            <DialogDescription>{labels.confirmDeleteBody}</DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setDeleteCandidate(null)}
+              disabled={pending}
+            >
+              {labels.cancel}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={confirmDel}
+              disabled={pending}
+            >
+              {labels.confirmDeleteCta}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
