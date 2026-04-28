@@ -70,7 +70,7 @@ export function NotificationOptOutForm({
   };
 
   return (
-    <form onSubmit={submit} className="space-y-4">
+    <form method="post" onSubmit={submit} className="space-y-4">
       <p className="text-sm text-muted-foreground">{labels.intro}</p>
       <div className="grid gap-4 md:grid-cols-2">
         <Channel

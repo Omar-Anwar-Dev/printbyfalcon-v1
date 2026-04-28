@@ -39,7 +39,7 @@ export function AdminInviteForm({ isAr }: { isAr: boolean }) {
   }
 
   return (
-    <form className="max-w-lg space-y-4" onSubmit={onSubmit}>
+    <form method="post" className="max-w-lg space-y-4" onSubmit={onSubmit}>
       <div>
         <label className="mb-1 block text-sm font-medium">
           {isAr ? 'البريد الإلكتروني' : 'Email'}

@@ -110,7 +110,7 @@ export function ProfileForm({ initial, locale }: Props) {
     'mb-1.5 flex items-center justify-between text-xs font-medium text-muted-foreground';
 
   return (
-    <form onSubmit={submit} className="space-y-5" noValidate>
+    <form method="post" onSubmit={submit} className="space-y-5" noValidate>
       <div className="grid gap-4 sm:grid-cols-2">
         {/* Name */}
         <div>

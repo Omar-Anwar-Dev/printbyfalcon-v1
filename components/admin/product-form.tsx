@@ -128,7 +128,7 @@ export function ProductForm({
   };
 
   return (
-    <form onSubmit={submit} className="max-w-4xl space-y-6">
+    <form method="post" onSubmit={submit} className="max-w-4xl space-y-6">
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="sku">{labels.sku}</Label>
