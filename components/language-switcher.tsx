@@ -1,6 +1,7 @@
 'use client';
 
 import { useLocale } from 'next-intl';
+import { useSearchParams } from 'next/navigation';
 import { usePathname, useRouter } from '@/lib/i18n/routing';
 import { locales, localeLabel } from '@/lib/i18n/config';
 import { cn } from '@/lib/utils';
@@ -17,7 +18,15 @@ type Props = {
 export function LanguageSwitcher({ className, variant = 'default' }: Props) {
   const locale = useLocale();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
+
+  // Preserve any active query string (filters, sort, page, search query…)
+  // when switching locale. Without this the catalog filter chips, search
+  // results, and order-history pagination all reset to defaults on a
+  // language toggle, which is jarring mid-flow.
+  const queryString = searchParams.toString();
+  const targetPath = queryString ? `${pathname}?${queryString}` : pathname;
 
   const isDark = variant === 'dark';
 
@@ -48,7 +57,7 @@ export function LanguageSwitcher({ className, variant = 'default' }: Props) {
                   : 'text-muted-foreground hover:text-foreground',
             )}
             aria-pressed={active}
-            onClick={() => router.replace(pathname, { locale: loc })}
+            onClick={() => router.replace(targetPath, { locale: loc })}
           >
             {localeLabel[loc]}
           </button>
