@@ -20,10 +20,26 @@ export async function generateMetadata({
 }: {
   params: Promise<{ locale: string; id: string }>;
 }): Promise<Metadata> {
-  const { locale } = await params;
+  const { locale, id } = await params;
   const isAr = locale === 'ar';
+  // SFR orders land here in PENDING_CONFIRMATION — the page title should
+  // match what the customer actually did (submit for review), not "confirmed".
+  const order = await prisma.order.findUnique({
+    where: { id },
+    select: { status: true },
+  });
+  // SFR orders sit in PENDING_CONFIRMATION until the sales rep agrees terms.
+  // Once they confirm (status flips to CONFIRMED), this page should read like
+  // any other confirmed order — even though paymentMethod stays SUBMIT_FOR_REVIEW.
+  const isAwaitingReview = order?.status === 'PENDING_CONFIRMATION';
   return {
-    title: isAr ? 'تم تأكيد طلبك' : 'Order confirmed',
+    title: isAwaitingReview
+      ? isAr
+        ? 'تم إرسال طلبك للمراجعة'
+        : 'Order submitted for review'
+      : isAr
+        ? 'تم تأكيد طلبك'
+        : 'Order confirmed',
     robots: { index: false, follow: false },
   };
 }
@@ -68,6 +84,12 @@ export default async function OrderConfirmedPage({
 
   const paymentPending = order.paymentStatus === 'PENDING';
   const paymentFailed = order.paymentStatus === 'FAILED';
+  // SFR (Submit-for-Review) orders sit in PENDING_CONFIRMATION until the sales
+  // rep agrees terms and confirms — header copy + CTAs reflect the review-pending
+  // state only while the order is actually waiting. Once the rep confirms (status
+  // flips to CONFIRMED), this page falls back to the normal "confirmed" copy even
+  // though paymentMethod stays SUBMIT_FOR_REVIEW for invoicing history.
+  const isAwaitingReview = order.status === 'PENDING_CONFIRMATION';
 
   return (
     <main className="container-page max-w-3xl py-10 md:py-14">
@@ -96,9 +118,13 @@ export default async function OrderConfirmedPage({
                 ? isAr
                   ? 'فشلت عملية الدفع'
                   : 'Payment failed'
-                : isAr
-                  ? 'تم تأكيد طلبك'
-                  : 'Your order is confirmed'}
+                : isAwaitingReview
+                  ? isAr
+                    ? 'تم إرسال طلبك للمراجعة'
+                    : 'Order submitted for review'
+                  : isAr
+                    ? 'تم تأكيد طلبك'
+                    : 'Your order is confirmed'}
             </h1>
             <p className="mt-1.5 text-sm text-muted-foreground">
               {isAr ? 'رقم الطلب' : 'Order number'}:{' '}
@@ -137,6 +163,14 @@ export default async function OrderConfirmedPage({
           {isAr
             ? 'طريقة الدفع: الدفع عند الاستلام. مندوبنا هيتواصل معك لتأكيد الطلب وتحديد موعد التسليم.'
             : 'Payment method: Cash on delivery. Our team will call to confirm and schedule delivery.'}
+        </div>
+      ) : null}
+
+      {isAwaitingReview ? (
+        <div className="mb-6 rounded-md border border-accent/40 bg-accent/5 p-4 text-sm text-foreground">
+          {isAr
+            ? 'تم استلام الطلب وهو الآن بانتظار مراجعة فريق المبيعات. هنتواصل معك خلال 24 ساعة لتأكيد الشروط وطريقة الدفع.'
+            : "We've received your order and our sales team will review it. We'll be in touch within 24 hours to confirm terms and payment."}
         </div>
       ) : null}
 
