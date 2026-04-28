@@ -2,10 +2,23 @@ import { getLocale } from 'next-intl/server';
 import { FileQuestion, Search } from 'lucide-react';
 import { Link } from '@/lib/i18n/routing';
 import { Button } from '@/components/ui/button';
+import { getStoreInfo } from '@/lib/settings/store-info';
 
 export default async function LocaleNotFound() {
   const locale = await getLocale();
   const isAr = locale === 'ar';
+  const store = await getStoreInfo();
+
+  // Build a WhatsApp deep-link to the sales team if configured. Replaces the
+  // previous static link to /contact, which never existed as a route — so the
+  // 404 page's own "need help?" affordance was itself a 404.
+  const supportPhone = (store.supportWhatsapp || '').replace(/[^0-9]/g, '');
+  const supportMessage = isAr
+    ? 'مرحبًا، وصلت لصفحة غير موجودة على الموقع.'
+    : 'Hi, I landed on a 404 page on the site.';
+  const supportHref = supportPhone
+    ? `https://wa.me/${supportPhone}?text=${encodeURIComponent(supportMessage)}`
+    : null;
 
   return (
     <section className="container-page flex min-h-[60vh] flex-col items-center justify-center py-24 text-center">
@@ -34,15 +47,19 @@ export default async function LocaleNotFound() {
           </Link>
         </Button>
       </div>
-      <p className="mt-10 text-sm text-muted-foreground">
-        {isAr ? 'تحتاج مساعدة؟' : 'Need help?'}{' '}
-        <Link
-          href="/contact"
-          className="font-medium text-accent-strong hover:underline"
-        >
-          {isAr ? 'تواصل معنا' : 'Contact us'}
-        </Link>
-      </p>
+      {supportHref ? (
+        <p className="mt-10 text-sm text-muted-foreground">
+          {isAr ? 'تحتاج مساعدة؟' : 'Need help?'}{' '}
+          <a
+            href={supportHref}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-accent-strong hover:underline"
+          >
+            {isAr ? 'راسلنا على واتساب' : 'Message us on WhatsApp'}
+          </a>
+        </p>
+      ) : null}
     </section>
   );
 }
