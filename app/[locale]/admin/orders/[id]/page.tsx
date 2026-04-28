@@ -17,6 +17,7 @@ import { OrderInvoicePanel } from '@/components/admin/order-invoice-panel';
 import { B2BConfirmPanel } from '@/components/admin/b2b-confirm-panel';
 import { CodMarkPaidButton } from '@/components/admin/cod-mark-paid-button';
 import { OrderLineEditor } from '@/components/admin/order-line-editor';
+import { CancellationDecisionButtons } from '@/components/admin/cancellation-decision-buttons';
 
 export const dynamic = 'force-dynamic';
 
@@ -169,6 +170,54 @@ export default async function AdminOrderDetailPage({
         </section>
       ) : null}
 
+      {order.cancellationRequestedAt && !order.cancellationResolution ? (
+        <section className="mb-6 rounded-md border-2 border-warning/40 bg-warning-soft/40 p-4">
+          <div className="mb-3 flex items-start justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold">
+                {isAr
+                  ? 'طلب إلغاء من العميل'
+                  : 'Customer-requested cancellation'}
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                {isAr
+                  ? `طُلب في ${new Date(order.cancellationRequestedAt).toLocaleString('ar-EG')}`
+                  : `Requested at ${new Date(order.cancellationRequestedAt).toLocaleString('en-US')}`}
+              </p>
+            </div>
+          </div>
+          <div className="mb-4 rounded-md border bg-background p-3 text-sm">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              {isAr ? 'سبب العميل' : 'Customer reason'}
+            </p>
+            <p className="mt-1 whitespace-pre-wrap text-foreground">
+              {order.cancellationReason ||
+                (isAr ? '(لم يُذكر سبب)' : '(no reason given)')}
+            </p>
+          </div>
+          <CancellationDecisionButtons
+            orderId={order.id}
+            labels={{
+              approve: isAr ? 'قبول الإلغاء' : 'Approve cancellation',
+              deny: isAr ? 'رفض الإلغاء' : 'Deny cancellation',
+              approveTitle: isAr ? 'قبول طلب الإلغاء' : 'Approve cancellation',
+              denyTitle: isAr ? 'رفض طلب الإلغاء' : 'Deny cancellation',
+              body: isAr
+                ? 'سيُسجَّل قرارك مع الطلب وسيتم إخطار العميل. الإلغاء يُحرر المخزون تلقائيًا.'
+                : 'Your decision will be recorded with the order and the customer notified. Approving releases the reserved inventory automatically.',
+              note: isAr
+                ? 'ملاحظة للعميل (اختياري)'
+                : 'Note for customer (optional)',
+              notePlaceholder: isAr
+                ? 'تظهر مع رسالة الإخطار'
+                : 'Sent in the customer notification',
+              confirm: isAr ? 'تأكيد القرار' : 'Confirm decision',
+              cancel: isAr ? 'إلغاء' : 'Cancel',
+            }}
+          />
+        </section>
+      ) : null}
+
       <section className="mb-6 rounded-md border bg-background p-4">
         <div className="mb-3 flex items-start justify-between gap-3">
           <div>
@@ -187,11 +236,18 @@ export default async function AdminOrderDetailPage({
           orderId={order.id}
           currentStatus={order.status}
           couriers={courierOptions}
-          hiddenTransitions={
-            order.status === 'PENDING_CONFIRMATION' && order.type === 'B2B'
-              ? ['CONFIRMED']
-              : undefined
-          }
+          hiddenTransitions={(() => {
+            // When the customer has a pending cancellation request, hide the
+            // generic CANCELLED transition so the admin uses the
+            // Approve/Deny panel above (which sets cancellationResolution +
+            // logs the decision against the customer's request).
+            const hidden: OrderStatusKey[] = [];
+            if (order.status === 'PENDING_CONFIRMATION' && order.type === 'B2B')
+              hidden.push('CONFIRMED');
+            if (order.cancellationRequestedAt && !order.cancellationResolution)
+              hidden.push('CANCELLED');
+            return hidden.length > 0 ? hidden : undefined;
+          })()}
           labels={{
             sectionTitle: isAr ? 'إجراءات الحالة' : 'Status actions',
             note: isAr ? 'ملاحظة (اختياري)' : 'Note (optional)',
