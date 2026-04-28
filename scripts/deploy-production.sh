@@ -30,4 +30,35 @@ echo "[$(date -Is)] prune dangling images"
 docker image prune -f
 
 echo "[$(date -Is)] deploy-production complete — was $PREV_SHA, now $NEW_SHA"
-echo "[$(date -Is)] verify: curl -sS https://printbyfalcon.com/api/health | jq"
+
+# Authoritative health probe — runs ON the VPS so it bypasses Cloudflare's
+# bot-management challenge. The public probe at https://printbyfalcon.com
+# returns Cloudflare's "Just a moment..." JS challenge to non-browser
+# clients (HTTP 403), which broke the GH Actions post-deploy probe and
+# blocked every prod deploy after the CF tier was upgraded. The internal
+# probe hits the app container directly via the host-side reverse proxy
+# (Nginx → 127.0.0.1:3000) so we get the actual app's /api/health JSON.
+echo "[$(date -Is)] internal health probe (bypasses Cloudflare)"
+sleep 15  # let containers finish boot
+HEALTH_OK=0
+for i in 1 2 3 4 5; do
+  HTTP_CODE=$(curl -sS -o /tmp/pbf-health.json -w "%{http_code}" \
+    --max-time 10 \
+    -H 'Host: printbyfalcon.com' \
+    http://127.0.0.1/api/health || true)
+  echo "[$(date -Is)] internal health attempt $i — HTTP $HTTP_CODE"
+  cat /tmp/pbf-health.json 2>/dev/null || true
+  echo
+  if [ "$HTTP_CODE" = "200" ]; then
+    HEALTH_OK=1
+    break
+  fi
+  sleep 6
+done
+if [ "$HEALTH_OK" != "1" ]; then
+  echo "[$(date -Is)] FATAL: internal health probe failed after 5 attempts."
+  echo "[$(date -Is)] containers may have failed to boot — check 'docker compose logs app'."
+  exit 1
+fi
+echo "[$(date -Is)] internal health OK — production stack is up."
+echo "[$(date -Is)] external verify: curl -sS https://printbyfalcon.com/api/health | jq"
