@@ -33,6 +33,60 @@ const DECISIONS = [
   { value: 'DENIED', ar: 'مرفوض', en: 'Denied' },
 ] as const;
 
+// errorKey codes returned by recordReturnAction → human messages.
+// Without this map the form rendered the raw key (e.g. "validation.failed")
+// as the error, which was indistinguishable from "submit silently failed"
+// on UI smoke tests and unhelpful for ops staff.
+const ERROR_MESSAGES: Record<string, { ar: string; en: string }> = {
+  'validation.failed': {
+    ar: 'البيانات غير صحيحة — تأكد من القيم المدخلة.',
+    en: 'Invalid input — check the values you entered.',
+  },
+  'return.items_not_found': {
+    ar: 'لم يتم العثور على الأصناف المختارة.',
+    en: 'Could not find the selected items.',
+  },
+  'return.item_wrong_order': {
+    ar: 'صنف من الأصناف لا يخص هذا الطلب.',
+    en: 'One of the items does not belong to this order.',
+  },
+  'return.qty_exceeds_order': {
+    ar: 'الكمية المطلوب استرجاعها أكبر من المسلَّم.',
+    en: 'Return quantity exceeds the original order quantity.',
+  },
+  'return.order_not_found': {
+    ar: 'الطلب غير موجود.',
+    en: 'Order not found.',
+  },
+  'return.policy_failed': {
+    ar: 'الطلب لا يستوفي سياسة الاسترجاع.',
+    en: 'Order does not meet the return policy.',
+  },
+  'return.override_forbidden': {
+    ar: 'لا تملك صلاحية تجاوز سياسة الاسترجاع.',
+    en: 'You are not allowed to override the return policy.',
+  },
+  'return.override_reason_required': {
+    ar: 'يجب كتابة سبب التجاوز.',
+    en: 'An override reason is required.',
+  },
+  'auth.admin_required': {
+    ar: 'يجب تسجيل الدخول كمسؤول.',
+    en: 'Admin login required.',
+  },
+};
+
+function localizeError(key: string, isAr: boolean): string {
+  const mapped = ERROR_MESSAGES[key];
+  if (mapped) return isAr ? mapped.ar : mapped.en;
+  // Unknown key — fall back to a generic message but keep the raw code for
+  // ops to grep server logs with. Matches the pattern other admin forms
+  // already use for unmapped errors.
+  return isAr
+    ? `حصل خطأ غير متوقع (${key}). جرب تاني.`
+    : `Unexpected error (${key}). Please try again.`;
+}
+
 export function RecordReturnForm({
   orderId,
   items,
@@ -108,7 +162,7 @@ export function RecordReturnForm({
         })),
       });
       if (!res.ok) {
-        setError(res.errorKey);
+        setError(localizeError(res.errorKey, isAr));
         return;
       }
       router.push(`/admin/orders/${orderId}`);
