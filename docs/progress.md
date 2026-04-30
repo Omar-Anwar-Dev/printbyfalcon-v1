@@ -1576,4 +1576,29 @@ Mapped to the 10 criteria in `docs/implementation-plan.md` line 761-771 (split i
 - **Whats360 device status widget** — polls `/api/v1/instances/status` every 5 min; lands in Sprint 12 unless the 2026-04-19 Sprint 5 version already suffices (verify post-deploy).
 - **Backfill `Notification.externalMessageId` index** — new @@index on existing table → `prisma db push` will CREATE INDEX CONCURRENTLY (Postgres default) or block briefly; verify the prod apply is instant given table size (~few hundred rows).
 
+---
+
+## Local-host QA pass — 2026-04-30 (worktree `claude/hungry-goldstine-74f2a1`)
+
+Resumed from prior session: re-set up the local dev stack (worktree, postgres `pbf-local-postgres` on :5433, dev server on :3000), then ran a structured page-by-page sweep using the preview tool. Storefront (AR + EN), admin panel, and B2B portal all behave correctly post-Sprint-11 polish. **One real implementation gap surfaced:** ADR-025 (Paymob-Fawry pay-at-outlet) was never wired into the customer-facing checkout, despite the schema enum, paymob client, admin orders surface, and CSP all already supporting it.
+
+- [x] **PAYMOB_FAWRY now selectable in B2C checkout** — closes the ADR-025 implementation gap. Three changes:
+  - **Action enum widened** — `paymentMethod: z.enum(['PAYMOB_CARD', 'PAYMOB_FAWRY', 'COD'])` in [app/actions/checkout.ts](../app/actions/checkout.ts#L91). The `PaymentMethod` Prisma enum already had the value (Sprint 5 invoice template + admin orders dropdown both consumed it); only the customer-side gate was missing.
+  - **Payment branch widened** — the post-transaction `if (result.paymentMethod === 'PAYMOB_CARD')` block now also handles `'PAYMOB_FAWRY'`, passing `integrationKind: result.paymentMethod === 'PAYMOB_FAWRY' ? 'fawry' : 'card'` into `createPaymentKey`. The Paymob client already supported both kinds via `integrationIdFor()` (Sprint 4 commit, never exercised on the customer side). Status-event note also branches: `'COD placed'` / `'Card checkout started'` / `'Fawry checkout started'`.
+  - **UI radio added** — third option below `PAYMOB_CARD` in [components/checkout/checkout-form.tsx](../components/checkout/checkout-form.tsx). AR label `الدفع في فوري/أمان` / `هنديك كود مرجعي تدفع بيه نقدًا في أي منفذ فوري أو أمان.`; EN `Pay at Fawry / Aman outlets` / `We'll give you a reference code to pay cash at any Fawry or Aman outlet.` `useState` widened to the 3-value union. The "COD becomes unavailable → flip to PAYMOB_CARD" auto-switch still defaults to card (not Fawry), since card is the universal fallback and Fawry is a deliberate customer choice (cash preference).
+
+### Verification
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npx next lint` — clean (only the pre-existing `lib/db.ts` console.log warning)
+- ✅ `npx vitest run` — **200/200 tests green** (no schema or test changes; existing `paymentMethod` test fixtures stay valid)
+- ✅ End-to-end placed a Fawry order via dev-stub: AR checkout → fill contact + Cairo address → select فوري/أمان radio → submit → redirect to `/ar/payments/paymob/dev-stub?key=...&order=...`. DB row inspection: `paymentMethod = PAYMOB_FAWRY`, `paymentStatus = PENDING`, `OrderStatusEvent.note = 'Fawry checkout started'`.
+- ✅ EN locale verified — radio renders "Pay at Fawry / Aman outlets" with the right helper text.
+
+### Decisions logged
+- **No new ADR** — this is the implementation that ADR-025 (2026-04-19) already pre-decided. Architecturally it's a no-op: Paymob client, schema, admin views, CSP, and env vars all already accommodated PAYMOB_FAWRY. Only the B2C checkout radio + the `if` branch in the action were missing.
+
+### Notes
+- Production credentials are still gated by env. Local dev mode (no `PAYMOB_INTEGRATION_ID_FAWRY`) routes Fawry through the same dev-stub as card, so the next env wiring step is purely "set `PAYMOB_INTEGRATION_ID_FAWRY` in `.env.production`" (already in `.env.production.example`). No webhook changes needed — Paymob normalizes both card and Fawry callbacks into the same `/api/webhooks/paymob` shape (per ADR-025).
+- The QA sweep otherwise found no regressions in the storefront / admin / B2B portal post-Sprint-11. All previously-flagged owner punch-list items (PRs #44–#62) verified working in local repro.
+
 
