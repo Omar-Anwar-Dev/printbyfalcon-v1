@@ -31,6 +31,18 @@ export async function SiteFooter() {
 
   const legalLinks = [
     {
+      href: '/contact',
+      label: isAr ? 'تواصل معنا' : 'Contact',
+    },
+    {
+      href: '/shipping',
+      label: isAr ? 'الشحن' : 'Shipping',
+    },
+    {
+      href: '/returns',
+      label: isAr ? 'الاسترجاع' : 'Returns',
+    },
+    {
       href: '/privacy',
       label: isAr ? 'سياسة الخصوصية' : 'Privacy',
     },
