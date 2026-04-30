@@ -88,7 +88,7 @@ const checkoutSchema = z.object({
     email: z.string().trim().email().optional().or(z.literal('')),
   }),
   address: addressSchema,
-  paymentMethod: z.enum(['PAYMOB_CARD', 'COD']),
+  paymentMethod: z.enum(['PAYMOB_CARD', 'PAYMOB_FAWRY', 'COD']),
   customerNotes: z.string().trim().max(500).optional().or(z.literal('')),
   placedByName: z.string().trim().max(80).optional().or(z.literal('')),
   poReference: z.string().trim().max(40).optional().or(z.literal('')),
@@ -239,8 +239,7 @@ export async function createOrderAction(
   try {
     result = await prisma.$transaction(async (tx) => {
       const orderNumber = await generateOrderNumber(tx);
-      const paymentMethod: PaymentMethod =
-        parsed.data.paymentMethod === 'COD' ? 'COD' : 'PAYMOB_CARD';
+      const paymentMethod: PaymentMethod = parsed.data.paymentMethod;
 
       // Atomically consume promo code first so the order isn't created if
       // someone else just used the last slot.
@@ -340,7 +339,11 @@ export async function createOrderAction(
           status: 'CONFIRMED',
           actorId: user?.id ?? null,
           note:
-            paymentMethod === 'COD' ? 'COD placed' : 'Card checkout started',
+            paymentMethod === 'COD'
+              ? 'COD placed'
+              : paymentMethod === 'PAYMOB_FAWRY'
+                ? 'Fawry checkout started'
+                : 'Card checkout started',
         },
       });
       await tx.auditLog.create({
@@ -395,13 +398,18 @@ export async function createOrderAction(
     );
   }
 
-  if (result.paymentMethod === 'PAYMOB_CARD') {
+  if (
+    result.paymentMethod === 'PAYMOB_CARD' ||
+    result.paymentMethod === 'PAYMOB_FAWRY'
+  ) {
     try {
       const [firstName, ...restParts] = parsed.data.contact.name.split(/\s+/);
       const lastName = restParts.join(' ') || firstName;
       const key = await createPaymentKey({
         merchantOrderId: result.order.id,
         amountCents: Math.round(total * 100),
+        integrationKind:
+          result.paymentMethod === 'PAYMOB_FAWRY' ? 'fawry' : 'card',
         items: items.map((i) => ({
           name: i.product.nameEn,
           amount_cents: Math.round(Number(i.unitPriceEgpSnapshot) * 100),

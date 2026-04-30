@@ -106,8 +106,10 @@ const LABELS = {
     payment: 'طريقة الدفع',
     card: 'بطاقة بنكية (Paymob)',
     cod: 'الدفع عند الاستلام',
+    fawry: 'الدفع في فوري/أمان',
     codDescription: 'ادفع نقدًا عند استلام الطلب من المندوب.',
     cardDescription: 'هنحولك لصفحة Paymob عشان تدفع بالبطاقة بأمان.',
+    fawryDescription: 'هنديك كود مرجعي تدفع بيه نقدًا في أي منفذ فوري أو أمان.',
     codUnavailable: 'الدفع عند الاستلام غير متاح حاليًا لهذه المنطقة.',
     codOverLimit: 'قيمة الطلب تتجاوز الحد المسموح للدفع عند الاستلام.',
     notes: 'ملاحظات للطلب (اختياري)',
@@ -194,8 +196,11 @@ const LABELS = {
     payment: 'Payment method',
     card: 'Credit/Debit card (Paymob)',
     cod: 'Cash on delivery',
+    fawry: 'Pay at Fawry / Aman outlets',
     codDescription: 'Pay cash when our courier delivers the order.',
     cardDescription: "We'll redirect you to Paymob to pay securely.",
+    fawryDescription:
+      "We'll give you a reference code to pay cash at any Fawry or Aman outlet.",
     codUnavailable: 'Cash on delivery is unavailable for this area right now.',
     codOverLimit: 'Order value exceeds the COD maximum.',
     notes: 'Order notes (optional)',
@@ -328,9 +333,9 @@ export function CheckoutForm({
   const [addressNotes, setAddressNotes] = useState('');
   const [customerNotes, setCustomerNotes] = useState('');
 
-  const [paymentMethod, setPaymentMethod] = useState<'PAYMOB_CARD' | 'COD'>(
-    'COD',
-  );
+  const [paymentMethod, setPaymentMethod] = useState<
+    'PAYMOB_CARD' | 'PAYMOB_FAWRY' | 'COD'
+  >('COD');
 
   // Sprint 9 — promo code UI state.
   const [promoInput, setPromoInput] = useState('');
@@ -968,6 +973,22 @@ export function CheckoutForm({
                 <span className="font-medium">{labels.card}</span>
                 <span className="block text-muted-foreground">
                   {labels.cardDescription}
+                </span>
+              </span>
+            </label>
+            <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+              <input
+                type="radio"
+                name="payment"
+                value="PAYMOB_FAWRY"
+                className="mt-1"
+                checked={paymentMethod === 'PAYMOB_FAWRY'}
+                onChange={() => setPaymentMethod('PAYMOB_FAWRY')}
+              />
+              <span>
+                <span className="font-medium">{labels.fawry}</span>
+                <span className="block text-muted-foreground">
+                  {labels.fawryDescription}
                 </span>
               </span>
             </label>
