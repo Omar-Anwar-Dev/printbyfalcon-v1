@@ -20,29 +20,12 @@ export default async function TermsPage() {
   return locale === 'ar' ? <TermsArabic /> : <TermsEnglish />;
 }
 
-function ReviewBanner({ locale }: { locale: 'ar' | 'en' }) {
-  const isAr = locale === 'ar';
-  return (
-    <div className="mb-8 rounded-md border border-warning/40 bg-warning/10 p-4 text-sm text-foreground">
-      <strong className="font-semibold">
-        {isAr
-          ? 'ملاحظة داخلية — لا تنشر قبل المراجعة القانونية:'
-          : 'Internal note — DO NOT PUBLISH WITHOUT LEGAL REVIEW:'}
-      </strong>{' '}
-      {isAr
-        ? 'هذا المحتوى المؤقت يحتاج مراجعة محامٍ متخصص في التجارة الإلكترونية قبل الإطلاق الرسمي (M1).'
-        : 'This scaffold content requires review by an e-commerce lawyer before M1 public launch.'}
-    </div>
-  );
-}
-
 function TermsArabic() {
   return (
     <main
       className="container-page prose prose-neutral max-w-none py-12 text-right"
       dir="rtl"
     >
-      <ReviewBanner locale="ar" />
       <h1>شروط الاستخدام</h1>
       <p className="text-sm text-muted-foreground">آخر تحديث: 23 أبريل 2026</p>
 
@@ -200,7 +183,6 @@ function TermsArabic() {
 function TermsEnglish() {
   return (
     <main className="container-page prose prose-neutral max-w-none py-12">
-      <ReviewBanner locale="en" />
       <h1>Terms of Service</h1>
       <p className="text-sm text-muted-foreground">
         Last updated: 23 April 2026

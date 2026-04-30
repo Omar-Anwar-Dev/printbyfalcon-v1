@@ -21,29 +21,12 @@ export default async function PrivacyPage() {
   return locale === 'ar' ? <PrivacyArabic /> : <PrivacyEnglish />;
 }
 
-function ReviewBanner({ locale }: { locale: 'ar' | 'en' }) {
-  const isAr = locale === 'ar';
-  return (
-    <div className="mb-8 rounded-md border border-warning/40 bg-warning/10 p-4 text-sm text-foreground">
-      <strong className="font-semibold">
-        {isAr
-          ? 'ملاحظة داخلية — لا تنشر قبل المراجعة القانونية:'
-          : 'Internal note — DO NOT PUBLISH WITHOUT LEGAL REVIEW:'}
-      </strong>{' '}
-      {isAr
-        ? 'هذا المحتوى المؤقت يتبع متطلبات القانون المصري رقم 151 لسنة 2020 لحماية البيانات الشخصية، لكنه يحتاج مراجعة محامي متخصص قبل الإطلاق الرسمي (M1).'
-        : 'This scaffold content follows Egyptian Personal Data Protection Law 151 of 2020 but requires review by a qualified lawyer before M1 public launch.'}
-    </div>
-  );
-}
-
 function PrivacyArabic() {
   return (
     <main
       className="container-page prose prose-neutral max-w-none py-12 text-right"
       dir="rtl"
     >
-      <ReviewBanner locale="ar" />
       <h1>سياسة الخصوصية</h1>
       <p className="text-sm text-muted-foreground">آخر تحديث: 23 أبريل 2026</p>
 
@@ -61,7 +44,8 @@ function PrivacyArabic() {
           <strong>الاسم التجاري:</strong> برينت باي فالكون
         </li>
         <li>
-          <strong>المقر:</strong> القاهرة، جمهورية مصر العربية
+          <strong>المقر:</strong> 12 محمد صدقي باشا، باب اللوق، القاهرة، جمهورية
+          مصر العربية
         </li>
         <li>
           <strong>البريد الإلكتروني:</strong>{' '}
@@ -233,7 +217,6 @@ function PrivacyArabic() {
 function PrivacyEnglish() {
   return (
     <main className="container-page prose prose-neutral max-w-none py-12">
-      <ReviewBanner locale="en" />
       <h1>Privacy Policy</h1>
       <p className="text-sm text-muted-foreground">
         Last updated: 23 April 2026
@@ -254,7 +237,8 @@ function PrivacyEnglish() {
           <strong>Trading name:</strong> Print By Falcon
         </li>
         <li>
-          <strong>Address:</strong> Cairo, Arab Republic of Egypt
+          <strong>Address:</strong> 12 Mohamed Sedky Pasha, Bab Al-Louk, Cairo,
+          Arab Republic of Egypt
         </li>
         <li>
           <strong>Email:</strong>{' '}
