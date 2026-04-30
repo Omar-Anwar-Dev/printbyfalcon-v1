@@ -94,6 +94,17 @@ const LABELS = {
     notes: 'ملاحظات',
     isDefault: 'اجعله عنواني الافتراضي',
     limit: 'الحد الأقصى 5 عناوين.',
+    errors: {
+      'auth.not_signed_in':
+        'انتهت صلاحية جلستك. سجّل الدخول من جديد عشان تكمل.',
+      'validation.invalid':
+        'فيه حقل ناقص أو غير صحيح. تأكد من رقم الموبايل (يبدأ بـ 01 وعدد أرقامه 11) والاسم والعنوان.',
+      'address.limit_reached':
+        'وصلت للحد الأقصى (5 عناوين). امسح عنوان قديم عشان تضيف واحد جديد.',
+      'address.not_found':
+        'العنوان مش موجود — يمكن يكون اتمسح من جلسة أخرى. حدّث الصفحة وحاول تاني.',
+      generic: 'حصل خطأ أثناء الحفظ. حاول تاني.',
+    },
   },
   en: {
     addBtn: 'Add address',
@@ -120,6 +131,17 @@ const LABELS = {
     notes: 'Notes',
     isDefault: 'Set as my default address',
     limit: 'Max 5 addresses.',
+    errors: {
+      'auth.not_signed_in':
+        'Your session has expired. Please sign in again to continue.',
+      'validation.invalid':
+        'Some fields are missing or invalid. Check the phone number (11 digits starting with 01) plus the name and address.',
+      'address.limit_reached':
+        "You've hit the 5-address limit. Delete an old one to add a new address.",
+      'address.not_found':
+        'That address is no longer there — it may have been deleted in another session. Refresh the page and try again.',
+      generic: 'Something went wrong saving the address. Please try again.',
+    },
   },
 };
 
@@ -144,11 +166,13 @@ export function AddressManager({ locale, addresses }: Props) {
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<AddressInput>(EMPTY);
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   function startAdd() {
     setForm(EMPTY);
     setAdding(true);
     setEditingId(null);
+    setErrorMsg(null);
   }
 
   function startEdit(a: Address) {
@@ -166,21 +190,25 @@ export function AddressManager({ locale, addresses }: Props) {
     });
     setEditingId(a.id);
     setAdding(false);
+    setErrorMsg(null);
   }
 
   function cancel() {
     setAdding(false);
     setEditingId(null);
+    setErrorMsg(null);
   }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
+    setErrorMsg(null);
     startTransition(async () => {
       const res = editingId
         ? await updateAddressAction(editingId, form)
         : await addAddressAction(form);
       if (!res.ok) {
-        alert(res.errorKey);
+        const key = res.errorKey as keyof typeof labels.errors;
+        setErrorMsg(labels.errors[key] ?? labels.errors.generic);
         return;
       }
       cancel();
@@ -347,6 +375,14 @@ export function AddressManager({ locale, addresses }: Props) {
             />
             <span>{labels.isDefault}</span>
           </label>
+          {errorMsg ? (
+            <p
+              role="alert"
+              className="rounded-md border border-error/30 bg-error-soft px-3 py-2 text-sm text-error"
+            >
+              {errorMsg}
+            </p>
+          ) : null}
           <div className="flex flex-wrap gap-2">
             <button
               type="submit"
