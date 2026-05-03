@@ -1,4 +1,5 @@
 import { notFound } from 'next/navigation';
+import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 import {
@@ -9,9 +10,46 @@ import {
 import { ProductCard } from '@/components/catalog/product-card';
 import { Pagination } from '@/components/ui/pagination';
 import { resolveViewerPrices } from '@/lib/pricing/storefront';
+import { JsonLd } from '@/components/seo/json-ld';
+import { buildBreadcrumbList } from '@/lib/seo/structured-data';
 
 // Dynamic rendering so B2B viewers see tier prices (Sprint 7 ADR-037).
 export const dynamic = 'force-dynamic';
+
+const BASE_URL =
+  process.env.APP_URL?.replace(/\/+$/, '') ?? 'https://printbyfalcon.com';
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string; locale: string }>;
+}): Promise<Metadata> {
+  const { slug, locale } = await params;
+  const category = await getActiveCategoryBySlug(slug);
+  if (!category) return {};
+  const isAr = locale === 'ar';
+  const name = isAr ? category.nameAr : category.nameEn;
+  const description = isAr
+    ? `تسوّق ${name} الأصلية والمتوافقة من برينت باي فالكون. شحن لكل محافظات مصر، الدفع عند الاستلام، أسعار جملة للشركات.`
+    : `Shop genuine and compatible ${name} from Print By Falcon. Nationwide Egypt shipping, cash on delivery, wholesale pricing for businesses.`;
+  return {
+    title: name,
+    description,
+    alternates: {
+      canonical: `${BASE_URL}/${locale}/categories/${category.slug}`,
+      languages: {
+        ar: `${BASE_URL}/ar/categories/${category.slug}`,
+        en: `${BASE_URL}/en/categories/${category.slug}`,
+      },
+    },
+    openGraph: {
+      title: name,
+      description,
+      type: 'website',
+      url: `${BASE_URL}/${locale}/categories/${category.slug}`,
+    },
+  };
+}
 
 const SORTS: ProductSort[] = ['newest', 'price-asc', 'price-desc'];
 
@@ -51,8 +89,23 @@ export default async function CategoryPage({
   });
   const { priceById } = await resolveViewerPrices(items);
 
+  // Sprint 13 — BreadcrumbList for the SERP breadcrumb trail.
+  const crumbs = [
+    { name: t('nav.home'), path: `/${locale}` },
+    { name: t('nav.catalog'), path: `/${locale}/products` },
+  ];
+  if (category.parent) {
+    crumbs.push({
+      name: isAr ? category.parent.nameAr : category.parent.nameEn,
+      path: `/${locale}/categories/${category.parent.slug}`,
+    });
+  }
+  crumbs.push({ name, path: `/${locale}/categories/${category.slug}` });
+  const breadcrumbSchema = buildBreadcrumbList(crumbs);
+
   return (
     <div className="container py-8">
+      <JsonLd data={breadcrumbSchema} id="category-schema" />
       <nav className="mb-4 flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
         <Link href="/" className="hover:underline">
           {t('nav.home')}

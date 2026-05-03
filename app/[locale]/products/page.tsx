@@ -1,4 +1,5 @@
-import { getTranslations } from 'next-intl/server';
+import { getTranslations, getLocale } from 'next-intl/server';
+import type { Metadata } from 'next';
 import { Link } from '@/lib/i18n/routing';
 import { listActiveProducts, type ProductSort } from '@/lib/catalog/queries';
 import { ProductCard } from '@/components/catalog/product-card';
@@ -11,6 +12,37 @@ import { prisma } from '@/lib/db';
 // (Postgres hot cache), and B2B is where the per-request rendering earns
 // its keep. Sprint 7 ADR-037.
 export const dynamic = 'force-dynamic';
+
+const PRODUCTS_BASE_URL =
+  process.env.APP_URL?.replace(/\/+$/, '') ?? 'https://printbyfalcon.com';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
+  const isAr = locale === 'ar';
+  const title = isAr
+    ? 'كتالوج الطابعات وأحبار الطباعة'
+    : 'Printers & Printing Supplies Catalog';
+  const description = isAr
+    ? 'تصفّح كل الطابعات وأحبار الطابعات والتونرات الأصلية والمتوافقة من HP, Canon, Epson, Brother, Samsung. تصفية حسب البراند والمتوافقية، أسعار شفافة، شحن لكل مصر.'
+    : 'Browse all printers, printer ink, and toner cartridges from HP, Canon, Epson, Brother, Samsung — genuine and compatible. Filter by brand and compatibility, transparent pricing, nationwide Egypt shipping.';
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `${PRODUCTS_BASE_URL}/${locale}/products`,
+      languages: {
+        ar: `${PRODUCTS_BASE_URL}/ar/products`,
+        en: `${PRODUCTS_BASE_URL}/en/products`,
+      },
+    },
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+      url: `${PRODUCTS_BASE_URL}/${locale}/products`,
+    },
+  };
+}
 
 const SORTS: ProductSort[] = ['newest', 'price-asc', 'price-desc'];
 

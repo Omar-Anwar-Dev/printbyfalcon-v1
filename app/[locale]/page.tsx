@@ -1,4 +1,6 @@
 import Image from 'next/image';
+import type { Metadata } from 'next';
+import { getLocale } from 'next-intl/server';
 import {
   ShieldCheck,
   Truck,
@@ -18,6 +20,37 @@ import {
 } from '@/lib/catalog/queries';
 import { buildTree, type FlatCategory } from '@/lib/catalog/category-tree';
 import { brandLogoUrl, categoryImageUrl } from '@/lib/storage/paths';
+
+const HOMEPAGE_BASE_URL =
+  process.env.APP_URL?.replace(/\/+$/, '') ?? 'https://printbyfalcon.com';
+
+export async function generateMetadata(): Promise<Metadata> {
+  const locale = await getLocale();
+  const isAr = locale === 'ar';
+  const title = isAr
+    ? 'أحبار وتونر طابعات أصلية ومتوافقة | شحن لكل مصر | برينت باي فالكون'
+    : 'Genuine & Compatible Printer Toner & Ink | Nationwide Egypt Delivery | Print By Falcon';
+  const description = isAr
+    ? 'اطلب أحبار، تونر، وخراطيش طابعات HP, Canon, Epson, Brother, Samsung — أصلية ومتوافقة. أسعار جملة للشركات، الدفع عند الاستلام، شحن لكل محافظات مصر خلال 1-5 أيام.'
+    : 'Order printer ink, toner, and cartridges from HP, Canon, Epson, Brother, Samsung — genuine and compatible. Wholesale pricing for businesses, cash on delivery, nationwide Egypt shipping in 1-5 days.';
+  return {
+    title,
+    description,
+    alternates: {
+      canonical: `${HOMEPAGE_BASE_URL}/${locale}`,
+      languages: {
+        ar: `${HOMEPAGE_BASE_URL}/ar`,
+        en: `${HOMEPAGE_BASE_URL}/en`,
+      },
+    },
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+      url: `${HOMEPAGE_BASE_URL}/${locale}`,
+    },
+  };
+}
 
 type TopCategory = {
   id: string;

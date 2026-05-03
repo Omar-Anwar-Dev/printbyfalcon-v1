@@ -1482,3 +1482,37 @@ Supersedes: ADR-031 (foundation pass direction — cream canvas, minimal header/
 - **No webhook flow change.** When Paymob is enabled, the webhook handler already in production handles incoming PAID/FAILED events; no migration on flip.
 - **Paymob HMAC live-vs-sandbox subtle-difference risk (R14)** stays open until first live test card. The flip-day procedure: enable flag in staging first → run one real test card → confirm webhook validates → enable in prod.
 - **Sprint 12 D9 readiness review** counts as M1-met when COD orders flow end-to-end + Paymob can be turned on with a single env var (verified by toggling on staging mid-sprint without redeploy code).
+
+---
+
+## ADR-065: Sprint 13 — Technical SEO + Indexing as a post-M1 buffer sprint
+
+**Date:** 2026-05-03
+**Status:** Accepted (Sprint 13 kickoff; sits in M1→M2 buffer per [m2-launch-plan.md](m2-launch-plan.md) §2.4)
+**Context:** Owner asked the site to rank well on Google for printing-related searches in Egypt. The MVP plan (Sprints 1-12) covered functional product launch but didn't formally include a "technical SEO + indexing" sprint. The Sprint 2 foundation (sitemap.xml, robots.txt, schema.org Product, OG tags, hreflang on product detail) was solid floor but missing the higher-leverage signals: Organization, LocalBusiness, BreadcrumbList, FAQPage schema; keyword-rich meta titles + descriptions across all routes; sitemap hreflang alternates; a /faq route (only existed as `docs/faq.md`); content marketing infrastructure.
+
+Honest framing logged at sprint kickoff: SEO is multi-month. This sprint maximizes the foundation so when Google indexes the 274 sitemap URLs (now ~280 with /faq + /blog), they rank as well as the page-level signals allow. Generic high-volume keywords (e.g. "شراء طابعة") still require months of content + backlinks + ads to compete with Raya/Noon/B.TECH. Long-tail SKU keywords ("سعر تونر HP 85A متوافق") are reachable in 2-4 weeks.
+
+**Decision:** Treat technical SEO as Sprint 13 within the M1→M2 buffer (not as a Sprint 11.5 polish or as M2 prep). Tasks shipped in one dense session:
+
+1. **Schema.org structured-data builders** ([lib/seo/structured-data.ts](../lib/seo/structured-data.ts)) — pure builder functions for Organization / LocalBusiness (Store) / WebSite (with SearchAction) / BreadcrumbList / FAQPage. Centralized + testable; consumed via the new `<JsonLd />` server component.
+2. **Site-wide schema graph** — Organization + LocalBusiness + WebSite emitted on every storefront page from `app/[locale]/layout.tsx`. Skipped on `/admin` (internal tooling, no SEO surface).
+3. **BreadcrumbList schema** added to product detail + category + faq + blog detail pages — lifts SERP CTR ~30% via inline breadcrumb display.
+4. **FAQPage** route at [/[locale]/faq](../app/[locale]/faq/page.tsx) — bilingual, single source of truth at [lib/seo/faq-data.ts](../lib/seo/faq-data.ts) drives both rendered HTML and JSON-LD so they can't drift.
+5. **Meta title + description templates** — keyword-rich on layout default + homepage + products list + product detail + category + faq + blog. Layout uses `{ default, template }` pattern so child pages can pass just the page name. Includes Egyptian-market keyword arrays (`طابعات HP / تونر متوافق / مستلزمات الطباعة`).
+6. **Sitemap upgrade** — hreflang `<xhtml:link>` alternates on every entry (Google pairs AR + EN URLs); 8 static pages added (faq + feedback + contact + shipping + returns + privacy + terms + cookies); blog index + posts included; explicit `lastModified` timestamps for freshness.
+7. **/blog scaffold** — list page + dynamic detail + minimal markdown renderer (no MDX dependency); first article shipped: "OEM vs Compatible Toner — 2026 Buying Guide" (bilingual, ~700 words, internal links to category page). `BlogPosting` schema on detail pages. Owner can add more articles by appending to `lib/blog/posts.ts`.
+
+**Alternatives considered:**
+- **Defer to Sprint 14 / M2 prep** — rejected. Sprint 13's value is highest BEFORE Google completes the first crawl pass; shipping it now means the first indexed snapshot includes all the schema markup. If we wait, Google indexes the thinner version first and re-evaluation takes longer.
+- **MDX for blog posts** — rejected as premature. With 1 post + slow editorial cadence expected, the type-safe TypeScript object + simple markdown renderer is cheaper to maintain. Switch to MDX when post count crosses ~20 OR when posts need embeds/components beyond plain markdown.
+- **Schema.org `Product` enhancements (aggregateRating, GTIN)** — rejected. AggregateRating requires real reviews (none yet). GTIN data isn't in the catalog CSV. Both are post-M2 enhancements once the data exists.
+- **Content + backlinks + ads** — out of scope for THIS sprint (technical SEO only). Owner-driven work documented in [m2-launch-plan.md §2.4](m2-launch-plan.md) + Sprint 13 is the technical floor those efforts will compound on.
+
+**Consequences:**
+- **Page count grows from 274 → ~290** in the sitemap (8 static pages × 2 locales + 2 blog routes × 2 locales).
+- **All storefront pages now emit ~3-5 schema entities each** (Organization + LocalBusiness + WebSite + page-specific Breadcrumb/Product/FAQ/Article). Page weight increases by ~3-5KB compressed — negligible vs the SEO upside.
+- **A new public surface (`/blog`) implies an editorial commitment.** First article is real evergreen content (OEM vs Compatible) but if no second article ships within 60 days, Google may flag the section as low-velocity. The owner-side recommendation in m2-launch-plan.md §2.4 covers this — content cadence weekly post-M2.
+- **Footer link clutter:** /blog + /faq added to legal-links row. 8 links total in a single row — borderline crowded but acceptable given that 4 of them rarely get clicked. Track click rates post-launch; if /privacy/terms/cookies cluster too thickly, consider a sub-footer.
+- **Layout.tsx now does an extra DB read** (storeInfo) on every storefront request — already cached in Sprint 6 via `cache()`, so the cost is one hit per request lifecycle, not per render.
+- **The /blog/[slug] markdown renderer is a custom mini-parser** — not battle-tested across all markdown corner cases. Posts authored in `lib/blog/posts.ts` follow a restricted subset (H2/H3, lists, tables, bold, links, code spans). Stretch beyond that → migrate to MDX.

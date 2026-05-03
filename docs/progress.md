@@ -1,11 +1,11 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** Sprints 1-11 dev-track complete + multiple polish passes (PRs #44–#65 + 2026-04-30 local-host QA). **Sprint 12 (soft launch + closed beta → M1) in progress** — dev tooling shipped 2026-05-03 in worktree `claude/kind-knuth-23348b`. Ops-track execution (production deploy, tester outreach, daily monitoring, bug-fix cycles) is owner-driven over the next ~2 weeks of calendar time.
-- **Current sprint:** **Sprint 12 — Soft Launch + Closed Beta → M1** — kickoff resolutions logged below; dev tooling (Paymob feature flag, Whats360 widget, /feedback page + admin review, M1 check script, three docs) shipped this session. M1 launches **COD-only** (Paymob deferred per ADR-064). Soft-launch + bug-fix cycles execute on real-calendar time.
-- **Last updated:** 2026-05-03 — Sprint 12 kickoff + dev tooling pass (single dense session).
-- **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint, except Sprint 12 which runs on real-user calendar after this dev push).
-- **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 11 dev-track + Sprint 12 dev tooling deploy together as the M1 release.
+- **Current milestone:** **M1 reached on production 2026-05-03** — Sprint 12 dev tooling deployed via PR #66; M1 catalog cutover executed (132 real SKUs imported, 200 demo SKUs wiped, transactional test data cleared). Sprint 13 (Technical SEO + Indexing) shipped same day in branch `claude/sprint13-seo` — pending merge + deploy. M1→M2 buffer phase active.
+- **Current sprint:** **Sprint 13 — Technical SEO + Indexing — COMPLETE** ✅ (post-M1 buffer work, ADR-065). Schema.org markup + meta enhancement + sitemap upgrade + /faq route + /blog scaffold shipped. Awaiting merge + deploy.
+- **Last updated:** 2026-05-03 — Sprint 13 close-out (single dense session).
+- **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint, except Sprint 12 which runs on real-user calendar).
+- **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 13 piggy-backs on the same staging→prod path as Sprint 12.
 
 ## Completed Sprints
 
@@ -1678,5 +1678,89 @@ Mapped to the 7 criteria in `docs/implementation-plan.md` line 809-816, split in
 - **Footer broken-link cleanup** — the site footer still references `/contact`, `/shipping`, `/returns` which are 404s (noted in ADR-059 consequences). Out of Sprint 12 scope; v1.1 should ship those pages or remove the links. Sprint 12 added `/feedback` (a real page) to the footer.
 - **Existing tests still green** — feature-flag changes added 3 new env-check cases. Final vitest count documented in next session's verification.
 - **B2B Pay Now under COD-only posture** — B2B "Pay Now" goes through Paymob; under the COD-only flag, B2B customers see only Submit-for-Review + COD (per zone availability). Tested via the same form path; documented in ADR-064.
+
+---
+
+## Sprint 13 — Technical SEO + Indexing — COMPLETE 2026-05-03
+
+### Sprint 13 kickoff resolutions (2026-05-03)
+
+- **Sprint scope:** post-M1 buffer work, not in original implementation-plan.md sprint list. Logged as ADR-065. Sits in M1→M2 buffer per [m2-launch-plan.md §2.4](m2-launch-plan.md).
+- **Honest framing acknowledged with owner upfront:** SEO is multi-month. This sprint maximizes the technical foundation so when Google indexes the ~290 sitemap URLs, they rank as well as page-level signals allow. Generic high-volume keywords (e.g. "شراء طابعة") still need months of content + backlinks + ads to compete with Raya/Noon/B.TECH; long-tail SKU keywords ("سعر تونر HP 85A متوافق") reachable in 2-4 weeks with this work alone.
+- **Phone format for LocalBusiness schema:** E.164 (`+201116527773`) used in structured data; the human-readable `+20 111 652 7773` format kept in visible site copy.
+
+### Tasks shipped (single dense session)
+
+#### Schema.org structured-data infrastructure
+- [x] **S13-T2** Pure builder functions in [lib/seo/structured-data.ts](../lib/seo/structured-data.ts) — Organization, LocalBusiness (Store), WebSite (with SearchAction), BreadcrumbList, FAQPage. Plus `toE164Egyptian()` phone normalizer.
+- [x] **S13-T2** Server component [components/seo/json-ld.tsx](../components/seo/json-ld.tsx) — emits `<script type="application/ld+json">` with safe escaping (strips `<`, `>`, `&`); supports single object OR array (wraps in `@graph`).
+- [x] **S13-T2** [app/[locale]/layout.tsx](../app/[locale]/layout.tsx) emits Organization + LocalBusiness + WebSite on every storefront page (skipped on `/admin`). Pulls store info from `getStoreInfo()`; defaults to Bab Al-Louk Cairo geo if no override.
+
+#### Per-page schema enrichment
+- [x] **S13-T3** BreadcrumbList added to product detail ([app/[locale]/products/[slug]/page.tsx](../app/[locale]/products/[slug]/page.tsx)) alongside existing Product schema. Old inline `<script>` replaced with `<JsonLd>` component.
+- [x] **S13-T3** BreadcrumbList added to category page ([app/[locale]/categories/[slug]/page.tsx](../app/[locale]/categories/[slug]/page.tsx)) — handles parent-category nesting.
+- [x] **S13-T4** New `/faq` route ([app/[locale]/faq/page.tsx](../app/[locale]/faq/page.tsx)) — bilingual (AR + EN) accordion-style FAQ + FAQPage schema + BreadcrumbList. Single source of truth at [lib/seo/faq-data.ts](../lib/seo/faq-data.ts) — 18 questions in 5 categories (Ordering / Account / Delivery / Returns / B2B). Updated to reflect COD-only posture per ADR-064.
+
+#### Meta titles + descriptions
+- [x] **S13-T5** [app/[locale]/layout.tsx](../app/[locale]/layout.tsx) defaults — keyword-rich title with `{ default, template }` so child pages just pass page name; AR + EN keyword arrays; `metadataBase`; OG defaults; viewport / theme-color / applicationName.
+- [x] **S13-T5** Homepage ([app/[locale]/page.tsx](../app/[locale]/page.tsx)) — own `generateMetadata` with high-density title ("أحبار وتونر طابعات أصلية ومتوافقة | شحن لكل مصر | برينت باي فالكون") + 5-brand mention in description.
+- [x] **S13-T5** Products list ([app/[locale]/products/page.tsx](../app/[locale]/products/page.tsx)) — own `generateMetadata` with brand-list keyword density.
+- [x] **S13-T5** Product detail enriched — title now includes price (e.g. "خرطوشة تونر HP 85A متوافقة — 260 ج.م"); description mentions price + free-shipping cue + COD; keywords array per product (name + brand + SKU + category-relevant terms).
+- [x] **S13-T5** Category page now has `generateMetadata` (was missing entirely) — bilingual title + description + canonical + alternates + OG.
+
+#### Sitemap upgrade
+- [x] **S13-T6** [app/sitemap.ts](../app/sitemap.ts) rewritten — hreflang `<xhtml:link>` alternates on every entry (Google pairs AR + EN URLs); 8 static pages added (faq + feedback + contact + shipping + returns + privacy + terms + cookies); blog index + posts included; explicit `lastModified = new Date()` for static pages so freshness signal is current; better priority weighting (1.0 home, 0.9 products list, 0.8 products, 0.7 categories + faq, 0.6 blog, 0.5 ops pages, 0.3 legal).
+
+#### Content marketing infrastructure
+- [x] **S13-T7** [/blog](../app/[locale]/blog/page.tsx) list page + [/blog/[slug]](../app/[locale]/blog/[slug]/page.tsx) detail page (bilingual, RTL-aware).
+- [x] **S13-T7** Minimal markdown renderer in [components/blog/post-body.tsx](../components/blog/post-body.tsx) — H2/H3, bullet lists, tables, bold, inline links (internal + external), code spans. Zero markdown library dependency.
+- [x] **S13-T7** First article shipped: "OEM vs Compatible Toner — 2026 Buying Guide" (~700 words AR + EN). Targets the keyword "تونر متوافق ولا أصلي" (high-volume Egyptian search). Internal links to `/categories/toner-cartridges`. Lives in [lib/blog/posts.ts](../lib/blog/posts.ts) — owner adds more posts by appending objects.
+- [x] **S13-T7** BlogPosting schema on detail pages — Google News + richer SERP card. BreadcrumbList too.
+- [x] **S13-T7** Sitemap includes blog list + posts.
+
+#### Footer + nav
+- [x] Footer link added: **/blog** + **/faq** (alongside the Sprint 12 /feedback link).
+
+### Verification (final)
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npx next lint` — clean (only pre-existing `lib/db.ts` warning from Sprint 1)
+- ✅ `npx vitest run` — **203/203** (no behavior changes outside SEO infrastructure; existing tests stay green)
+- ✅ `npx next build` — 145+ pages generated. Confirmed routes: `/ar/blog`, `/en/blog`, `/ar/blog/[slug]`, `/en/blog/[slug]`, `/ar/faq`, `/en/faq` all compile.
+- ⏭️ Lighthouse SEO audit — runs against staging post-deploy via `bash scripts/perf/lighthouse.sh` (Sprint 11 harness).
+- ⏭️ Google Rich Results test — owner runs `https://search.google.com/test/rich-results` against the deployed product / faq / blog pages to confirm Google parses each schema type correctly.
+
+### Sprint 13 Exit Criteria
+- ✅ Site-wide Organization + LocalBusiness + WebSite schema on every storefront page
+- ✅ BreadcrumbList schema on product + category + faq + blog detail
+- ✅ FAQPage schema on `/faq` (route built; replaces docs-only FAQ)
+- ✅ Meta titles + descriptions keyword-rich on all top-level routes
+- ✅ Sitemap has hreflang alternates + 8 new static pages + blog routes
+- ✅ Blog scaffold deployable; first SEO-targeted article shipped
+- ✅ All checks green (typecheck + lint + vitest + build)
+
+**Sprint 13 closed 2026-05-03.** Ops handoff:
+
+1. After deploy, owner runs Google Rich Results test on:
+   - `https://printbyfalcon.com/ar` — should detect Organization + LocalBusiness + WebSite
+   - `https://printbyfalcon.com/ar/products/<any-sku>` — should detect Product + BreadcrumbList
+   - `https://printbyfalcon.com/ar/faq` — should detect FAQPage + BreadcrumbList
+   - `https://printbyfalcon.com/ar/blog/oem-vs-compatible-toner-egypt-2026` — should detect BlogPosting + BreadcrumbList
+2. Re-submit `sitemap.xml` in Search Console (count should now be ~290 instead of 274 — confirms new URLs picked up).
+3. URL Inspection + "Request Indexing" for the 5 most important pages: home, products list, faq, blog index, first blog post.
+
+### Decisions logged this sprint
+- **ADR-065** [2026-05-03] Sprint 13 introduces a post-M1 SEO sprint not originally in implementation-plan.md. Sits in M1→M2 buffer per m2-launch-plan.md §2.4. Honest framing on multi-month nature of SEO logged at kickoff.
+
+### Risk Log Updates
+- **No new risks.** Sprint 13 is additive — no breaking changes to catalog/checkout/admin. New surfaces (`/blog`, `/faq`) opt-in and don't affect existing user flows.
+- **NEW low-risk:** `/blog` implies editorial commitment. If second post doesn't ship within 60 days, Google may flag as low-velocity. Tracked in m2-launch-plan.md §2.4 (content marketing cadence).
+
+### Sprint 13 parking lot for future sprints
+- **MDX migration** — when post count crosses ~20 OR a post needs embeds/components, switch from data-driven to MDX files under `content/blog/` + bundler integration.
+- **AggregateRating + Review schema** — once real reviews exist (post-M2 with Google Reviews integration via GBP).
+- **GTIN / MPN** in Product schema — if catalog CSV gets enriched with manufacturer barcode data.
+- **Article images on blog** — current posts are text-only. Add hero image + featured image fields when an editorial flow needs it.
+- **Image sitemap** — separate `image-sitemap.xml` for product images. Helps Google Image Search discover catalog photos.
+- **Per-product OG images auto-generated** — currently uses first product image. A custom OG image (with brand + price overlay) would lift CTR on social/WhatsApp shares.
 
 
