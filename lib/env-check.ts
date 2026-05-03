@@ -9,6 +9,7 @@
  * to customers.
  */
 import { logger } from '@/lib/logger';
+import { isPaymobEnabled } from '@/lib/payments/feature-flags';
 
 const DANGEROUS_FLAGS_IN_PROD = [
   'OTP_DEV_MODE',
@@ -16,15 +17,23 @@ const DANGEROUS_FLAGS_IN_PROD = [
   'WHATS360_SANDBOX',
 ] as const;
 
-const REQUIRED_IN_PROD = [
+const ALWAYS_REQUIRED_IN_PROD = [
   'DATABASE_URL',
   'APP_URL',
-  'PAYMOB_API_KEY',
-  'PAYMOB_HMAC_SECRET',
-  'PAYMOB_INTEGRATION_ID_CARD',
   'WHATS360_TOKEN',
   'WHATS360_INSTANCE_ID',
   'WHATS360_WEBHOOK_SECRET',
+] as const;
+
+/**
+ * Required only when Paymob is enabled. ADR-064 lets M1 launch COD-only by
+ * setting PAYMENTS_PAYMOB_ENABLED=false; in that posture these env vars are
+ * legitimately absent until merchant approval lands and the flag flips on.
+ */
+const REQUIRED_WHEN_PAYMOB_ENABLED = [
+  'PAYMOB_API_KEY',
+  'PAYMOB_HMAC_SECRET',
+  'PAYMOB_INTEGRATION_ID_CARD',
 ] as const;
 
 export type EnvCheckResult = { ok: true } | { ok: false; errors: string[] };
@@ -43,7 +52,11 @@ export function checkProductionEnv(
     }
   }
 
-  for (const key of REQUIRED_IN_PROD) {
+  const required: readonly string[] = isPaymobEnabled(env)
+    ? [...ALWAYS_REQUIRED_IN_PROD, ...REQUIRED_WHEN_PAYMOB_ENABLED]
+    : ALWAYS_REQUIRED_IN_PROD;
+
+  for (const key of required) {
     if (!env[key] || env[key]?.length === 0) {
       errors.push(`${key} is required in production but is not set`);
     }

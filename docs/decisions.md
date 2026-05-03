@@ -1421,3 +1421,64 @@ Supersedes: ADR-031 (foundation pass direction — cream canvas, minimal header/
 - Route-group rename (`/b2b/profile` → `/b2b/(portal)/profile`, etc.) is a tracked move in git; the URL shape doesn't change so no incoming links break.
 - Bulk-order autocomplete dropdown vertical clipping on the LAST row is a known minor UX issue; a follow-up PR can portal the dropdown to fix it.
 - A separate pre-existing bug surfaced during the audit: B2B's first-time-login flow redirects to `/account/change-password` which doesn't exist (404). Out of scope for layout polish — flagged in the progress entry.
+
+---
+
+## ADR-063: Whats360 device runs on the sales line `+201116527773` — one WhatsApp number for sales + OTP + order notifications
+
+**Date:** 2026-05-02
+**Status:** Accepted (Sprint 12 kickoff; M1 launch posture)
+**Supersedes:** Sprint 1 deferred-item resolution (which planned to procure a second physical line distinct from the sales line).
+
+**Context:** Sprint 1 closed with WhatsApp templates "deferred — blocked on procuring a new physical phone number distinct from the sales-team line `+201116527773`." ADR-033 (Sprint 5) then dropped Meta Cloud API for Whats360, removing the template-approval bottleneck but not the phone-number question. M1 readiness item #3 explicitly said "scanned against the live business WhatsApp number (not sales line `+201116527773`)." At Sprint 12 kickoff the owner confirmed the Whats360 device is in fact scanned against the sales line — the second number was not procured. Owner confirmed this is a deliberate choice (single number for all customer touchpoints), not an oversight.
+
+**Decision:** **The Whats360 device runs on `+201116527773` for the M1 launch.** Same number receives sales calls + sales WhatsApp inbound + outbound OTP sends + outbound order-status notifications + STOP/UNSUBSCRIBE opt-out replies.
+
+**Operational guardrails that make the single-number posture viable:**
+- **OTP sends bypass the opt-out gate** (ADR-057). A customer who sent STOP can still receive an OTP — auth security takes precedence over notification preferences. This is exactly the failure mode that single-number-confusion would otherwise cause (a sales-conversation "STOP" landing on the OTP path).
+- **Opt-out detector uses equality match, not substring** (Sprint 11 S11-D6-T3). "STOP" inside a sales reply ("we don't STOP at delivery") will NOT trigger opt-out. Only a message that IS exactly STOP / UNSUBSCRIBE / إلغاء / ايقاف triggers it.
+- **Whats360 device-status widget** lands in Sprint 12 — alerts the owner if the device disconnects, since one number = one device = one point of failure.
+- **5 sends/phone/hour app-side rate limit** (ADR-033) protects customers from notification spam regardless of number.
+- **Inbound Whats360 webhook records every customer reply** as a Notification row. Sales team can scan the existing customer history for context before replying.
+
+**Alternatives considered:**
+- **Procure a second number** (the original Sprint 1 plan). Rejected by owner — operationally simpler to maintain one device + one Whats360 plan + one customer-facing number; no separate sales-vs-store branding required since the store IS the sales team at MVP scale.
+- **Run two Whats360 instances on two devices** (sales + store separated). Rejected — doubles cost + admin overhead; the existing guardrails already mitigate cross-channel confusion.
+- **Defer M1 launch until a second number is procured.** Rejected — second number is operationally optional, not blocking; the existing safeguards make the single-number posture safe enough for closed beta.
+
+**Consequences:**
+- **R3-v2 risk profile increases slightly.** A single device disconnect now affects sales + OTP + notifications simultaneously. Mitigated by the new admin device-status widget + Sprint 12 daily monitoring playbook.
+- **Privacy policy already reflects this** (`/privacy` lists `+20 111 652 7773` as the data-controller phone — same number).
+- **No code change needed.** All Whats360 envs (`WHATS360_TOKEN`, `WHATS360_INSTANCE_ID`, `WHATS360_WEBHOOK_SECRET`) are already wired to the sales-line device. `NOTIFICATIONS_DEV_MODE=false` flip is unblocked.
+- **If the single-number posture causes UX issues post-launch** (real customer confusion between sales replies and automated OTPs / notifications), revisit by procuring a second number in v1.1 — the codebase doesn't bake in a single-number assumption beyond the env vars.
+
+---
+
+## ADR-064: M1 launches COD-only — Paymob switchover deferred to in-place env-var flip post-merchant-approval
+
+**Date:** 2026-05-02
+**Status:** Accepted (Sprint 12 kickoff; M1 launch posture)
+**Realises:** R15 (live Paymob merchant approval delayed → M1 launches COD-only).
+
+**Context:** Sprint 12 kickoff. Owner confirmed Paymob merchant application is still in review at Egypt Paymob. M1 readiness item #2 ("Live Paymob merchant switchover — flip from sandbox to live credentials") is therefore unattainable on the M1 timeline. Plan options were: (a) delay M1 until Paymob approves, or (b) launch M1 COD-only with Paymob switching on in place once approval lands. Owner picked (b) — already planned for in R15 mitigation.
+
+**Decision:** **M1 (closed beta) launches with Cash-on-Delivery as the only customer-payable method.** The PAYMOB_CARD + PAYMOB_FAWRY radios stay in the checkout UI but are gated behind a server-side feature flag (`PAYMENTS_PAYMOB_ENABLED`). When the flag is `false` (M1 default), the radios are hidden from B2C checkout and the only selectable payment method is COD. When Paymob merchant approval lands, owner sets `PAYMENTS_PAYMOB_ENABLED=true` in `.env.production` + redeploys → no code change, the gateway flips on with one env-var flip.
+
+**B2B implications:** B2B Pending-Confirmation flow does NOT touch Paymob (rep takes payment offline). B2B "Pay Now" goes through Paymob — also gated by the same flag. B2B customers who hit checkout while the flag is off see only "Submit for Review" and COD (per zone availability).
+
+**M1 readiness recalibration:**
+- Item #2 (Paymob switchover) is **moved from "M1 blocking" to "post-M1 in-place flip."**
+- Item #18 (deploy rehearsal) still includes a webhook reachability test against the sandbox URL — no change.
+- Sprint 12 day 1-2 friendly-tester onboarding messaging makes COD-only explicit so testers don't go looking for a card option.
+
+**Alternatives considered:**
+- **Delay M1 until Paymob approves.** Rejected — Paymob's review timeline is unpredictable + the closed-beta cohort + the catalog data are ready now; soft-launching with COD-only is the right cost/time trade-off.
+- **Hide Paymob entirely (delete the radios)** until approval lands. Rejected — would require code re-introduction post-approval, more risk than a feature flag.
+- **Show the Paymob radios but disable them with "coming soon" copy.** Rejected — adds confusion + a checkout-form surface that has to be re-tested at flip; the feature flag is cleaner.
+
+**Consequences:**
+- **R15 materializes.** Documented + accepted. Mitigation = closed beta tolerates a single payment method; M1 cohort is small enough that COD-only is acceptable for first-week orders.
+- **One env var added** to `.env.production.example` + `lib/env-check.ts` (read-only — defaulting to false in prod is safe; the boot-assert doesn't require the flag to be present).
+- **No webhook flow change.** When Paymob is enabled, the webhook handler already in production handles incoming PAID/FAILED events; no migration on flip.
+- **Paymob HMAC live-vs-sandbox subtle-difference risk (R14)** stays open until first live test card. The flip-day procedure: enable flag in staging first → run one real test card → confirm webhook validates → enable in prod.
+- **Sprint 12 D9 readiness review** counts as M1-met when COD orders flow end-to-end + Paymob can be turned on with a single env var (verified by toggling on staging mid-sprint without redeploy code).

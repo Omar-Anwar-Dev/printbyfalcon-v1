@@ -42,6 +42,7 @@ export default async function AdminLayout({
     couriers: t('admin.nav.couriers'),
     inventory: t('admin.nav.inventory'),
     customers: t('admin.nav.customers'),
+    feedback: isAr ? 'الملاحظات' : 'Feedback',
     b2bApplications: t('admin.nav.b2bApplications'),
     b2bPendingConfirmation: t('admin.nav.b2bPendingConfirmation'),
     b2bCompanies: t('admin.nav.b2bCompanies'),

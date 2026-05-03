@@ -84,6 +84,8 @@ type Props = {
   globalThresholds: { b2cEgp: number; b2bEgp: number };
   codPolicy: CodPolicyView;
   vatRatePercent: number;
+  /** ADR-064 — when false, only COD is selectable. M1 launch posture. */
+  paymobEnabled: boolean;
 };
 
 const LABELS = {
@@ -167,6 +169,10 @@ const LABELS = {
         'هذه المحافظة غير مهيأة للشحن — من فضلك تواصل معنا.',
       'checkout.cod_not_available_for_zone':
         'الدفع عند الاستلام غير متاح لمحافظتك أو الحد الأقصى تخطى — اختر الدفع بالبطاقة.',
+      'checkout.paymob_disabled':
+        'الدفع الإلكتروني غير متاح حاليًا — اختر الدفع عند الاستلام أو تواصل معنا عبر واتساب.',
+      'checkout.no_payment_method':
+        'لا توجد طريقة دفع متاحة لمحافظتك حاليًا — تواصل معنا عبر واتساب.',
       'promo.not_found': 'كود الخصم غير صحيح.',
       'promo.inactive': 'هذا الكود غير مفعّل.',
       'promo.not_started': 'هذا الكود لم يبدأ سريانه بعد.',
@@ -260,6 +266,10 @@ const LABELS = {
         "We don't ship to this governorate yet — please contact us.",
       'checkout.cod_not_available_for_zone':
         "Cash on delivery isn't available for your area or exceeds the limit — please pay by card.",
+      'checkout.paymob_disabled':
+        'Online payment is temporarily unavailable — please pick cash on delivery or contact us on WhatsApp.',
+      'checkout.no_payment_method':
+        'No payment method is available for your governorate right now — please contact us on WhatsApp.',
       'promo.not_found': 'Promo code not found.',
       'promo.inactive': 'This promo code is inactive.',
       'promo.not_started': 'This promo code is not active yet.',
@@ -294,6 +304,7 @@ export function CheckoutForm({
   globalThresholds,
   codPolicy,
   vatRatePercent,
+  paymobEnabled,
 }: Props) {
   const labels = LABELS[locale];
   const router = useRouter();
@@ -436,8 +447,16 @@ export function CheckoutForm({
   ]);
 
   // If COD becomes unavailable (user picked a Sinai address), silently flip
-  // the picker to PAYMOB_CARD so the summary stays consistent.
-  if (paymentMethod === 'COD' && !totals.codAvailable && zoneInfo) {
+  // the picker to PAYMOB_CARD so the summary stays consistent. ADR-064: when
+  // Paymob is disabled (M1 COD-only), there's nothing to flip to — the submit
+  // button below disables itself + the form shows a "no payment method" notice
+  // for that zone.
+  if (
+    paymentMethod === 'COD' &&
+    !totals.codAvailable &&
+    zoneInfo &&
+    paymobEnabled
+  ) {
     // Defer the setState to the next tick to avoid "setState during render".
     setTimeout(() => setPaymentMethod('PAYMOB_CARD'), 0);
   }
@@ -960,38 +979,47 @@ export function CheckoutForm({
                 </span>
               </div>
             )}
-            <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-              <input
-                type="radio"
-                name="payment"
-                value="PAYMOB_CARD"
-                className="mt-1"
-                checked={paymentMethod === 'PAYMOB_CARD'}
-                onChange={() => setPaymentMethod('PAYMOB_CARD')}
-              />
-              <span>
-                <span className="font-medium">{labels.card}</span>
-                <span className="block text-muted-foreground">
-                  {labels.cardDescription}
-                </span>
-              </span>
-            </label>
-            <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-              <input
-                type="radio"
-                name="payment"
-                value="PAYMOB_FAWRY"
-                className="mt-1"
-                checked={paymentMethod === 'PAYMOB_FAWRY'}
-                onChange={() => setPaymentMethod('PAYMOB_FAWRY')}
-              />
-              <span>
-                <span className="font-medium">{labels.fawry}</span>
-                <span className="block text-muted-foreground">
-                  {labels.fawryDescription}
-                </span>
-              </span>
-            </label>
+            {paymobEnabled ? (
+              <>
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="PAYMOB_CARD"
+                    className="mt-1"
+                    checked={paymentMethod === 'PAYMOB_CARD'}
+                    onChange={() => setPaymentMethod('PAYMOB_CARD')}
+                  />
+                  <span>
+                    <span className="font-medium">{labels.card}</span>
+                    <span className="block text-muted-foreground">
+                      {labels.cardDescription}
+                    </span>
+                  </span>
+                </label>
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="PAYMOB_FAWRY"
+                    className="mt-1"
+                    checked={paymentMethod === 'PAYMOB_FAWRY'}
+                    onChange={() => setPaymentMethod('PAYMOB_FAWRY')}
+                  />
+                  <span>
+                    <span className="font-medium">{labels.fawry}</span>
+                    <span className="block text-muted-foreground">
+                      {labels.fawryDescription}
+                    </span>
+                  </span>
+                </label>
+              </>
+            ) : null}
+            {!paymobEnabled && !totals.codAvailable && zoneInfo ? (
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
+                {labels.errors['checkout.no_payment_method']}
+              </div>
+            ) : null}
           </section>
         ) : (
           <section className="space-y-2 rounded-md border border-accent/40 bg-accent/5 p-4 text-sm">
@@ -1062,7 +1090,15 @@ export function CheckoutForm({
 
         <button
           type="submit"
-          disabled={pending || (activeGovernorate !== '' && !zoneInfo)}
+          disabled={
+            pending ||
+            (activeGovernorate !== '' && !zoneInfo) ||
+            // ADR-064: COD-only launch — block submit when no method is available.
+            (checkoutMode === 'payNow' &&
+              !paymobEnabled &&
+              !!zoneInfo &&
+              !totals.codAvailable)
+          }
           className="w-full rounded-md bg-primary px-4 py-3 font-semibold text-primary-foreground hover:opacity-90 disabled:opacity-60"
         >
           {pending

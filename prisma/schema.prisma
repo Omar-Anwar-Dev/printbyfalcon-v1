@@ -73,6 +73,8 @@ model User {
   notifications  Notification[]  @relation("UserNotifications")
   authoredReturns Return[]       @relation("ReturnAuthor")
   generatedInvoices Invoice[]    @relation("InvoiceAuthor")
+  /// Sprint 12 — feedback authored by this user (anonymous feedback has null userId).
+  feedback        Feedback[]     @relation("UserFeedback")
 
   // B2B (Sprint 7): the shared company login is the primaryUser; reverse side
   // is optional (null for B2C / ADMIN / unapproved applicants).
@@ -1079,4 +1081,57 @@ model CompanyPriceOverride {
 
   @@unique([companyId, productId])
   @@index([productId])
+}
+
+// -------------------------------------------------------------------------
+// Sprint 12 — Closed-beta feedback channel.
+// Anyone (signed-in or guest) can submit feedback from /[locale]/feedback.
+// Admin (OWNER + OPS) reviews + actions at /admin/feedback. Per S12-D2-T3.
+// -------------------------------------------------------------------------
+
+enum FeedbackCategory {
+  BUG
+  UX
+  FEATURE_REQUEST
+  PRAISE
+  OTHER
+}
+
+enum FeedbackStatus {
+  NEW
+  REVIEWING
+  ACTIONED
+  DISMISSED
+}
+
+model Feedback {
+  id           String           @id @default(cuid())
+  /// Optional FK to User if signed in at submit time. Anonymous = null.
+  userId       String?
+  user         User?            @relation("UserFeedback", fields: [userId], references: [id], onDelete: SetNull)
+  /// Captured for analytics — value of `User.type` at submit time, OR null
+  /// for anonymous submitters.
+  userType     UserType?
+  locale       Locale
+  category     FeedbackCategory
+  /// Optional contact info for follow-up — owner can use sensibly per
+  /// privacy policy. Free-text since users may type phone OR email.
+  contactName  String?
+  contactValue String?
+  message      String           @db.Text
+  /// What page they were on when they hit submit, for triage context.
+  pathname     String?
+  /// Truncated to 500 chars in the action — for browser-bug triage.
+  userAgent    String?          @db.Text
+  status       FeedbackStatus   @default(NEW)
+  /// Admin notes on triage; visible only on /admin/feedback/[id].
+  adminNote    String?          @db.Text
+  reviewedAt   DateTime?
+  reviewedById String?
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+
+  @@index([status, createdAt])
+  @@index([category, createdAt])
+  @@index([createdAt])
 }

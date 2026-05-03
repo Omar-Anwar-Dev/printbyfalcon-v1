@@ -75,6 +75,16 @@ export const RATE_LIMIT_RULES = {
     max: 1000,
     windowSeconds: 60,
   },
+  /**
+   * Closed-beta feedback form throttle (Sprint 12 S12-D2-T3). Cap at 5
+   * submissions per IP per hour so a frustrated tester doesn't spam, but a
+   * legitimate "two bugs in five minutes" round still goes through.
+   */
+  feedback: {
+    name: 'feedback',
+    max: 5,
+    windowSeconds: 60 * 60,
+  },
 } as const satisfies Record<string, LimitRule>;
 
 export type RateLimitResult = {

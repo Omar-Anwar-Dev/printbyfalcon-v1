@@ -14,6 +14,7 @@ import {
   Building,
   UserCog,
   Settings,
+  MessageSquare,
   type LucideIcon,
 } from 'lucide-react';
 import type { AdminNavIconName } from '@/lib/admin/nav-config';
@@ -34,6 +35,7 @@ const iconMap: Record<AdminNavIconName, LucideIcon> = {
   building: Building,
   'user-cog': UserCog,
   settings: Settings,
+  'message-square': MessageSquare,
 };
 
 /**

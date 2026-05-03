@@ -42,6 +42,7 @@ import { getB2BCheckoutContext } from '@/lib/b2b/checkout-context';
 import { notifySalesRepsOfPendingOrder } from '@/lib/b2b/sales-rep-notify';
 import { generateOrderNumber } from '@/lib/order/order-number';
 import { createPaymentKey } from '@/lib/payments/paymob';
+import { isPaymobEnabled } from '@/lib/payments/feature-flags';
 import { enqueueJob } from '@/lib/queue';
 import { renderOrderConfirmationEmail } from '@/lib/email/order-confirmation';
 import { renderB2bPendingReview } from '@/lib/whatsapp-templates';
@@ -120,6 +121,16 @@ export async function createOrderAction(
   const parsed = checkoutSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, errorKey: 'validation.invalid' };
+  }
+
+  // ADR-064 — server-side gate, defense in depth. Even if a tampered client
+  // submits PAYMOB_CARD/PAYMOB_FAWRY while the gateway is disabled, refuse.
+  if (
+    !isPaymobEnabled() &&
+    (parsed.data.paymentMethod === 'PAYMOB_CARD' ||
+      parsed.data.paymentMethod === 'PAYMOB_FAWRY')
+  ) {
+    return { ok: false, errorKey: 'checkout.paymob_disabled' };
   }
 
   const user = await getOptionalUser();

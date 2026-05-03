@@ -22,6 +22,7 @@ import {
   getTopProductsThisMonth,
 } from '@/lib/admin/dashboard';
 import { SalesTrendChart } from '@/components/admin/sales-trend-chart';
+import { Whats360StatusWidget } from '@/components/admin/whats360-status-widget';
 
 export const revalidate = 300; // 5-min cache for dashboard widgets (S10-D5-T2).
 
@@ -115,6 +116,13 @@ export default async function AdminHomePage({
               isAr={isAr}
             />
           ) : null}
+        </section>
+      ) : null}
+
+      {/* Whats360 device health (ADR-063) — OWNER + OPS. */}
+      {canSeeWidget(role, 'whats360Status') ? (
+        <section className="mb-6">
+          <Whats360StatusWidget isAr={isAr} />
         </section>
       ) : null}
 

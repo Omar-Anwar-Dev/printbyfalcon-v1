@@ -30,7 +30,9 @@
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps",
     "prepare": "husky",
-    "perf:search": "tsx scripts/search-perf-audit.ts"
+    "perf:search": "tsx scripts/search-perf-audit.ts",
+    "m1:check": "tsx scripts/m1-check.ts",
+    "m1:fresh-catalog": "tsx scripts/m1-fresh-catalog.ts"
   },
   "dependencies": {
     "@fontsource/ibm-plex-sans-arabic": "^5.2.9",
