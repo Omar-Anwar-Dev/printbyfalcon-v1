@@ -36,6 +36,9 @@ export const ROLE_MATRIX = {
 
   /** Order detail view — all 3 roles can inspect an order. */
   ORDER_VIEW: ['OWNER', 'OPS', 'SALES_REP'] as const,
+
+  /** Sprint 12 — closed-beta feedback triage. */
+  FEEDBACK: ['OWNER', 'OPS'] as const,
 } satisfies Record<string, readonly AdminRole[]>;
 
 export type RoleMatrixKey = keyof typeof ROLE_MATRIX;
@@ -57,6 +60,9 @@ export const DASHBOARD_WIDGETS = {
   lowStock: ['OWNER', 'OPS'] as const,
   returnsPending: ['OWNER', 'OPS'] as const,
   topProducts: ['OWNER', 'OPS'] as const,
+
+  // Sprint 12 — Whats360 device health (M1 single-number posture, ADR-063 + R3-v2).
+  whats360Status: ['OWNER', 'OPS'] as const,
 
   // B2B / sales-rep queues — OWNER + SALES_REP.
   b2bPendingApplications: ['OWNER', 'SALES_REP'] as const,

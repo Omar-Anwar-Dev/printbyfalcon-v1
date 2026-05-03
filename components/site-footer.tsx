@@ -31,6 +31,10 @@ export async function SiteFooter() {
 
   const legalLinks = [
     {
+      href: '/feedback',
+      label: isAr ? 'شاركنا رأيك' : 'Feedback',
+    },
+    {
       href: '/contact',
       label: isAr ? 'تواصل معنا' : 'Contact',
     },

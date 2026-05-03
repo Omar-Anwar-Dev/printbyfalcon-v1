@@ -8,6 +8,7 @@ import { productImageUrl } from '@/lib/storage/paths';
 import { getFreeShipThresholds } from '@/lib/settings/shipping';
 import { getCodPolicy } from '@/lib/settings/cod';
 import { getVatRate } from '@/lib/settings/vat';
+import { isPaymobEnabled } from '@/lib/payments/feature-flags';
 import { CheckoutForm } from '@/components/checkout/checkout-form';
 import type { Governorate } from '@prisma/client';
 
@@ -216,6 +217,7 @@ export default async function CheckoutPage({
           globalThresholds={thresholds}
           codPolicy={codPolicy}
           vatRatePercent={vat.percent}
+          paymobEnabled={isPaymobEnabled()}
         />
       </div>
     </main>

@@ -92,4 +92,56 @@ describe('checkProductionEnv', () => {
       expect(result.errors.length).toBeGreaterThanOrEqual(2);
     }
   });
+
+  // ADR-064 — M1 launches COD-only; PAYMOB_* envs are conditionally required.
+  it('passes COD-only prod boot without PAYMOB_* when PAYMENTS_PAYMOB_ENABLED=false', () => {
+    const env: NodeJS.ProcessEnv = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://user:pass@host/db',
+      APP_URL: 'https://printbyfalcon.com',
+      WHATS360_TOKEN: 'tok',
+      WHATS360_INSTANCE_ID: 'inst',
+      WHATS360_WEBHOOK_SECRET: 'wh',
+      PAYMENTS_PAYMOB_ENABLED: 'false',
+    };
+    expect(checkProductionEnv(env)).toEqual({ ok: true });
+  });
+
+  it('still fails on COD-only boot if a non-Paymob required var is missing', () => {
+    const env: NodeJS.ProcessEnv = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://user:pass@host/db',
+      APP_URL: 'https://printbyfalcon.com',
+      WHATS360_TOKEN: 'tok',
+      WHATS360_INSTANCE_ID: 'inst',
+      // WHATS360_WEBHOOK_SECRET intentionally absent
+      PAYMENTS_PAYMOB_ENABLED: 'false',
+    };
+    const result = checkProductionEnv(env);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContain(
+        'WHATS360_WEBHOOK_SECRET is required in production but is not set',
+      );
+    }
+  });
+
+  it('requires PAYMOB_* by default (flag unset = enabled)', () => {
+    const env: NodeJS.ProcessEnv = {
+      NODE_ENV: 'production',
+      DATABASE_URL: 'postgres://user:pass@host/db',
+      APP_URL: 'https://printbyfalcon.com',
+      WHATS360_TOKEN: 'tok',
+      WHATS360_INSTANCE_ID: 'inst',
+      WHATS360_WEBHOOK_SECRET: 'wh',
+      // PAYMOB_* intentionally absent
+    };
+    const result = checkProductionEnv(env);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toContain(
+        'PAYMOB_API_KEY is required in production but is not set',
+      );
+    }
+  });
 });

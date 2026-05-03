@@ -1,11 +1,11 @@
 # Print By Falcon — Project Progress
 
 ## Status
-- **Current milestone:** **M0 reached** (Internal demo). Sprints 4 + 5 + 6 + 7 + 8 + 9 + 10 **all live in production** (confirmed by owner 2026-04-23). **Sprint 11 dev-track complete** in worktree `claude/priceless-boyd-432d48` — awaiting review + merge → staging deploy. M1 target remains end of Sprint 12.
-- **Current sprint:** **Sprint 11 dev-track COMPLETE** ✅ — 6 of 10 exit criteria fully green; remaining 4 are ops-track (Lighthouse/k6 runs, backup drill, live merchant switchover, DNS) with all harnesses + docs + checklist shipped in [docs/m1-readiness.md](m1-readiness.md). **Sprint 11 ops-track + Sprint 12 (soft launch)** still pending.
-- **Last updated:** 2026-04-23 — Sprint 11 dev-track close-out (single dense session).
-- **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint).
-- **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 6 deploy confirmed at Sprint 7 kickoff.
+- **Current milestone:** Sprints 1-11 dev-track complete + multiple polish passes (PRs #44–#65 + 2026-04-30 local-host QA). **Sprint 12 (soft launch + closed beta → M1) in progress** — dev tooling shipped 2026-05-03 in worktree `claude/kind-knuth-23348b`. Ops-track execution (production deploy, tester outreach, daily monitoring, bug-fix cycles) is owner-driven over the next ~2 weeks of calendar time.
+- **Current sprint:** **Sprint 12 — Soft Launch + Closed Beta → M1** — kickoff resolutions logged below; dev tooling (Paymob feature flag, Whats360 widget, /feedback page + admin review, M1 check script, three docs) shipped this session. M1 launches **COD-only** (Paymob deferred per ADR-064). Soft-launch + bug-fix cycles execute on real-calendar time.
+- **Last updated:** 2026-05-03 — Sprint 12 kickoff + dev tooling pass (single dense session).
+- **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint, except Sprint 12 which runs on real-user calendar after this dev push).
+- **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 11 dev-track + Sprint 12 dev tooling deploy together as the M1 release.
 
 ## Completed Sprints
 
@@ -1600,5 +1600,83 @@ Resumed from prior session: re-set up the local dev stack (worktree, postgres `p
 ### Notes
 - Production credentials are still gated by env. Local dev mode (no `PAYMOB_INTEGRATION_ID_FAWRY`) routes Fawry through the same dev-stub as card, so the next env wiring step is purely "set `PAYMOB_INTEGRATION_ID_FAWRY` in `.env.production`" (already in `.env.production.example`). No webhook changes needed — Paymob normalizes both card and Fawry callbacks into the same `/api/webhooks/paymob` shape (per ADR-025).
 - The QA sweep otherwise found no regressions in the storefront / admin / B2B portal post-Sprint-11. All previously-flagged owner punch-list items (PRs #44–#62) verified working in local repro.
+
+---
+
+## Sprint 12 — Soft Launch + Closed Beta → M1 — IN PROGRESS (kickoff 2026-05-03)
+
+### Sprint 12 kickoff resolutions (2026-05-03)
+
+Owner answered the five prerequisite questions on session start:
+
+1. **Catalog data:** 132 real SKUs ready as CSV (smaller than the planned 500–2000 — adapt acceptance criterion to "real catalog imported").
+2. **Live Paymob:** still in merchant review at Egypt Paymob → **M1 launches COD-only** (R15 materializes; accepted). Paymob switches on via in-place env-var flip when approval lands → ADR-064.
+3. **Whats360 device:** scanned to `+201116527773` (sales line) — **single number for sales + OTP + order notifications**. Owner confirmed deliberate decision (operational simplicity) → ADR-063.
+4. **Privacy/Terms lawyer review:** done. The "REVIEW REQUIRED BEFORE M1" banners were already removed during the ADR-059 polish pass; no further code change.
+5. **Friendly testers:** owner has the list of 5 B2C + 3 B2B; outreach is owner-driven during the soft-launch window using the templates in [docs/tester-onboarding.md](tester-onboarding.md).
+
+**Sprint shape:** unlike Sprints 1-11's single-dense-session pattern, Sprint 12's substance is launch execution — production deploy + real-user testing + reactive bug fixes. The dev-tooling pass below ships in one session; the soft-launch unfolds on calendar time over the next ~2 weeks.
+
+### Dev tooling shipped (2026-05-03)
+
+Single dense session in worktree `claude/kind-knuth-23348b`. All changes typecheck + lint + vitest clean.
+
+#### Decisions logged this sprint
+- **ADR-063** [2026-05-03] Whats360 device runs on the sales line `+201116527773` — one WhatsApp number for sales + OTP + order notifications. Operational guardrails (admin device-status widget + opt-out word-equality + OTP-bypass per ADR-057) make it safe enough for closed beta.
+- **ADR-064** [2026-05-03] M1 launches COD-only via the new `PAYMENTS_PAYMOB_ENABLED` server-side feature flag. Paymob switchover is a single `.env.production` env change + redeploy when merchant approval lands — no code change.
+
+#### Paymob feature flag (ADR-064)
+- [x] **`isPaymobEnabled()`** helper in [lib/payments/feature-flags.ts](../lib/payments/feature-flags.ts) — default `true`; explicit `=false` opts into COD-only. Default preserves staging UX (no env edit needed).
+- [x] **env-check honors the flag** — PAYMOB_API_KEY / PAYMOB_HMAC_SECRET / PAYMOB_INTEGRATION_ID_CARD are now in a `REQUIRED_WHEN_PAYMOB_ENABLED` set; when the flag is `false`, env-check stops requiring them. 3 new vitest cases covering COD-only posture + still-required non-Paymob keys + flag-unset default.
+- [x] **Checkout form** [components/checkout/checkout-form.tsx](../components/checkout/checkout-form.tsx) accepts `paymobEnabled: boolean` prop. When false: hides PAYMOB_CARD + PAYMOB_FAWRY radios; suppresses the "COD unavailable → flip to PAYMOB_CARD" auto-switch; disables submit + shows a "no payment method" error in the COD-unavailable-zone case. Two new error strings (AR + EN) for `checkout.paymob_disabled` and `checkout.no_payment_method`.
+- [x] **Server action** [createOrderAction](../app/actions/checkout.ts) — defense-in-depth gate: rejects PAYMOB_CARD / PAYMOB_FAWRY submissions with `checkout.paymob_disabled` when the flag is off, regardless of client tampering.
+- [x] **`.env.production.example`** + **`.env.staging.example`** — flag documented inline; production defaults to `false` for the M1 posture, staging defaults to `true` to preserve sandbox-Paymob exercise.
+
+#### Whats360 device-status widget (ADR-063 mitigation)
+- [x] **Server action** [getWhats360DeviceStatusAction](../app/actions/admin-whats360.ts) — admin-gated (OWNER + OPS via new `whats360Status` `DASHBOARD_WIDGETS` entry). Wraps the existing `getDeviceStatus()` helper from `lib/whatsapp.ts`.
+- [x] **Client widget** [components/admin/whats360-status-widget.tsx](../components/admin/whats360-status-widget.tsx) — polls every 60 s; renders 4 states (loading / connected / disconnected / probe-failed) with operator-actionable copy; bilingual; dot indicator pulses while loading.
+- [x] **Mounted on /admin home** above the queues row, gated by `canSeeWidget(role, 'whats360Status')`.
+
+#### Closed-beta feedback channel (S12-D2-T3)
+- [x] **Schema** — new `Feedback` model + `FeedbackCategory` (BUG / UX / FEATURE_REQUEST / PRAISE / OTHER) and `FeedbackStatus` (NEW / REVIEWING / ACTIONED / DISMISSED) enums. Captures userId (nullable for guests), userType, locale, contactName, contactValue, message, pathname, userAgent, status, adminNote, reviewedAt, reviewedById. Indexed on (status, createdAt) + (category, createdAt) + createdAt.
+- [x] **Rate limit** — new `RATE_LIMIT_RULES.feedback` rule (5/IP/hour) wired into `submitFeedbackAction`.
+- [x] **Server actions** [app/actions/feedback.ts](../app/actions/feedback.ts) — `submitFeedbackAction` (anonymous-safe, rate-limited, captures user if signed in) + `updateFeedbackStatusAction` (OWNER+OPS via new `ROLE_MATRIX.FEEDBACK` entry).
+- [x] **Public form** at [/feedback](../app/[locale]/feedback/page.tsx) + thanks page at [/feedback/thanks](../app/[locale]/feedback/thanks/page.tsx) — bilingual, RTL-aware, prefilled contact for signed-in users, 5 category radios.
+- [x] **Admin review surface** at [/admin/feedback](../app/[locale]/admin/feedback/page.tsx) (list with status + category filters, 30/page) + [/admin/feedback/[id]](../app/[locale]/admin/feedback/[id]/page.tsx) (detail with full triage panel — status workflow + admin note + reviewer attribution).
+- [x] **Triage panel** [components/admin/feedback-triage-panel.tsx](../components/admin/feedback-triage-panel.tsx) — bilingual; saves status + admin note; shows last-saved timestamp.
+- [x] **Footer link** to `/feedback` added to [components/site-footer.tsx](../components/site-footer.tsx) so testers can find the form from any page.
+- [x] **Admin nav entry** added to `getAdminNavGroups` (Customers group, OWNER+OPS) with new `message-square` icon mapping.
+
+#### Pre-deploy go/no-go script
+- [x] **`scripts/m1-check.ts`** — TS script runnable via `npm run m1:check [-- --env path] [-- --url URL]`. Static checks: prisma schema present, env-file parse + `checkProductionEnv` validation, CHANGEME placeholder detection. Live checks: `/api/health`, `/ar` storefront, `/ar/products`, `/ar/admin` gate redirect, `/sitemap.xml`, `/ar/feedback`, security headers (CSP + HSTS + nosniff + referrer). Color-coded output, summary, exit 1 on any FAIL.
+- [x] **npm script** `m1:check` registered in `package.json`.
+- [x] **Self-test** — `npm run m1:check` (no args) → 1 PASS (schema). `npm run m1:check -- --env .env.production.example` correctly catches both placeholder values + missing Whats360 keys → exit 1.
+
+#### Documentation
+- [x] **[docs/tester-onboarding.md](tester-onboarding.md)** — bilingual welcome message templates (B2C + B2B), per-tester onboarding checklist, day-by-day support cadence, end-of-beta close-out copy, post-M1 Paymob switch-on procedure.
+- [x] **[docs/daily-monitoring.md](daily-monitoring.md)** — three daily sweep playbooks (morning / afternoon / evening), weekly Thursday review template, escalation paths for 7 specific failure modes, pre-flight before each production deploy, end-of-M1 final stability sweep.
+- [x] **[docs/m2-launch-plan.md](m2-launch-plan.md)** — Definition of Done for M2 (7 items), 7 buffer-period workstreams (catalog growth, Paymob switch-on, sales training, paid-ad readiness, support scaling, off-site backup decision, CSP tightening), launch-day procedure, M2+ first month posture, v1.1 roadmap reference, M2-specific risks, owner sign-off questions.
+- [x] **[docs/m1-readiness.md](m1-readiness.md)** — rewritten to reflect the COD-only posture (item #2 deferred to post-M1 in-place flip), Whats360 single-number decision (item #3), banners-already-removed (item #15 ✅), 132-SKU catalog reality (item #17), release tag standardised on `v1.0.0-mvp` (was `v0.12.0-m1` in the older draft). Added Sprint 12 dev-tooling sub-section to dev-track sign-off.
+
+### Sprint 12 Exit Criteria — dev-track status
+
+Mapped to the 7 criteria in `docs/implementation-plan.md` line 809-816, split into dev (this session) vs ops (owner-driven over calendar):
+
+| # | Criterion | Dev | Ops |
+|---|---|---|---|
+| 1 | Production live + stable; error rate <1%; uptime >99% over the sprint | Tooling ✅ ([daily-monitoring.md](daily-monitoring.md)) | Run on prod ⏳ |
+| 2 | 8 friendly testers onboarded (5 B2C + 3 B2B); processing real orders | Templates + checklist ✅ ([tester-onboarding.md](tester-onboarding.md)) | Outreach ⏳ |
+| 3 | All 9 MVP features acceptance-criteria-met in production | M1 check script ✅ | Verify on prod ⏳ |
+| 4 | Catalog populated with 500+ live SKUs | **Recalibrated to 132 SKUs** (Sprint 12 kickoff #1) | Import to prod ⏳ |
+| 5 | Live merchant accounts processing real payments | **Recalibrated: COD-only at M1; Paymob post-approval flip** (ADR-064) | Flip post-approval ⏳ |
+| 6 | All 5 success metrics ready to track from M1 baseline | Daily-monitoring playbook covers this ✅ | Owner tracks ⏳ |
+| 7 | M2 launch plan drafted | ✅ ([m2-launch-plan.md](m2-launch-plan.md)) | Owner reviews 5 sign-off questions ⏳ |
+
+**Dev-track sign-off: COMPLETE 2026-05-03** — all 7 dev criteria green in this worktree. Ops-track checklist consolidated in [m1-readiness.md](m1-readiness.md).
+
+### Notes / parking lot
+- **Footer broken-link cleanup** — the site footer still references `/contact`, `/shipping`, `/returns` which are 404s (noted in ADR-059 consequences). Out of Sprint 12 scope; v1.1 should ship those pages or remove the links. Sprint 12 added `/feedback` (a real page) to the footer.
+- **Existing tests still green** — feature-flag changes added 3 new env-check cases. Final vitest count documented in next session's verification.
+- **B2B Pay Now under COD-only posture** — B2B "Pay Now" goes through Paymob; under the COD-only flag, B2B customers see only Submit-for-Review + COD (per zone availability). Tested via the same form path; documented in ADR-064.
 
 

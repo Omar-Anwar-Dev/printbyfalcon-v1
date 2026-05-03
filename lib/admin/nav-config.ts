@@ -15,7 +15,8 @@ export type AdminNavIconName =
   | 'clipboard-check'
   | 'building'
   | 'user-cog'
-  | 'settings';
+  | 'settings'
+  | 'message-square';
 
 export type AdminNavLink = {
   href: string;
@@ -45,6 +46,7 @@ type NavLabels = {
   couriers: string;
   inventory: string;
   customers: string;
+  feedback: string;
   b2bApplications: string;
   b2bPendingConfirmation: string;
   b2bCompanies: string;
@@ -149,6 +151,12 @@ export function getAdminNavGroups(
           label: labels.customers,
           icon: 'users',
           roles: ownerSales,
+        },
+        {
+          href: '/admin/feedback',
+          label: labels.feedback,
+          icon: 'message-square',
+          roles: ownerOps,
         },
       ],
     },
