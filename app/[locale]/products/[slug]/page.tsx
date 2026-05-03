@@ -19,6 +19,8 @@ import { resolveViewerPrices } from '@/lib/pricing/storefront';
 import { getOptionalUser } from '@/lib/auth';
 import { getPricingContextForUser } from '@/lib/pricing/context';
 import { resolvePrice } from '@/lib/pricing/resolve';
+import { JsonLd } from '@/components/seo/json-ld';
+import { buildBreadcrumbList } from '@/lib/seo/structured-data';
 
 // Dynamic so B2B tier pricing + exact stock qty render per viewer.
 export const dynamic = 'force-dynamic';
@@ -36,13 +38,32 @@ export async function generateMetadata({
   if (!product) return {};
   const isAr = locale === 'ar';
   const name = isAr ? product.nameAr : product.nameEn;
-  const description =
-    (isAr ? product.descriptionAr : product.descriptionEn).slice(0, 200) ||
-    (isAr ? product.nameAr : product.nameEn);
+  const brandName = isAr ? product.brand.nameAr : product.brand.nameEn;
+  const priceEgp = Number(product.basePriceEgp.toString()).toFixed(0);
+  const priceLabel = isAr ? `${priceEgp} ج.م` : `${priceEgp} EGP`;
+  // Title is the most weighted SEO signal — include brand + price + a value cue.
+  // Keep under ~60 chars total when rendered (template adds " | Print By Falcon").
+  const title = isAr ? `${name} — ${priceLabel}` : `${name} — ${priceLabel}`;
+  // Description gets brand + price + delivery + USP. Keep under 160 chars.
+  const baseDescription = (isAr ? product.descriptionAr : product.descriptionEn)
+    .slice(0, 110)
+    .trim();
+  const description = isAr
+    ? `${baseDescription} السعر ${priceLabel}. شحن لكل محافظات مصر، الدفع عند الاستلام.`
+    : `${baseDescription} Priced at ${priceLabel}. Nationwide Egypt shipping, cash on delivery.`;
   const image = product.images[0]?.medium;
   return {
-    title: name,
+    title,
     description,
+    keywords: [
+      name,
+      brandName,
+      product.sku,
+      isAr ? 'طابعة' : 'printer',
+      isAr ? 'تونر' : 'toner',
+      isAr ? 'حبر' : 'ink',
+      isAr ? 'مصر' : 'Egypt',
+    ],
     alternates: {
       canonical: `${BASE_URL}/${locale}/products/${product.slug}`,
       languages: {
@@ -120,7 +141,7 @@ export default async function ProductDetailPage({
       ? await getAvailableQtyExact(product.id)
       : null;
 
-  const jsonLd = {
+  const productSchema = {
     '@context': 'https://schema.org',
     '@type': 'Product',
     sku: product.sku,
@@ -145,13 +166,20 @@ export default async function ProductDetailPage({
     },
   };
 
+  // Sprint 13 — BreadcrumbList for the SERP breadcrumb trail (lifts CTR).
+  const breadcrumbSchema = buildBreadcrumbList([
+    { name: t('nav.home'), path: `/${locale}` },
+    { name: t('nav.catalog'), path: `/${locale}/products` },
+    {
+      name: categoryName,
+      path: `/${locale}/categories/${product.category.slug}`,
+    },
+    { name, path: `/${locale}/products/${product.slug}` },
+  ]);
+
   return (
     <main className="container-page py-8 md:py-12">
-      <script
-        type="application/ld+json"
-        // eslint-disable-next-line react/no-danger -- JSON.stringify of a server-built object; schema.org requires a raw <script> payload
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
+      <JsonLd data={[productSchema, breadcrumbSchema]} id="product-schema" />
       <nav
         aria-label={isAr ? 'المسار' : 'Breadcrumbs'}
         className="mb-6 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
