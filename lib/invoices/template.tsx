@@ -22,6 +22,12 @@
  * Layout inputs are deterministic — see `buildInvoiceData()`. ADR-034
  * regenerates PDF on every download (no files on disk).
  */
+// Explicit React import: Next.js's SWC auto-injects the JSX runtime in app
+// code, but standalone scripts (e.g. scripts/smoke-invoice-render.tsx via
+// tsx + esbuild) use the classic JSX transform and need React in scope.
+// Importing it here keeps the template renderable in both pipelines.
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import * as React from 'react';
 import {
   Document,
   Image,
