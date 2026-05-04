@@ -2,9 +2,12 @@ import { getTranslations } from 'next-intl/server';
 import { requireAdmin } from '@/lib/auth';
 import {
   getBrandOptions,
+  getBrandResolveData,
   getCategoryOptions,
+  getCategoryResolveData,
 } from '@/lib/catalog/admin-options';
 import { ProductForm } from '@/components/admin/product-form';
+import { buildPasteLabels } from '@/lib/admin/paste-labels';
 
 export default async function NewProductPage({
   params,
@@ -16,10 +19,13 @@ export default async function NewProductPage({
   const t = await getTranslations();
   const isAr = locale === 'ar';
 
-  const [brands, categories] = await Promise.all([
-    getBrandOptions(locale),
-    getCategoryOptions(locale),
-  ]);
+  const [brands, categories, brandsResolve, categoriesResolve] =
+    await Promise.all([
+      getBrandOptions(locale),
+      getCategoryOptions(locale),
+      getBrandResolveData(),
+      getCategoryResolveData(),
+    ]);
 
   return (
     <div className="container-page max-w-5xl py-10 md:py-14">
@@ -29,7 +35,10 @@ export default async function NewProductPage({
       <ProductForm
         brands={brands}
         categories={categories}
+        brandsResolve={brandsResolve}
+        categoriesResolve={categoriesResolve}
         cancelHref="/admin/products"
+        pasteLabels={buildPasteLabels(isAr)}
         labels={{
           sku: t('admin.catalog.products.sku'),
           brand: t('admin.catalog.products.brand'),

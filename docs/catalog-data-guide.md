@@ -1,21 +1,22 @@
 # Catalog Data Guide — Print By Falcon
 
-_Last updated: 2026-04-18 (Sprint 2, Day 8)_
+_Last updated: 2026-05-05 (Sprint 16 quick-fill panel)_
 
-This guide explains how catalog data (products, brands, categories, printer models, images) moves in and out of the system — day-to-day edits through the admin UI, plus the bulk CSV importer for onboarding and large updates.
+This guide explains how catalog data (products, brands, categories, printer models, images) moves in and out of the system — day-to-day edits through the admin UI, a single-product JSON quick-fill panel for fast manual entry, plus the bulk CSV importer for onboarding and large updates.
 
 Aimed at: the founder (Ahmed) and any data-entry person taking on catalog maintenance.
 
 ---
 
-## 1. The two channels
+## 1. The three channels
 
 | Channel | When to use | Tooling |
 |---|---|---|
-| **Admin UI** | Day-to-day edits: add a few SKUs, fix a name/price, upload images, archive discontinued items, manage categories, wire up printer compatibility. | Browser — `https://printbyfalcon.com/ar/admin` or `/en/admin` |
-| **CSV importer** | Initial catalog load, monthly large refresh, supplier price-list sync, migrating from spreadsheets. | Command line on the VPS — `npm run seed:catalog -- <file.csv>` |
+| **Admin UI (form)** | Day-to-day edits: fix a name/price, upload images, archive discontinued items, manage categories, wire up printer compatibility. | Browser — `https://printbyfalcon.com/ar/admin` or `/en/admin` |
+| **Admin UI (JSON paste)** | Adding a single new product fast, especially when ChatGPT already drafted the names/description/specs. Same form, just pre-filled in one shot. | Browser — same admin pages, "إدخال سريع بـ JSON" panel at top of product form. See §3.7. |
+| **CSV importer** | Initial catalog load, monthly large refresh, supplier price-list sync, 50+ products at once. | Command line on the VPS — `npm run seed:catalog -- <file.csv>` |
 
-Both channels write to the same tables. You can always start in CSV and then polish individual items in the UI.
+All three channels write to the same tables. You can start with CSV, polish individuals in the UI, or use JSON paste for one-off ChatGPT-generated entries.
 
 ---
 
@@ -89,6 +90,45 @@ Every create / edit / archive / delete writes an `AuditLog` row with `actor + ti
 - Checkbox list of all active printer models, grouped by brand.
 - Search box filters by model/brand name.
 - Press **Save** — wipes the product's existing compatibility links and writes the new set atomically. The storefront product detail page immediately shows the new "Compatible printers" panel.
+
+### 3.7 Quick-fill via JSON (Sprint 16, single-product fast lane)
+
+Sits collapsed at the top of every product create/edit page (`إدخال سريع بـ JSON` / `Quick-fill via JSON`). For when you've already drafted a product description with ChatGPT and don't want to copy-paste each field.
+
+**Workflow:**
+
+1. **Click "Copy ChatGPT prompt"** — copies a ready-made bilingual prompt to your clipboard (includes the JSON schema + the list of valid brand and category names from your live catalog).
+2. **Paste into ChatGPT** along with the product name / supplier link / spec sheet. ChatGPT returns a single JSON object.
+3. **Copy that JSON, click "Paste from clipboard"** (or paste manually into the textarea).
+4. **Click "Fill form"** — every recognised field populates, including bilingual specs.
+5. **Review** — the form is a normal form again. Tweak anything that looks off, upload images, pick compatible printers, then **Save** like usual.
+
+**Important:**
+
+- Apply does **not** save. It only fills client state. You always click Save manually.
+- Images and Compatible-printers are **out of scope** — those still need real uploads / the multi-select picker.
+- `brand` and `category` accept a **name** (Arabic or English) or a slug; the panel resolves to the right id. If a name doesn't match exactly, you'll see suggestions inline.
+- A green "Applied:" panel lists every field that was filled. A red "Issues:" panel lists what failed. Both can show at once.
+- For power users: `window.__pbfFillProduct(jsonString)` is exposed in DevTools — useful when scripting bulk paste from a saved JSON file.
+
+**Console one-liner example:**
+
+```js
+__pbfFillProduct(JSON.stringify({
+  sku: "BROTHER-DCP-T530DW",
+  brand: "Brother",
+  category: "Ink Tank Printers",
+  nameAr: "طابعة Brother DCP-T530DW",
+  nameEn: "Brother DCP-T530DW",
+  basePriceEgp: 8200,
+  authenticity: "GENUINE",
+  condition: "NEW",
+  warranty: "ضمان سنة رسمي",
+  status: "ACTIVE"
+}));
+```
+
+This is the day-to-day fastest path for **single-product entry**. For 50+ products at once, the CSV importer (§4) is still faster.
 
 ---
 
