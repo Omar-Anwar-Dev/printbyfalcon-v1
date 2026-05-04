@@ -45,6 +45,11 @@ export function ProductCard({
             {isAr ? 'متوافق' : 'Compatible'}
           </span>
         ) : null}
+        {product.condition === 'USED' ? (
+          <span className="absolute end-2 top-2 rounded-full border border-warning/30 bg-warning-soft/95 px-2 py-0.5 text-[11px] font-semibold text-warning backdrop-blur">
+            {isAr ? 'مستعمل' : 'Used'}
+          </span>
+        ) : null}
       </div>
       <div className="flex flex-1 flex-col gap-1.5 p-4">
         <p className="text-[11px] font-medium uppercase tracking-[0.08em] text-muted-foreground">

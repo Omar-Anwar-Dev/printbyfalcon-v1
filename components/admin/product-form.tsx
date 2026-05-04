@@ -23,12 +23,24 @@ type Labels = {
   authenticity: string;
   genuine: string;
   compatible: string;
+  /// Sprint 14
+  condition: string;
+  conditionNew: string;
+  conditionUsed: string;
+  warranty: string;
+  warrantyHelp: string;
+  conditionNote: string;
+  conditionNoteHelp: string;
   nameAr: string;
   nameEn: string;
   descriptionAr: string;
   descriptionEn: string;
   specs: string;
   specsHelp: string;
+  /// Sprint 14
+  specsAr: string;
+  specsEn: string;
+  specsLegacy: string;
   addSpec: string;
   basePrice: string;
   vatExempt: string;
@@ -85,16 +97,30 @@ export function ProductForm({
       descriptionAr: '',
       descriptionEn: '',
       specs: {},
+      specsAr: {},
+      specsEn: {},
       basePriceEgp: 0,
       vatExempt: false,
       returnable: true,
       authenticity: 'GENUINE',
+      condition: 'NEW',
+      warranty: '',
+      conditionNote: '',
       status: 'ACTIVE',
     },
   );
   const [specRows, setSpecRows] = useState<SpecRow[]>(() =>
     specsObjectToRows(initial?.specs ?? {}),
   );
+  const [specArRows, setSpecArRows] = useState<SpecRow[]>(() =>
+    specsObjectToRows(initial?.specsAr ?? {}),
+  );
+  const [specEnRows, setSpecEnRows] = useState<SpecRow[]>(() =>
+    specsObjectToRows(initial?.specsEn ?? {}),
+  );
+  /// Sprint 14 — Specs editor active tab. Default = AR (matches owner's primary
+  /// market) but the form is symmetric — switch tabs to edit the other locale.
+  const [specsTab, setSpecsTab] = useState<'ar' | 'en' | 'legacy'>('ar');
   const [error, setError] = useState<string | null>(null);
 
   const canSubmit = useMemo(
@@ -109,6 +135,8 @@ export function ProductForm({
       const payload: ProductInput = {
         ...state,
         specs: rowsToSpecsObject(specRows),
+        specsAr: rowsToSpecsObject(specArRows),
+        specsEn: rowsToSpecsObject(specEnRows),
         slug: state.slug?.trim() ? state.slug.trim() : undefined,
       };
       const res = id
@@ -259,6 +287,22 @@ export function ProductForm({
             <option value="COMPATIBLE">{labels.compatible}</option>
           </Select>
         </div>
+        <div className="space-y-2">
+          <Label htmlFor="condition">{labels.condition}</Label>
+          <Select
+            id="condition"
+            value={state.condition}
+            onChange={(e) =>
+              setState((s) => ({
+                ...s,
+                condition: e.target.value as ProductInput['condition'],
+              }))
+            }
+          >
+            <option value="NEW">{labels.conditionNew}</option>
+            <option value="USED">{labels.conditionUsed}</option>
+          </Select>
+        </div>
         <div className="flex items-end gap-2">
           <input
             id="vat"
@@ -285,55 +329,86 @@ export function ProductForm({
         </div>
       </div>
 
+      {/* Sprint 14 — warranty (always visible) + conditionNote (only for USED). */}
+      <div className="grid gap-4 md:grid-cols-2">
+        <div className="space-y-2">
+          <Label htmlFor="warranty">{labels.warranty}</Label>
+          <Input
+            id="warranty"
+            value={state.warranty ?? ''}
+            onChange={(e) =>
+              setState((s) => ({ ...s, warranty: e.target.value }))
+            }
+            placeholder={labels.warrantyHelp}
+            maxLength={160}
+          />
+          <p className="text-xs text-muted-foreground">{labels.warrantyHelp}</p>
+        </div>
+        {state.condition === 'USED' ? (
+          <div className="space-y-2">
+            <Label htmlFor="conditionNote">{labels.conditionNote}</Label>
+            <Input
+              id="conditionNote"
+              value={state.conditionNote ?? ''}
+              onChange={(e) =>
+                setState((s) => ({ ...s, conditionNote: e.target.value }))
+              }
+              placeholder={labels.conditionNoteHelp}
+              maxLength={280}
+            />
+            <p className="text-xs text-muted-foreground">
+              {labels.conditionNoteHelp}
+            </p>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Sprint 14 — bilingual specs editor with tabs. Legacy `specs` kept
+          accessible under a third tab for backward compatibility (existing
+          rows that haven't been migrated). The storefront prefers
+          specsAr/specsEn and falls back to legacy when locale-specific is empty. */}
       <fieldset className="rounded-md border p-4">
         <legend className="px-2 text-sm font-medium">{labels.specs}</legend>
         <p className="mb-3 text-xs text-muted-foreground">{labels.specsHelp}</p>
-        <div className="space-y-2">
-          {specRows.map((row, idx) => (
-            <div key={idx} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
-              <Input
-                placeholder="key"
-                value={row.key}
-                onChange={(e) =>
-                  setSpecRows((rs) =>
-                    rs.map((r, i) =>
-                      i === idx ? { ...r, key: e.target.value } : r,
-                    ),
-                  )
-                }
-              />
-              <Input
-                placeholder="value"
-                value={row.value}
-                onChange={(e) =>
-                  setSpecRows((rs) =>
-                    rs.map((r, i) =>
-                      i === idx ? { ...r, value: e.target.value } : r,
-                    ),
-                  )
-                }
-              />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() =>
-                  setSpecRows((rs) => rs.filter((_, i) => i !== idx))
-                }
-              >
-                ×
-              </Button>
-            </div>
+        <div className="mb-4 inline-flex rounded-md border bg-paper p-1 text-sm">
+          {(
+            [
+              { v: 'ar' as const, label: labels.specsAr },
+              { v: 'en' as const, label: labels.specsEn },
+              { v: 'legacy' as const, label: labels.specsLegacy },
+            ] as const
+          ).map((tab) => (
+            <button
+              key={tab.v}
+              type="button"
+              onClick={() => setSpecsTab(tab.v)}
+              className={`rounded px-3 py-1.5 text-xs font-medium transition-colors ${
+                specsTab === tab.v
+                  ? 'bg-foreground text-canvas'
+                  : 'text-muted-foreground hover:text-foreground'
+              }`}
+            >
+              {tab.label}
+            </button>
           ))}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => setSpecRows((rs) => [...rs, { key: '', value: '' }])}
-          >
-            + {labels.addSpec}
-          </Button>
         </div>
+        <SpecsEditor
+          rows={
+            specsTab === 'ar'
+              ? specArRows
+              : specsTab === 'en'
+                ? specEnRows
+                : specRows
+          }
+          setRows={
+            specsTab === 'ar'
+              ? setSpecArRows
+              : specsTab === 'en'
+                ? setSpecEnRows
+                : setSpecRows
+          }
+          addLabel={labels.addSpec}
+        />
       </fieldset>
 
       <div className="space-y-2">
@@ -367,5 +442,66 @@ export function ProductForm({
         </Button>
       </div>
     </form>
+  );
+}
+
+/**
+ * Sprint 14 — extracted key/value editor so the bilingual spec tabs share
+ * one renderer. Each tab swaps in a different `rows` / `setRows` pair.
+ */
+function SpecsEditor({
+  rows,
+  setRows,
+  addLabel,
+}: {
+  rows: SpecRow[];
+  setRows: React.Dispatch<React.SetStateAction<SpecRow[]>>;
+  addLabel: string;
+}) {
+  return (
+    <div className="space-y-2">
+      {rows.map((row, idx) => (
+        <div key={idx} className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+          <Input
+            placeholder="key"
+            value={row.key}
+            onChange={(e) =>
+              setRows((rs) =>
+                rs.map((r, i) =>
+                  i === idx ? { ...r, key: e.target.value } : r,
+                ),
+              )
+            }
+          />
+          <Input
+            placeholder="value"
+            value={row.value}
+            onChange={(e) =>
+              setRows((rs) =>
+                rs.map((r, i) =>
+                  i === idx ? { ...r, value: e.target.value } : r,
+                ),
+              )
+            }
+          />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setRows((rs) => rs.filter((_, i) => i !== idx))}
+          >
+            ×
+          </Button>
+        </div>
+      ))}
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={() => setRows((rs) => [...rs, { key: '', value: '' }])}
+      >
+        + {addLabel}
+      </Button>
+    </div>
   );
 }

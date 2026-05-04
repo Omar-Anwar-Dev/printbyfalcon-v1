@@ -15,6 +15,8 @@ type Selected = {
   brandIds: string[];
   categoryIds: string[];
   authenticity: 'GENUINE' | 'COMPATIBLE' | undefined;
+  /// Sprint 14 — undefined = "Any" (default).
+  condition: 'NEW' | 'USED' | undefined;
   priceMin: number | undefined;
   priceMax: number | undefined;
   inStockOnly: boolean;
@@ -41,6 +43,9 @@ const LABELS = {
     authenticity: 'الأصالة',
     genuine: 'أصلي',
     compatible: 'متوافق',
+    condition: 'حالة المنتج',
+    conditionNew: 'جديد',
+    conditionUsed: 'مستعمل',
     any: 'الكل',
     price: 'السعر (ج.م)',
     min: 'من',
@@ -57,6 +62,9 @@ const LABELS = {
     authenticity: 'Authenticity',
     genuine: 'Genuine',
     compatible: 'Compatible',
+    condition: 'Condition',
+    conditionNew: 'New',
+    conditionUsed: 'Used',
     any: 'Any',
     price: 'Price (EGP)',
     min: 'Min',
@@ -85,6 +93,9 @@ export function MobileFiltersButton(props: Props) {
   );
   const [authenticity, setAuthenticity] = useState<Selected['authenticity']>(
     selected.authenticity,
+  );
+  const [condition, setCondition] = useState<Selected['condition']>(
+    selected.condition,
   );
   const [priceMin, setPriceMin] = useState<string>(
     selected.priceMin != null ? String(selected.priceMin) : '',
@@ -119,6 +130,7 @@ export function MobileFiltersButton(props: Props) {
     if (brandIds.length) query.brand = brandIds.join(',');
     if (categoryIds.length) query.category = categoryIds.join(',');
     if (authenticity) query.auth = authenticity;
+    if (condition) query.condition = condition;
     if (priceMin.trim()) query.priceMin = priceMin.trim();
     if (priceMax.trim()) query.priceMax = priceMax.trim();
     if (inStockOnly) query.inStock = '1';
@@ -130,6 +142,7 @@ export function MobileFiltersButton(props: Props) {
     setBrandIds([]);
     setCategoryIds([]);
     setAuthenticity(undefined);
+    setCondition(undefined);
     setPriceMin('');
     setPriceMax('');
     setInStockOnly(false);
@@ -264,6 +277,39 @@ export function MobileFiltersButton(props: Props) {
                     onChange={() => setAuthenticity('COMPATIBLE')}
                   />
                   <span>{labels.compatible}</span>
+                </label>
+              </div>
+            </fieldset>
+
+            <fieldset>
+              <legend className="mb-2 font-medium">{labels.condition}</legend>
+              <div className="flex flex-col gap-1">
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="condition-mobile"
+                    checked={!condition}
+                    onChange={() => setCondition(undefined)}
+                  />
+                  <span>{labels.any}</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="condition-mobile"
+                    checked={condition === 'NEW'}
+                    onChange={() => setCondition('NEW')}
+                  />
+                  <span>{labels.conditionNew}</span>
+                </label>
+                <label className="flex cursor-pointer items-center gap-2">
+                  <input
+                    type="radio"
+                    name="condition-mobile"
+                    checked={condition === 'USED'}
+                    onChange={() => setCondition('USED')}
+                  />
+                  <span>{labels.conditionUsed}</span>
                 </label>
               </div>
             </fieldset>

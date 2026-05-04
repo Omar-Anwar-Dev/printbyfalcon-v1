@@ -49,12 +49,24 @@ export const productSchema = z.object({
   nameEn: nameField,
   descriptionAr: descriptionField,
   descriptionEn: descriptionField,
-  // Specs come from a key/value editor; serialize to JSON before dispatch.
+  // Legacy specs come from a single key/value editor; kept for backward compat
+  // with rows that haven't been migrated to specsAr/specsEn yet.
   specs: z.record(z.string(), z.string()).default({}),
+  /// Sprint 14 — Arabic-locale specs.
+  specsAr: z.record(z.string(), z.string()).default({}),
+  /// Sprint 14 — English-locale specs.
+  specsEn: z.record(z.string(), z.string()).default({}),
   basePriceEgp: z.coerce.number().nonnegative().max(10_000_000),
   vatExempt: z.coerce.boolean().default(false),
   returnable: z.coerce.boolean().default(true),
   authenticity: z.enum(['GENUINE', 'COMPATIBLE']).default('GENUINE'),
+  /// Sprint 14 — defaults to NEW; flip to USED for pre-owned listings.
+  condition: z.enum(['NEW', 'USED']).default('NEW'),
+  /// Sprint 14 — free-form warranty text (e.g. "ضمان سنة" / "ضمان شهر" /
+  /// "بدون ضمان"). Empty string treated as "no warranty info".
+  warranty: z.string().trim().max(160).default(''),
+  /// Sprint 14 — free-form condition note for USED listings only.
+  conditionNote: z.string().trim().max(280).default(''),
   status: z.enum(['ACTIVE', 'ARCHIVED']).default('ACTIVE'),
 });
 export type ProductInput = z.infer<typeof productSchema>;

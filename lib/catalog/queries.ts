@@ -4,6 +4,7 @@
  * public surfaces; admin uses Prisma directly with full access.
  */
 import { prisma } from '@/lib/db';
+import type { ProductCondition } from '@prisma/client';
 import { productImageUrl } from '@/lib/storage/paths';
 import { getStockStatus, type StockStatus } from '@/lib/catalog/stock';
 import { getGlobalLowStockThreshold } from '@/lib/settings/inventory';
@@ -20,6 +21,8 @@ export type ProductListItem = {
   nameEn: string;
   basePriceEgp: string;
   authenticity: 'GENUINE' | 'COMPATIBLE';
+  /// Sprint 14 — NEW or USED. Drives the "مستعمل" badge on cards/detail.
+  condition: ProductCondition;
   primaryImageUrl: string | null;
   brand: { nameAr: string; nameEn: string; slug: string };
   category: { nameAr: string; nameEn: string; slug: string };
@@ -44,12 +47,15 @@ export async function listActiveProducts({
   categoryId,
   brandSlug,
   categorySlug,
+  condition,
 }: {
   page?: number;
   sort?: ProductSort;
   categoryId?: string;
   brandSlug?: string;
   categorySlug?: string;
+  /// Sprint 14 — filter by condition (NEW / USED). Undefined = no filter.
+  condition?: ProductCondition;
 } = {}): Promise<{
   items: ProductListItem[];
   total: number;
@@ -62,6 +68,7 @@ export async function listActiveProducts({
   const where = {
     status: 'ACTIVE' as const,
     ...(categoryId ? { categoryId } : {}),
+    ...(condition ? { condition } : {}),
     ...(brandSlug
       ? { brand: { slug: brandSlug, status: 'ACTIVE' as const } }
       : { brand: { status: 'ACTIVE' as const } }),
@@ -101,6 +108,7 @@ export async function listActiveProducts({
     nameEn: p.nameEn,
     basePriceEgp: p.basePriceEgp.toString(),
     authenticity: p.authenticity,
+    condition: p.condition,
     primaryImageUrl: p.images[0]
       ? productImageUrl(p.id, 'medium', p.images[0].filename)
       : null,

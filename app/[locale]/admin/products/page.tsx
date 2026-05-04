@@ -20,6 +20,8 @@ export default async function AdminProductsPage({
     brand?: string;
     category?: string;
     authenticity?: string;
+    /// Sprint 14 — admin filter for NEW vs USED listings.
+    condition?: string;
   }>;
 }) {
   await requireAdmin(['OWNER', 'OPS']);
@@ -44,6 +46,9 @@ export default async function AdminProductsPage({
   if (sp.category) where.categoryId = sp.category;
   if (sp.authenticity === 'GENUINE' || sp.authenticity === 'COMPATIBLE') {
     where.authenticity = sp.authenticity;
+  }
+  if (sp.condition === 'NEW' || sp.condition === 'USED') {
+    where.condition = sp.condition;
   }
 
   const [products, brands, categories] = await Promise.all([
@@ -132,6 +137,15 @@ export default async function AdminProductsPage({
             {t('admin.catalog.products.compatible')}
           </option>
         </select>
+        <select
+          name="condition"
+          defaultValue={sp.condition ?? ''}
+          className="flex h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+        >
+          <option value="">{isAr ? 'الحالة' : 'Condition'}</option>
+          <option value="NEW">{isAr ? 'جديد' : 'New'}</option>
+          <option value="USED">{isAr ? 'مستعمل' : 'Used'}</option>
+        </select>
         <div className="col-span-2 flex gap-2">
           <Button type="submit" size="sm">
             {t('admin.common.search')}
@@ -171,6 +185,9 @@ export default async function AdminProductsPage({
               <th className="p-3 text-start">
                 {t('admin.catalog.products.basePrice')}
               </th>
+              <th className="p-3 text-start">
+                {isAr ? 'الحالة' : 'Condition'}
+              </th>
               <th className="p-3 text-start">{t('admin.common.status')}</th>
               <th className="p-3 text-end">{t('admin.common.actions')}</th>
             </tr>
@@ -179,7 +196,7 @@ export default async function AdminProductsPage({
             {products.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="p-6 text-center text-muted-foreground"
                 >
                   {t('admin.common.noRows')}
@@ -219,6 +236,23 @@ export default async function AdminProductsPage({
                 </td>
                 <td className="p-3 font-mono text-xs">
                   {Number(p.basePriceEgp).toFixed(2)}
+                </td>
+                <td className="p-3">
+                  <span
+                    className={`rounded px-2 py-0.5 text-xs font-medium ${
+                      p.condition === 'USED'
+                        ? 'bg-warning-soft text-warning'
+                        : 'bg-paper text-muted-foreground'
+                    }`}
+                  >
+                    {p.condition === 'USED'
+                      ? isAr
+                        ? 'مستعمل'
+                        : 'Used'
+                      : isAr
+                        ? 'جديد'
+                        : 'New'}
+                  </span>
                 </td>
                 <td className="p-3">
                   <span

@@ -15,6 +15,8 @@ type Selected = {
   brandIds: string[];
   categoryIds: string[];
   authenticity: 'GENUINE' | 'COMPATIBLE' | undefined;
+  /// Sprint 14 — undefined = "Any" (default), NEW or USED otherwise.
+  condition: 'NEW' | 'USED' | undefined;
   priceMin: number | undefined;
   priceMax: number | undefined;
   inStockOnly: boolean;
@@ -38,6 +40,9 @@ const LABELS = {
     authenticity: 'الأصالة',
     genuine: 'أصلي',
     compatible: 'متوافق',
+    condition: 'حالة المنتج',
+    conditionNew: 'جديد',
+    conditionUsed: 'مستعمل',
     price: 'السعر (ج.م)',
     min: 'من',
     max: 'إلى',
@@ -52,6 +57,9 @@ const LABELS = {
     authenticity: 'Authenticity',
     genuine: 'Genuine',
     compatible: 'Compatible',
+    condition: 'Condition',
+    conditionNew: 'New',
+    conditionUsed: 'Used',
     price: 'Price (EGP)',
     min: 'Min',
     max: 'Max',
@@ -82,6 +90,9 @@ export function SearchFiltersSidebar(props: Props) {
   const [authenticity, setAuthenticity] = useState<Selected['authenticity']>(
     selected.authenticity,
   );
+  const [condition, setCondition] = useState<Selected['condition']>(
+    selected.condition,
+  );
   const [priceMin, setPriceMin] = useState<string>(
     selected.priceMin != null ? String(selected.priceMin) : '',
   );
@@ -97,6 +108,7 @@ export function SearchFiltersSidebar(props: Props) {
     b: selected.brandIds,
     c: selected.categoryIds,
     a: selected.authenticity ?? '',
+    cond: selected.condition ?? '',
     pMin: selected.priceMin ?? '',
     pMax: selected.priceMax ?? '',
     s: selected.inStockOnly,
@@ -108,6 +120,7 @@ export function SearchFiltersSidebar(props: Props) {
     setBrandIds(selected.brandIds);
     setCategoryIds(selected.categoryIds);
     setAuthenticity(selected.authenticity);
+    setCondition(selected.condition);
     setPriceMin(selected.priceMin != null ? String(selected.priceMin) : '');
     setPriceMax(selected.priceMax != null ? String(selected.priceMax) : '');
     setInStockOnly(selected.inStockOnly);
@@ -121,10 +134,19 @@ export function SearchFiltersSidebar(props: Props) {
       brandIds.length > 0 ||
       categoryIds.length > 0 ||
       !!authenticity ||
+      !!condition ||
       priceMin.trim() !== '' ||
       priceMax.trim() !== '' ||
       inStockOnly,
-    [brandIds, categoryIds, authenticity, priceMin, priceMax, inStockOnly],
+    [
+      brandIds,
+      categoryIds,
+      authenticity,
+      condition,
+      priceMin,
+      priceMax,
+      inStockOnly,
+    ],
   );
 
   function toggleInArray(arr: string[], id: string): string[] {
@@ -143,6 +165,8 @@ export function SearchFiltersSidebar(props: Props) {
     const nextCategoryIds = overrides.categoryIds ?? categoryIds;
     const nextAuthenticity =
       'authenticity' in overrides ? overrides.authenticity : authenticity;
+    const nextCondition =
+      'condition' in overrides ? overrides.condition : condition;
     const nextPriceMin =
       'priceMin' in overrides
         ? overrides.priceMin != null
@@ -165,6 +189,7 @@ export function SearchFiltersSidebar(props: Props) {
     if (nextBrandIds.length) query.brand = nextBrandIds.join(',');
     if (nextCategoryIds.length) query.category = nextCategoryIds.join(',');
     if (nextAuthenticity) query.auth = nextAuthenticity;
+    if (nextCondition) query.condition = nextCondition;
     if (nextPriceMin.trim()) query.priceMin = nextPriceMin.trim();
     if (nextPriceMax.trim()) query.priceMax = nextPriceMax.trim();
     if (nextInStockOnly) query.inStock = '1';
@@ -192,6 +217,11 @@ export function SearchFiltersSidebar(props: Props) {
     applyInstant({ authenticity: next });
   }
 
+  function handleConditionChange(next: Selected['condition']) {
+    setCondition(next);
+    applyInstant({ condition: next });
+  }
+
   function handleInStockChange(next: boolean) {
     setInStockOnly(next);
     applyInstant({ inStockOnly: next });
@@ -212,6 +242,7 @@ export function SearchFiltersSidebar(props: Props) {
     setBrandIds([]);
     setCategoryIds([]);
     setAuthenticity(undefined);
+    setCondition(undefined);
     setPriceMin('');
     setPriceMax('');
     setInStockOnly(false);
@@ -312,6 +343,29 @@ export function SearchFiltersSidebar(props: Props) {
                 name="authenticity"
                 checked={authenticity === opt.v}
                 onChange={() => handleAuthChange(opt.v)}
+              />
+              <span>{opt.label}</span>
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend className="mb-2 font-medium">{labels.condition}</legend>
+        <div className="flex flex-col gap-1">
+          {(
+            [
+              { v: undefined, label: labels.any },
+              { v: 'NEW' as const, label: labels.conditionNew },
+              { v: 'USED' as const, label: labels.conditionUsed },
+            ] as const
+          ).map((opt, i) => (
+            <label key={i} className="flex cursor-pointer items-center gap-2">
+              <input
+                type="radio"
+                name="condition"
+                checked={condition === opt.v}
+                onChange={() => handleConditionChange(opt.v)}
               />
               <span>{opt.label}</span>
             </label>

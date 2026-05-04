@@ -438,10 +438,18 @@ export async function createProductAction(
       descriptionAr: parsed.data.descriptionAr,
       descriptionEn: parsed.data.descriptionEn,
       specs: parsed.data.specs,
+      specsAr: parsed.data.specsAr,
+      specsEn: parsed.data.specsEn,
       basePriceEgp: parsed.data.basePriceEgp,
       vatExempt: parsed.data.vatExempt,
       returnable: parsed.data.returnable,
       authenticity: parsed.data.authenticity,
+      condition: parsed.data.condition,
+      warranty: parsed.data.warranty || null,
+      conditionNote:
+        parsed.data.condition === 'USED'
+          ? parsed.data.conditionNote || null
+          : null,
       status: parsed.data.status,
     },
   });
@@ -504,10 +512,18 @@ export async function updateProductAction(
       descriptionAr: parsed.data.descriptionAr,
       descriptionEn: parsed.data.descriptionEn,
       specs: parsed.data.specs,
+      specsAr: parsed.data.specsAr,
+      specsEn: parsed.data.specsEn,
       basePriceEgp: parsed.data.basePriceEgp,
       vatExempt: parsed.data.vatExempt,
       returnable: parsed.data.returnable,
       authenticity: parsed.data.authenticity,
+      condition: parsed.data.condition,
+      warranty: parsed.data.warranty || null,
+      conditionNote:
+        parsed.data.condition === 'USED'
+          ? parsed.data.conditionNote || null
+          : null,
       status: parsed.data.status,
     },
   });
