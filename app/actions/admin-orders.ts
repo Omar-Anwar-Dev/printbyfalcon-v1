@@ -20,11 +20,13 @@ import {
   statusReleasesInventory,
 } from '@/lib/order/status';
 import {
-  renderOrderStatusChange,
-  renderB2bOrderConfirmedByRep,
   type OrderStatusKey,
   type SupportedLocale,
 } from '@/lib/whatsapp-templates';
+import {
+  renderOrderStatusChangeMessage,
+  renderB2bOrderConfirmedByRepMessage,
+} from '@/lib/whatsapp/wrappers';
 import { isNotificationOptedOut } from '@/lib/settings/notifications';
 import { RATE_LIMIT_RULES, checkAndIncrement } from '@/lib/rate-limit';
 import { logger } from '@/lib/logger';
@@ -215,7 +217,8 @@ export async function updateOrderStatusAction(
       courierPhone = courierHandoff.courierPhone ?? courier?.phone ?? undefined;
     }
 
-    const body = renderOrderStatusChange(
+    // Sprint 15 — DB-driven template (with hardcoded fallback) per ADR-067.
+    const body = await renderOrderStatusChangeMessage(
       {
         orderNumber: order.orderNumber,
         newStatus: newStatus as OrderStatusKey,
@@ -749,7 +752,8 @@ export async function confirmB2BOrderAction(
     order.user?.languagePref === 'EN' ? 'en' : 'ar';
   const phone = order.user?.phone ?? order.contactPhone;
 
-  const body = renderB2bOrderConfirmedByRep(
+  // Sprint 15 — DB-driven template with hardcoded fallback (ADR-067).
+  const body = await renderB2bOrderConfirmedByRepMessage(
     {
       orderNumber: order.orderNumber,
       paymentMethodNote,

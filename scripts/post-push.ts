@@ -12,6 +12,7 @@ import {
   type Governorate,
   type ShippingZoneCode,
 } from '@prisma/client';
+import { DEFAULT_WHATSAPP_TEMPLATES } from '../lib/whatsapp/templates-seed';
 
 const prisma = new PrismaClient();
 
@@ -359,6 +360,29 @@ async function main() {
     if (!existing) {
       await prisma.courier.create({ data: c });
     }
+  }
+
+  // Sprint 15 — seed default WhatsApp message templates. Idempotent by key.
+  // `update: {}` means re-running this on every boot does NOT overwrite an
+  // owner's edits — only NEW keys (fresh templates added in code) get
+  // inserted. To restore a default, the admin UI has a "Reset to default"
+  // action that overwrites the row from `DEFAULT_WHATSAPP_TEMPLATES`.
+  for (const tpl of DEFAULT_WHATSAPP_TEMPLATES) {
+    await prisma.whatsappTemplate.upsert({
+      where: { key: tpl.key },
+      update: {},
+      create: {
+        key: tpl.key,
+        category: tpl.category,
+        nameAr: tpl.nameAr,
+        nameEn: tpl.nameEn,
+        descriptionAr: tpl.descriptionAr,
+        descriptionEn: tpl.descriptionEn,
+        bodyAr: tpl.bodyAr,
+        bodyEn: tpl.bodyEn,
+        variables: tpl.variables as never,
+      },
+    });
   }
 
   // Backfill searchVector for every product. Safe to run every boot — it's a

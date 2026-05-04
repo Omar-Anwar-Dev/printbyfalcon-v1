@@ -76,6 +76,13 @@ export default async function AdminSettingsIndex({
         ? 'تحكم في حالات الطلب التي تُرسل فيها إشعارات على كل قناة.'
         : 'Control which order statuses trigger customer notifications per channel.',
     },
+    {
+      href: '/admin/settings/whatsapp-templates',
+      title: isAr ? 'قوالب رسائل واتساب' : 'WhatsApp message templates',
+      desc: isAr
+        ? 'تعديل صياغة رسائل واتساب التي تُرسل للعملاء (تأكيد الطلب، التسليم للشحن، إلخ).'
+        : 'Edit the wording of WhatsApp messages sent to customers (order confirmed, handed to courier, etc.).',
+    },
   ];
 
   return (

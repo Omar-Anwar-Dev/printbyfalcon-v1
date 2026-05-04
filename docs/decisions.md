@@ -1563,3 +1563,78 @@ Honest framing logged at sprint kickoff: SEO is multi-month. This sprint maximiz
 2. All existing products keep their `specs` field untouched.
 3. New products created via admin can fill `specsAr` + `specsEn` + `condition` + `warranty` + `conditionNote`. Old products are unaffected until owner edits them.
 4. The `condition` column has DEFAULT NEW so the migration is non-blocking even with active writes.
+
+---
+
+## ADR-067: Sprint 15 — WhatsApp templates editable from admin (with hardcoded fallback) + invoice polish
+
+**Date:** 2026-05-03
+**Status:** Accepted (Sprint 15 kickoff; M1→M2 buffer)
+**Context:** Owner asked for two related improvements:
+1. **Professional wording** for invoices and WhatsApp messages.
+2. **Admin-editable WhatsApp templates** — let the owner change the wording of customer notifications from `/admin` without a code deploy.
+
+**Decision:**
+
+### A. WhatsApp template architecture — DB-driven with hardcoded fallback
+
+- **New `WhatsappTemplate` table.** Each row: `key` (lookup id, e.g. `order.confirmed.b2c`), `category`, bilingual `nameAr/En`, `descriptionAr/En`, bilingual `bodyAr/En` with `{{var}}` placeholders, JSON `variables` array (drives the admin UI panel), `isActive`, `updatedBy`, audit timestamps.
+- **Seed source of truth in code.** `lib/whatsapp/templates-seed.ts` exports the 10 default templates. `post-push.ts` upserts them via `update: {}` (idempotent — owner edits never overwritten by re-seed). Templates that don't exist yet on a fresh DB get inserted; existing keys are skipped.
+- **Renderer with fallback.** `lib/whatsapp/render-template.ts` has two functions:
+  - `renderTemplateFromDb(key, locale, vars)` — reads the row, substitutes `{{name}}` placeholders, returns string OR null when row missing/inactive.
+  - `renderTemplateOrFallback(key, locale, vars, fallback)` — wraps the above with a hardcoded fallback function so a corrupted/deleted DB row CAN'T break the notification pipeline. The hardcoded fallbacks live in the original `lib/whatsapp-templates.ts` (Sprint 5 file, untouched) — they're tagged `_legacyXxx` only metaphorically; no code rename needed because the wrappers in `lib/whatsapp/wrappers.ts` glue old + new together.
+- **Substitution rules (mirrored in admin UI preview):**
+  - `{{name}}` (alphanumeric only, no spaces) → looked up in vars; left literal if unknown so admin spots typos.
+  - 3+ consecutive newlines → collapsed to 2. Lets templates have optional `{{xLine}}` vars that resolve to `''` when not applicable, without leaving ugly multi-blank gaps.
+  - Output trimmed.
+- **Variable substitution is plain text replacement, not Mustache/Handlebars.** No conditionals, no loops, no helpers. The admin UI is for owner with no template-language experience; restricting to dumb substitution keeps the surface impossible to mis-use.
+
+### B. Templates EXCLUDED from the editable system (security / regulatory)
+
+- **OTP messages.** Stay in `lib/whatsapp-templates.ts::renderOtp` (hardcoded). Editing OTP wording could:
+  (a) accidentally break formatting that the customer's auth flow relies on, OR
+  (b) be exploited by a compromised admin account to inject phishing into login messages.
+- **STOP/UNSUBSCRIBE detection.** Lives in `lib/notifications/opt-out.ts` (regex equality match). Not a template — it's a regulatory feature (Egyptian privacy + WhatsApp policy compliance, ADR-057). Owner cannot change the keywords customers reply with to opt out.
+- **Email templates** (order confirmation, B2B status change). Out of scope this sprint. If owner wants those editable, file as a future ask — design pattern is the same but each template type doubles the implementation cost.
+
+### C. Admin role gate — OWNER only
+
+- **`requireAdmin(['OWNER'])`** on the list page, detail page, and both server actions.
+- **Why not OPS?** Blast radius — a misedit garbles every customer notification of that type. OPS doesn't need template-edit power for daily operations. If OPS needs to change wording urgently, they go through Owner.
+- **Reset-to-default action** also OWNER-only. Restores the row from `DEFAULT_WHATSAPP_TEMPLATES` and audit-logs the prior body.
+
+### D. Audit log
+
+Every edit + reset writes to `AuditLog` with the before/after JSON. Action keys: `whatsapp.template.update`, `whatsapp.template.reset`. Discoverable via the existing `docs/audit-log-queries.md` cookbook.
+
+### E. Invoice polish (visual + wording)
+
+- **Title:** "فاتورة" → **"فاتورة ضريبية"** (tax-invoice — explicit Egyptian compliance signal that Tax Authority + B2B accounting expect).
+- **Top accent strip** (6px ink-cyan band across the page) on every page — brand cue carrying over from the storefront.
+- **Section labels formalized:** "العميل" → "بيانات العميل" / "الدفع" → "بيانات الدفع". Section labels render in accent color uppercase letterspacing — same visual rhythm as the storefront.
+- **Table header reverses** to accent fill + white text for legibility + brand consistency.
+- **Zebra row striping** (alternating white + #F7F7F7) in the line-items table — easier to read multi-line invoices.
+- **Grand total** uses accent color + 1.5px accent border-top — visually anchors the number that matters.
+- **New thank-you / return-policy block** above the footer (accent-soft tinted callout) — gives every invoice a customer-facing close that mentions the 14-day return window + contact channels.
+- **Page numbers** ("صفحة N من M") added to footer — required for multi-page invoices, missing in v1.
+- **Wording tweaks throughout:** "الكود" → "كود المنتج", "السعر" → "سعر الوحدة", "الإجمالي" (column) → "إجمالي البند", "الإجمالي" (totals) → "الإجمالي المستحق", "س.ت" → "س.ت رقم:" (more formal). All driven by Egyptian B2B accounting convention.
+- **No schema change.** All visual + wording lives in `lib/invoices/template.tsx`. Existing `InvoiceData` shape unchanged — re-renders of past invoices will use the new template (since invoices are regenerated on download per ADR-034).
+
+**Alternatives considered:**
+- **Use a real templating language (Handlebars / Mustache).** Rejected — owner has no templating background; helpers + conditionals are landmines waiting to be misused. Plain `{{var}}` substitution is foolproof.
+- **Allow editing every notification, including OTP.** Rejected — auth integrity > edit convenience. Owner can request a code change for OTP wording if needed (rare).
+- **Email templates editable in same sprint.** Rejected — scope. Each channel is its own implementation surface; wait for owner to ask before doubling the work.
+- **Move the audit-log helper out of `admin-catalog.ts` to a shared lib.** Rejected for THIS sprint — pure refactor; not blocking. Local helper duplicated in `admin-whatsapp-templates.ts` works for now. Filed as future small refactor.
+
+**Consequences:**
+- **Templates persist across deploys** — owner's edits survive every restart. Re-seed only inserts NEW keys (templates added in code that don't exist yet in DB).
+- **Hardcoded fallback means the notification pipeline can never go silent** even if someone accidentally TRUNCATEs the WhatsappTemplate table or sets every row to inactive. This is a deliberate robustness choice — sending a "fallback" message is much better than sending nothing.
+- **Renderer caches per-request** via React's `cache()`, so a single order action (creates Order + Notification rows + sends WA) hits the templates table once per template type, not once per use.
+- **Invoice template change applies retroactively** to every invoice ever generated (because invoices are render-on-demand per ADR-034). Customers downloading an old invoice from `/account/orders/<id>` get the new design. This is desirable — visual consistency across history.
+- **Admin UI accessible at `/admin/settings/whatsapp-templates`** — added to the settings landing page card list. List page groups templates by category; detail page has bilingual editor + variables panel + live preview + active toggle + reset button.
+- **No schema migration risk to in-flight catalog upload.** New `WhatsappTemplate` table is fresh; doesn't touch any existing column. Same data-safety posture as Sprint 14.
+
+**Deploy-time:**
+- `prisma db push` adds the table + 1 index in <1 second.
+- `post-push.ts` seeds 10 templates via upsert on first boot post-deploy.
+- Existing send paths immediately start using the DB templates (with fallback unchanged) — no manual cutover needed.

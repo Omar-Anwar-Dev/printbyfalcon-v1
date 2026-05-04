@@ -1165,3 +1165,51 @@ model Feedback {
   @@index([category, createdAt])
   @@index([createdAt])
 }
+
+// -------------------------------------------------------------------------
+// Sprint 15 — Editable WhatsApp message templates.
+// Owner-editable from /admin/settings/whatsapp-templates. Renderer in
+// lib/whatsapp/render-template.ts substitutes {{variables}} at send time.
+// OTP templates are NOT in this table — they stay hardcoded for auth
+// security (per ADR-067).
+// -------------------------------------------------------------------------
+
+enum WhatsappTemplateCategory {
+  ORDER
+  B2B
+  PROMO
+  SUPPORT
+  RETURN
+}
+
+model WhatsappTemplate {
+  id          String                   @id @default(cuid())
+  /// Stable lookup key, e.g. "order.confirmed.b2c", "order.delivered".
+  /// Code refers to templates by this key — never by id.
+  key         String                   @unique
+  category    WhatsappTemplateCategory
+  /// Human-readable name shown in admin UI list.
+  nameAr      String
+  nameEn      String
+  /// Short description of when this template fires (admin UI subtitle).
+  descriptionAr String                 @db.Text
+  descriptionEn String                 @db.Text
+  /// Template body with {{placeholder}} substitutions. AR + EN ship together
+  /// so renderer can pick the right one for the recipient's locale.
+  bodyAr      String                   @db.Text
+  bodyEn      String                   @db.Text
+  /// JSON array of {name, descriptionAr, descriptionEn, example} — drives
+  /// the variables panel + preview-with-sample-data feature in admin UI.
+  /// Renderer uses this to validate inputs at runtime.
+  variables   Json                     @default("[]")
+  /// When false, sends fall back to the hardcoded default. Useful to
+  /// disable a notification type (e.g., promo confirmations) without losing
+  /// the customized text.
+  isActive    Boolean                  @default(true)
+  /// Updated by audit trail (admin user id).
+  updatedBy   String?
+  createdAt   DateTime                 @default(now())
+  updatedAt   DateTime                 @updatedAt
+
+  @@index([category, isActive])
+}
