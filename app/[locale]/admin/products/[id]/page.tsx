@@ -55,16 +55,17 @@ export default async function EditProductPage({
   // Narrow `specs` — Prisma returns `Prisma.JsonValue`, but the Server Action
   // validates via zod.record(string,string), so any non-object or non-string
   // values get dropped in the form's row initializer.
-  const specsObj =
-    product.specs &&
-    typeof product.specs === 'object' &&
-    !Array.isArray(product.specs)
-      ? (Object.fromEntries(
-          Object.entries(product.specs as Record<string, unknown>)
-            .filter(([, v]) => typeof v === 'string')
-            .map(([k, v]) => [k, v as string]),
-        ) as Record<string, string>)
-      : {};
+  function narrowJsonRecord(v: unknown): Record<string, string> {
+    if (!v || typeof v !== 'object' || Array.isArray(v)) return {};
+    return Object.fromEntries(
+      Object.entries(v as Record<string, unknown>)
+        .filter(([, val]) => typeof val === 'string')
+        .map(([k, val]) => [k, val as string]),
+    );
+  }
+  const specsObj = narrowJsonRecord(product.specs);
+  const specsArObj = narrowJsonRecord(product.specsAr);
+  const specsEnObj = narrowJsonRecord(product.specsEn);
 
   const initialImages = product.images.map((img) => ({
     id: img.id,
@@ -91,10 +92,15 @@ export default async function EditProductPage({
             descriptionAr: product.descriptionAr,
             descriptionEn: product.descriptionEn,
             specs: specsObj,
+            specsAr: specsArObj,
+            specsEn: specsEnObj,
             basePriceEgp: Number(product.basePriceEgp),
             vatExempt: product.vatExempt,
             returnable: product.returnable,
             authenticity: product.authenticity,
+            condition: product.condition,
+            warranty: product.warranty ?? '',
+            conditionNote: product.conditionNote ?? '',
             status: product.status,
           }}
           brands={brands}
@@ -107,12 +113,28 @@ export default async function EditProductPage({
             authenticity: t('admin.catalog.products.authenticity'),
             genuine: t('admin.catalog.products.genuine'),
             compatible: t('admin.catalog.products.compatible'),
+            condition: isAr ? 'حالة المنتج' : 'Condition',
+            conditionNew: isAr ? 'جديد' : 'New',
+            conditionUsed: isAr ? 'مستعمل' : 'Used',
+            warranty: isAr ? 'الضمان' : 'Warranty',
+            warrantyHelp: isAr
+              ? 'مثلاً: ضمان سنة، ضمان 6 شهور، بدون ضمان'
+              : 'e.g. 1-year warranty, 6 months, no warranty',
+            conditionNote: isAr
+              ? 'ملاحظة الحالة (للمستعمل)'
+              : 'Condition note (for used)',
+            conditionNoteHelp: isAr
+              ? 'مثلاً: 9/10، استخدام شهرين، علبة أصلية'
+              : 'e.g. 9/10, 2 months use, original packaging',
             nameAr: t('admin.catalog.products.nameAr'),
             nameEn: t('admin.catalog.products.nameEn'),
             descriptionAr: t('admin.catalog.products.descriptionAr'),
             descriptionEn: t('admin.catalog.products.descriptionEn'),
             specs: t('admin.catalog.products.specs'),
             specsHelp: t('admin.catalog.products.specsHelp'),
+            specsAr: isAr ? 'المواصفات بالعربي' : 'Specs (AR)',
+            specsEn: isAr ? 'المواصفات بالإنجليزي' : 'Specs (EN)',
+            specsLegacy: isAr ? 'مواصفات قديمة' : 'Legacy specs',
             addSpec: t('admin.catalog.products.addSpec'),
             basePrice: t('admin.catalog.products.basePrice'),
             vatExempt: t('admin.catalog.products.vatExempt'),

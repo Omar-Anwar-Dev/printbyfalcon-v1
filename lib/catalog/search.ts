@@ -163,6 +163,8 @@ export type SearchFilters = {
   brandIds?: string[];
   categoryIds?: string[];
   authenticity?: 'GENUINE' | 'COMPATIBLE';
+  /// Sprint 14 — condition filter (NEW / USED). Drives the storefront facet.
+  condition?: 'NEW' | 'USED';
   priceMin?: number;
   priceMax?: number;
   inStockOnly?: boolean;
@@ -344,6 +346,11 @@ function buildFilterClauses(filters: SearchFilters): Prisma.Sql[] {
       Prisma.sql`p.authenticity = ${filters.authenticity}::"Authenticity"`,
     );
   }
+  if (filters.condition) {
+    clauses.push(
+      Prisma.sql`p.condition = ${filters.condition}::"ProductCondition"`,
+    );
+  }
   if (filters.priceMin != null) {
     clauses.push(Prisma.sql`p."basePriceEgp" >= ${filters.priceMin}`);
   }
@@ -457,6 +464,7 @@ async function execSearch({
       p."nameEn" AS name_en,
       p."basePriceEgp"::text AS base_price_egp,
       p.authenticity::text AS authenticity,
+      p.condition::text AS condition,
       b.id AS brand_id,
       b."nameAr" AS brand_name_ar,
       b."nameEn" AS brand_name_en,
@@ -501,6 +509,7 @@ async function hydrateRows(rows: RawSearchRow[]): Promise<SearchResultItem[]> {
   return rows.map((r) => {
     const row = r as RawSearchRow & {
       authenticity: 'GENUINE' | 'COMPATIBLE';
+      condition: 'NEW' | 'USED';
       brand_name_ar: string;
       brand_name_en: string;
       brand_slug: string;
@@ -516,6 +525,7 @@ async function hydrateRows(rows: RawSearchRow[]): Promise<SearchResultItem[]> {
       nameEn: row.name_en,
       basePriceEgp: row.base_price_egp,
       authenticity: row.authenticity,
+      condition: row.condition,
       primaryImageUrl: row.image_filename
         ? productImageUrl(row.id, 'medium', row.image_filename)
         : null,

@@ -47,6 +47,11 @@ function parseAuth(raw: unknown): 'GENUINE' | 'COMPATIBLE' | undefined {
   return undefined;
 }
 
+function parseCondition(raw: unknown): 'NEW' | 'USED' | undefined {
+  if (raw === 'NEW' || raw === 'USED') return raw;
+  return undefined;
+}
+
 export async function generateMetadata({
   params,
   searchParams,
@@ -89,6 +94,7 @@ export default async function SearchPage({
   const brandIds = parseCsv(sp.brand);
   const categoryIds = parseCsv(sp.category);
   const authenticity = parseAuth(sp.auth);
+  const condition = parseCondition(sp.condition);
   const priceMin = parseFloat(sp.priceMin);
   const priceMax = parseFloat(sp.priceMax);
   const inStockOnly = sp.inStock === '1';
@@ -117,6 +123,7 @@ export default async function SearchPage({
         brandIds,
         categoryIds,
         authenticity,
+        condition,
         priceMin,
         priceMax,
         inStockOnly,
@@ -173,6 +180,7 @@ export default async function SearchPage({
     ...(brandIds.length ? { brand: brandIds.join(',') } : {}),
     ...(categoryIds.length ? { category: categoryIds.join(',') } : {}),
     ...(authenticity ? { auth: authenticity } : {}),
+    ...(condition ? { condition } : {}),
     ...(priceMin != null ? { priceMin: String(priceMin) } : {}),
     ...(priceMax != null ? { priceMax: String(priceMax) } : {}),
     ...(inStockOnly ? { inStock: '1' } : {}),
@@ -249,6 +257,7 @@ export default async function SearchPage({
             brandIds,
             categoryIds,
             authenticity,
+            condition,
             priceMin,
             priceMax,
             inStockOnly,
@@ -257,6 +266,7 @@ export default async function SearchPage({
             brandIds.length +
             categoryIds.length +
             (authenticity ? 1 : 0) +
+            (condition ? 1 : 0) +
             (priceMin != null ? 1 : 0) +
             (priceMax != null ? 1 : 0) +
             (inStockOnly ? 1 : 0)
@@ -276,6 +286,7 @@ export default async function SearchPage({
               brandIds,
               categoryIds,
               authenticity,
+              condition,
               priceMin,
               priceMax,
               inStockOnly,

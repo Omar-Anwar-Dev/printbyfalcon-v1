@@ -1763,4 +1763,68 @@ Mapped to the 7 criteria in `docs/implementation-plan.md` line 809-816, split in
 - **Image sitemap** — separate `image-sitemap.xml` for product images. Helps Google Image Search discover catalog photos.
 - **Per-product OG images auto-generated** — currently uses first product image. A custom OG image (with brand + price overlay) would lift CTR on social/WhatsApp shares.
 
+---
+
+## Sprint 14 — Product Condition (NEW/USED) + Bilingual Specs — COMPLETE 2026-05-03
+
+### Sprint 14 kickoff resolutions
+
+- **Owner asked for:** (1) ability to mark a product as NEW or USED with different price/warranty, where the same model could be available in both conditions; (2) Arabic specs in AR locale, English specs in EN locale.
+- **Critical constraint logged:** owner is actively uploading the real catalog to production during this sprint. ANY destructive schema migration could corrupt the upload mid-flight. Decision logged in ADR-066: all schema changes additive + nullable/defaulted; legacy `specs` field preserved as fallback.
+- **Variant model = independent listings.** Each (model, condition) pair is its own Product row. Owner duplicates a product if they want both NEW + USED versions. No DB-level variant linking (deferred per ADR-066 alternatives section).
+
+### Tasks shipped (single dense session)
+
+#### Schema additions (all additive, deploy-safe)
+- [x] **S14-T1** [prisma/schema.prisma](../prisma/schema.prisma) — new `ProductCondition` enum + 4 new optional/defaulted Product fields:
+  - `condition ProductCondition @default(NEW)` — all 132 existing products auto-tag NEW.
+  - `specsAr Json?` + `specsEn Json?` — bilingual specs; legacy `specs` kept as fallback.
+  - `warranty String? @db.VarChar(160)` — free-form ("ضمان سنة" / "بدون ضمان").
+  - `conditionNote String? @db.VarChar(280)` — free-form for USED listings.
+  - New `@@index([condition, status])` for the storefront filter facet.
+
+#### Storefront
+- [x] **S14-T2** Product detail page — `specsAr`/`specsEn` rendered per locale with fallback to legacy `specs`. New "الضمان والحالة" / "Warranty & condition" info block (only renders when at least one of warranty/conditionNote is populated). "مستعمل / Used" amber badge added to price row alongside the existing authenticity badge.
+- [x] **S14-T3** [components/catalog/product-card.tsx](../components/catalog/product-card.tsx) — "مستعمل / Used" badge on top-end corner (amber) when `condition === 'USED'`. Authenticity badge stays at top-start so the two don't collide.
+- [x] **S14-T3** Filter facet — Condition (All / New / Used) added to both [search-filters-sidebar.tsx](../components/catalog/search-filters-sidebar.tsx) (desktop) + [mobile-filters-button.tsx](../components/catalog/mobile-filters-button.tsx) (mobile modal). Wired to URL param `condition=NEW|USED` + the search action's `SearchFilters.condition` clause (raw SQL cast to `::"ProductCondition"` enum).
+- [x] **S14-T3** [lib/catalog/queries.ts](../lib/catalog/queries.ts) — `ProductListItem` now includes `condition`; `listActiveProducts` accepts a `condition` filter. [lib/catalog/search.ts](../lib/catalog/search.ts) raw SQL adds `p.condition::text AS condition` to the SELECT and `p.condition = $1::"ProductCondition"` filter clause.
+
+#### Admin
+- [x] **S14-T4** [components/admin/product-form.tsx](../components/admin/product-form.tsx) — Condition select (NEW/USED), Warranty input (always visible), ConditionNote input (conditional — only shows when condition=USED). Specs editor refactored into 3-tab UI: **AR specs / EN specs / Legacy specs**. Each tab uses the extracted `<SpecsEditor>` component sharing one renderer. Submit serializes all three to the matching JSON columns.
+- [x] **S14-T4** [lib/validation/catalog.ts](../lib/validation/catalog.ts) `productSchema` — added 5 new optional fields (specsAr, specsEn, condition, warranty, conditionNote) with safe defaults.
+- [x] **S14-T4** [app/actions/admin-catalog.ts](../app/actions/admin-catalog.ts) — `createProductAction` + `updateProductAction` write all 5 new fields. ConditionNote auto-cleared to null when condition flips to NEW (server-side, defense in depth).
+- [x] **S14-T4** Both `/admin/products/new` + `/admin/products/[id]` pages pass the new bilingual labels through.
+- [x] **S14-T5** [app/[locale]/admin/products/page.tsx](../app/[locale]/admin/products/page.tsx) — Condition column added to the table (between price and status); Condition filter dropdown added to the toolbar (between authenticity and submit). Server-side filter via `where.condition = sp.condition` when valid.
+
+### Verification
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npx next lint` — clean (only pre-existing `lib/db.ts` warning from Sprint 1)
+- ✅ `npx vitest run` — **203/203 tests green** (no behavior change on existing test surface; new fields are additive)
+- ✅ Schema validates with `prisma validate` (DATABASE_URL placeholder).
+
+### Sprint 14 Exit Criteria
+- ✅ Product can be marked NEW or USED via admin
+- ✅ NEW + USED variants of the same model coexist as independent listings (different SKU + price + warranty)
+- ✅ Specs render in Arabic when locale=AR, English when locale=EN, with fallback to legacy `specs` for unmigrated rows
+- ✅ Storefront card + detail show "Used" badge when applicable
+- ✅ Warranty + condition note display on detail page
+- ✅ Catalog + admin filter facets support condition
+- ✅ Zero destructive schema changes — owner's active data upload is unaffected by deploy
+
+**Sprint 14 closed 2026-05-03.** Single dense session.
+
+### Decisions logged this sprint
+- **ADR-066** [2026-05-03] Sprint 14 — additive schema migration during live data upload. ProductCondition enum + 4 new optional fields; legacy `specs` preserved as fallback; variant model = separate Product rows (no DB-level linking). Three rejected alternatives logged (variant table refactor, destructive specs rename, single bilingual JSON shape) with reasoning.
+
+### Risk Log Updates
+- **No new risks.** Sprint 14 is purely additive at the data layer.
+- **NEW low-risk:** if owner ends up managing 50+ models × 2 conditions = 100+ rows manually, operational pain may justify a v1.1 ProductVariant table refactor (parked in ADR-066).
+
+### Sprint 14 deploy-time safety notes (for owner)
+- Schema migration adds 4 columns + 1 enum + 1 index. All defaults/nullable. ~1 second apply time on the 132-row table.
+- Owner's in-flight catalog uploads use existing fields (`specs`, name*, price, etc.) which are untouched.
+- All 132 existing products auto-tag as `condition=NEW`. No manual action needed.
+- After deploy, owner can edit a product → see the new Condition select + bilingual specs tabs. Existing legacy specs continue to render via fallback until specsAr/specsEn are filled.
+- Recommendation: deploy at a quiet window (early morning or late evening) so the brief container restart doesn't interrupt an upload-in-progress. Container restart = ~5-10 seconds.
+
 

@@ -122,12 +122,21 @@ export default async function ProductDetailPage({
   const { priceById: relatedPriceById } =
     await resolveViewerPrices(relatedItems);
 
-  const specs =
-    product.specs &&
-    typeof product.specs === 'object' &&
-    !Array.isArray(product.specs)
-      ? (product.specs as Record<string, string>)
+  // Sprint 14 — bilingual specs with legacy-fallback. specsAr/specsEn ship
+  // per-locale; if the locale-specific bag is empty, fall back to the legacy
+  // `specs` (single language, populated pre-Sprint-14) so existing products
+  // keep displaying spec data without owner action.
+  function asRecord(v: unknown): Record<string, string> {
+    return v && typeof v === 'object' && !Array.isArray(v)
+      ? (v as Record<string, string>)
       : {};
+  }
+  const localizedSpecs = isAr
+    ? asRecord(product.specsAr)
+    : asRecord(product.specsEn);
+  const legacySpecs = asRecord(product.specs);
+  const specs =
+    Object.keys(localizedSpecs).length > 0 ? localizedSpecs : legacySpecs;
 
   const stockStatus =
     product.status === 'ACTIVE'
@@ -241,6 +250,11 @@ export default async function ProductDetailPage({
                 {isAr ? 'أصلي' : 'Genuine'}
               </span>
             )}
+            {product.condition === 'USED' ? (
+              <span className="rounded-full border border-warning/20 bg-warning-soft px-2.5 py-0.5 text-xs font-medium text-warning">
+                {isAr ? 'مستعمل' : 'Used'}
+              </span>
+            ) : null}
             {resolvedDetail.source === 'tier' ? (
               <span className="rounded-full border border-accent/20 bg-accent-soft px-2.5 py-0.5 text-xs font-medium text-accent-strong">
                 {isAr
@@ -294,6 +308,33 @@ export default async function ProductDetailPage({
               <p className="mt-3 whitespace-pre-line text-sm leading-relaxed text-foreground">
                 {description}
               </p>
+            </div>
+          ) : null}
+
+          {product.warranty ||
+          (product.condition === 'USED' && product.conditionNote) ? (
+            <div className="border-t border-border pt-6">
+              <h2 className="text-sm font-semibold uppercase tracking-[0.08em] text-muted-foreground">
+                {isAr ? 'الضمان والحالة' : 'Warranty & condition'}
+              </h2>
+              <dl className="mt-3 space-y-2 text-sm">
+                {product.warranty ? (
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <dt className="font-medium text-muted-foreground">
+                      {isAr ? 'الضمان:' : 'Warranty:'}
+                    </dt>
+                    <dd className="text-foreground">{product.warranty}</dd>
+                  </div>
+                ) : null}
+                {product.condition === 'USED' && product.conditionNote ? (
+                  <div className="flex flex-wrap items-baseline gap-2">
+                    <dt className="font-medium text-muted-foreground">
+                      {isAr ? 'حالة المنتج:' : 'Condition:'}
+                    </dt>
+                    <dd className="text-foreground">{product.conditionNote}</dd>
+                  </div>
+                ) : null}
+              </dl>
             </div>
           ) : null}
 

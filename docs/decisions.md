@@ -1516,3 +1516,50 @@ Honest framing logged at sprint kickoff: SEO is multi-month. This sprint maximiz
 - **Footer link clutter:** /blog + /faq added to legal-links row. 8 links total in a single row — borderline crowded but acceptable given that 4 of them rarely get clicked. Track click rates post-launch; if /privacy/terms/cookies cluster too thickly, consider a sub-footer.
 - **Layout.tsx now does an extra DB read** (storeInfo) on every storefront request — already cached in Sprint 6 via `cache()`, so the cost is one hit per request lifecycle, not per render.
 - **The /blog/[slug] markdown renderer is a custom mini-parser** — not battle-tested across all markdown corner cases. Posts authored in `lib/blog/posts.ts` follow a restricted subset (H2/H3, lists, tables, bold, links, code spans). Stretch beyond that → migrate to MDX.
+
+---
+
+## ADR-066: Sprint 14 — Product Condition (NEW/USED) + bilingual specs as additive schema migration during live data upload
+
+**Date:** 2026-05-03
+**Status:** Accepted (Sprint 14 kickoff; M1→M2 buffer; live data upload constraint)
+**Context:** Owner asked for two new product features:
+1. **Condition (NEW / USED)** — same model could be available in both conditions, with different prices + warranty + condition notes (e.g., "9/10, 2 months use").
+2. **Bilingual specs** — current `Product.specs Json` field stores a single key/value bag with English keys; the storefront should render Arabic specs in AR locale, English in EN locale.
+
+**Critical constraint:** Owner is actively uploading the real catalog data (132 SKUs + ongoing) to production. Any schema change that alters existing column shape or adds NOT NULL columns without defaults could corrupt the upload mid-flight. The Sprint 4 `prisma db push --accept-data-loss` boot pattern means destructive changes ARE applied automatically on deploy — there's no migration-review safety gate to catch it.
+
+**Decision:**
+- **Variant model = separate Product rows.** Each (model, condition) combination is its own Product listing with own SKU + price + warranty + images. Owner manually duplicates a product if they want both NEW and USED versions. No DB-level variant linking (deferred to v1.1 if usage justifies a unified product page with a condition switcher).
+- **All schema changes additive + nullable/defaulted.** No destructive migrations. Specifically:
+  - `enum ProductCondition { NEW, USED }` — new enum.
+  - `Product.condition ProductCondition @default(NEW)` — all 132 existing products auto-tag NEW on `prisma db push`. Owner manually flips to USED for pre-owned items via admin UI.
+  - `Product.warranty String? @db.VarChar(160)` — nullable. Free-form ("ضمان سنة" / "ضمان 6 شهور" / "بدون ضمان"). Different conditions of the same model can ship different warranties.
+  - `Product.conditionNote String? @db.VarChar(280)` — nullable. UI shows it only when condition=USED (form hides the input for NEW; storefront detail panel only renders the row for USED).
+  - `Product.specsAr Json?` + `Product.specsEn Json?` — both nullable. Each is `{ key: value }` in the matching locale.
+  - Legacy `Product.specs Json @default("{}")` field stays untouched as fallback. Storefront prefers `specsAr`/`specsEn` for the active locale and falls back to `specs` when locale-specific is empty. Owner can migrate gradually — not all 132 rows need editing on day 1.
+  - New index `@@index([condition, status])` supports the storefront filter facet without full-table scans.
+- **Storefront rendering:** "مستعمل / Used" badge in amber on `ProductCard` + product detail. Warranty + conditionNote rendered in a dedicated info block on detail (only renders when at least one is populated). Condition filter facet ("All / New / Used") added to the search filters sidebar (desktop) + mobile filter modal — wires through `q.condition=NEW|USED` URL param + `SearchFilters.condition` server filter (raw SQL clause cast to `"ProductCondition"` enum).
+- **Admin form:** Condition select (NEW default), Warranty input (always visible), ConditionNote input (conditional on USED). Specs editor restructured into 3-tab UI: AR specs / EN specs / Legacy specs — sharing one extracted `SpecsEditor` component. Submit serializes all three tabs into the matching JSON field.
+- **Admin list:** Condition column + filter dropdown.
+
+**Alternatives considered:**
+- **Unified product with `ProductVariant` table** — proper variant model. Rejected this sprint because it requires touching `Order`, `OrderItem`, `Inventory`, `Cart`, `CartItem`, all priced by `productId` today. Migration complexity is high + risk of breaking the live data upload is unacceptable. Re-evaluate post-M2 if customer feedback says the UX of two separate listings is confusing.
+- **Replace `specs` with `specsAr`/`specsEn` (rename existing column)** — destructive. The 132 products in production have data in `specs` (single language, mostly English keys). Renaming would either lose that data or require a manual data migration script during deploy — adds risk during owner's active upload session. Keeping legacy `specs` as fallback is the safest path; owner migrates rows over time via admin form.
+- **Single `specs` field with bilingual values inside (`{ "pageYield": { "ar": "...", "en": "..." } }`)** — rejected. Changes JSON shape → existing rows would need a one-shot migration script that runs on deploy. Same data-corruption risk as the rename. Twin-column approach with fallback is mechanically simpler and reversible (just delete the new columns if anything goes wrong).
+
+**Consequences:**
+- **Zero data corruption risk during deploy.** `prisma db push` on production adds 4 columns (1 enum default + 2 nullable text + 2 nullable JSON) without touching any existing row. Owner's in-flight uploads continue against the existing fields and work end-to-end.
+- **Existing 132 products auto-tag as NEW.** Owner doesn't have to do anything for those. The "Used" status is opt-in per row.
+- **Storefront filter facet count** grows to 8 active controls (brand × N + category × N + authenticity radio + condition radio + price min/max + in-stock toggle). Acceptable density on desktop sidebar; mobile modal stays scrollable.
+- **Search SQL adds an enum cast** (`p.condition = $1::"ProductCondition"`) — cheap; supported by the new `(condition, status)` composite index.
+- **Admin spec editor is now 3-tab.** Cognitive load slightly up for owner (three places to enter specs vs one), but each tab is identical; bilingual workflow is "type AR specs → switch tab → type EN specs". The legacy tab stays as a read-only-ish fallback for migrating older rows.
+- **Storefront detail page** has two new conditional blocks (Used badge in price row; Warranty + ConditionNote info block). Both render only when populated, so existing products show NO change until owner edits them.
+- **Two listings per model = two URLs in sitemap.** Each gets its own product schema + indexed page. Slight duplication risk for Google (same product name, different SKU); the canonical URL is per-listing so canonicalization handles it. If duplication signals weaken individual rankings, consider noindex'ing the USED listing later (not done now — both surfaces are valuable).
+- **Future variant linking parking lot:** if owner reports operational pain managing duplicate listings (e.g., 50+ models × 2 conditions = 100 rows to maintain), revisit ProductVariant migration in a dedicated sprint with proper Order/Cart/Inventory refactor. Don't start that without 4-6 hours of dedicated planning + a staging dress rehearsal.
+
+**Deploy safety checklist (for the operator):**
+1. `prisma db push --accept-data-loss` on container boot. Adds 4 columns + 1 enum + 1 index. ~1 second on the 132-row table.
+2. All existing products keep their `specs` field untouched.
+3. New products created via admin can fill `specsAr` + `specsEn` + `condition` + `warranty` + `conditionNote`. Old products are unaffected until owner edits them.
+4. The `condition` column has DEFAULT NEW so the migration is non-blocking even with active writes.
