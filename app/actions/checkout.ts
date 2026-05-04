@@ -45,7 +45,7 @@ import { createPaymentKey } from '@/lib/payments/paymob';
 import { isPaymobEnabled } from '@/lib/payments/feature-flags';
 import { enqueueJob } from '@/lib/queue';
 import { renderOrderConfirmationEmail } from '@/lib/email/order-confirmation';
-import { renderB2bPendingReview } from '@/lib/whatsapp-templates';
+import { renderB2bPendingReviewMessage } from '@/lib/whatsapp/wrappers';
 import { ensureInvoiceForOrder } from '@/lib/invoices/ensure';
 import { sendInvoiceToCustomer } from '@/lib/invoices/delivery';
 import { resolveShippingQuote } from '@/lib/shipping/resolve';
@@ -835,15 +835,22 @@ export async function submitForReviewOrderAction(
   }
 
   try {
+    // Sprint 15 — DB-driven template with hardcoded fallback (ADR-067).
+    const orderTotal = Number(result.order.totalEgp);
+    const b2bPendingBody = await renderB2bPendingReviewMessage(
+      {
+        orderNumber: result.orderNumber,
+        slaHours: B2B_SFR_SLA_HOURS,
+        companyName: b2bCtx?.companyNameAr ?? '',
+        total: Number.isFinite(orderTotal)
+          ? String(Math.round(orderTotal))
+          : '',
+      },
+      'ar',
+    );
     await enqueueJob('send-whatsapp', {
       phone: parsed.data.contact.phone,
-      body: renderB2bPendingReview(
-        {
-          orderNumber: result.orderNumber,
-          slaHours: B2B_SFR_SLA_HOURS,
-        },
-        'ar',
-      ),
+      body: b2bPendingBody,
     });
   } catch (err) {
     logger.error(

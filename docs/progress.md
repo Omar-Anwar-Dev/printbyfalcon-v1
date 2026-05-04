@@ -1827,4 +1827,107 @@ Mapped to the 7 criteria in `docs/implementation-plan.md` line 809-816, split in
 - After deploy, owner can edit a product → see the new Condition select + bilingual specs tabs. Existing legacy specs continue to render via fallback until specsAr/specsEn are filled.
 - Recommendation: deploy at a quiet window (early morning or late evening) so the brief container restart doesn't interrupt an upload-in-progress. Container restart = ~5-10 seconds.
 
+---
+
+## Sprint 15 — Editable WhatsApp Templates + Invoice Polish — COMPLETE 2026-05-03
+
+### Sprint 15 kickoff resolutions
+
+- **Owner asked for:** (1) professional wording on invoices + WhatsApp messages; (2) admin-editable WhatsApp templates from `/admin`.
+- **Architecture (per ADR-067):** DB-driven templates with hardcoded fallback. New `WhatsappTemplate` table seeded from `lib/whatsapp/templates-seed.ts`. Renderer reads DB → falls back to hardcoded `lib/whatsapp-templates.ts` if row missing/inactive — pipeline can never go silent.
+- **OTP excluded** from the editable system (auth-critical). STOP/UNSUBSCRIBE detection (regulatory) also unchanged.
+- **OWNER-only edits** — `requireAdmin(['OWNER'])` on list, detail, both server actions. OPS does NOT get template-edit power.
+- **Invoice changes are visual + wording in code only** — no schema migration; re-renders apply to every past invoice retroactively (per ADR-034 deterministic regeneration).
+
+### Tasks shipped (single dense session)
+
+#### Schema additions (additive, deploy-safe)
+- [x] **S15-T1** New `WhatsappTemplateCategory` enum + `WhatsappTemplate` model in [prisma/schema.prisma](../prisma/schema.prisma) — key (unique), category, bilingual name + description + body, JSON variables, isActive, audit fields. Index on `(category, isActive)` for the list page.
+
+#### Default templates + seeding
+- [x] **S15-T2** [lib/whatsapp/templates-seed.ts](../lib/whatsapp/templates-seed.ts) — 10 default templates with professional AR + EN wording:
+  1. `order.confirmed.b2c` — تأكيد طلب أفراد
+  2. `order.confirmed.b2b` — تأكيد طلب شركات
+  3. `order.handed_to_courier` — تسليم للشحن (مع courier name + phone + ETA)
+  4. `order.delivered` — تم التسليم (مع شكر + رابط للكتالوج)
+  5. `order.cancelled` — تم الإلغاء (مع reason + refund note)
+  6. `b2b.pending_review` — طلب B2B بانتظار المراجعة
+  7. `b2b.confirmed` — تأكيد طلب B2B بعد مندوب المبيعات
+  8. `return.received` — استلام مرتجع
+  9. `promo.applied` — كود خصم خاص (template يدوي)
+  10. `support.greeting` — ترحيب بالدعم
+- [x] **S15-T2** [scripts/post-push.ts](../scripts/post-push.ts) upserts each via `update: {}` so re-seeds NEVER overwrite owner edits.
+
+#### Renderer + tests
+- [x] **S15-T3** [lib/whatsapp/render-template.ts](../lib/whatsapp/render-template.ts):
+  - `substituteVariables(template, vars)` — pure function. `{{name}}` substitution; unknown vars left literal; 3+ newlines collapse to 2; trims output.
+  - `renderTemplateFromDb(key, locale, vars)` — reads + substitutes; returns null when missing/inactive. Cached per-request via React `cache()`.
+  - `renderTemplateOrFallback(key, locale, vars, fallback)` — wrapper that tries DB then falls back to hardcoded.
+- [x] **S15-T3** 10 new vitest cases in [render-template.test.ts](../lib/whatsapp/render-template.test.ts) covering happy path, unknown vars, numeric coercion, Arabic + emoji preservation, optional-line collapse, regex word-boundary edge cases. **213/213 total** (was 203 + 10).
+
+#### Wired into existing send paths
+- [x] **S15-T4** [lib/whatsapp/wrappers.ts](../lib/whatsapp/wrappers.ts) — typed wrappers:
+  - `renderOrderStatusChangeMessage` — maps status → template key for HANDED_TO_COURIER / DELIVERED / CANCELLED; falls through to hardcoded for other statuses (CONFIRMED, OUT_FOR_DELIVERY, RETURNED, DELAYED).
+  - `renderB2bPendingReviewMessage`, `renderB2bOrderConfirmedByRepMessage` — DB-first with hardcoded fallback.
+- [x] **S15-T4** Call sites updated:
+  - [app/actions/admin-orders.ts](../app/actions/admin-orders.ts) (status change broadcast + B2B confirm)
+  - [app/actions/checkout.ts](../app/actions/checkout.ts) (B2B pending-review on submission)
+- [x] **S15-T4** OTP send path in [lib/otp.ts](../lib/otp.ts) UNTOUCHED — stays hardcoded for auth security.
+
+#### Admin UI
+- [x] **S15-T5** [/admin/settings/whatsapp-templates](../app/[locale]/admin/settings/whatsapp-templates/page.tsx) — list page grouped by category; per-row badges for active/inactive + last-updated timestamp; mono key display.
+- [x] **S15-T5** [/admin/settings/whatsapp-templates/[id]](../app/[locale]/admin/settings/whatsapp-templates/[id]/page.tsx) — detail page with description block + bilingual editor.
+- [x] **S15-T5** [components/admin/whatsapp-template-editor.tsx](../components/admin/whatsapp-template-editor.tsx) — client component:
+  - Side-by-side AR + EN textareas (RTL/LTR per body)
+  - Variables sidebar — clickable `{{placeholder}}` chips that insert at last-focused cursor; description + example shown
+  - Live preview with sample data substituted (AR + EN side-by-side, mirrors runtime substitution)
+  - Active toggle + Save + "Reset to default" (with confirm)
+  - Length counter (×/2000 chars per locale)
+  - Saved-at indicator + error display
+- [x] **S15-T5** Server actions [app/actions/admin-whatsapp-templates.ts](../app/actions/admin-whatsapp-templates.ts) — `updateWhatsappTemplateAction` + `resetWhatsappTemplateAction`. OWNER-gated. Audit-logs every change.
+- [x] **S15-T5** Settings landing page card added — link to the new templates page.
+
+#### Invoice polish
+- [x] **S15-T6** [lib/invoices/template.tsx](../lib/invoices/template.tsx) rewritten:
+  - **Title:** "فاتورة" → **"فاتورة ضريبية"** (Egyptian tax-compliance signal).
+  - **Top accent strip** (6px brand cyan) on every page.
+  - **Section labels formalized:** "بيانات العميل" / "بيانات الدفع" with accent uppercase letterspacing.
+  - **Table header** reverses to accent fill + white text.
+  - **Zebra row striping** in line items.
+  - **Grand total row** uses accent color + thicker accent border.
+  - **Thank-you + 14-day return-policy block** in accent-soft callout above footer.
+  - **Page numbers** ("صفحة N من M") added to footer.
+  - **Wording polish throughout:** "الكود" → "كود المنتج", "السعر" → "سعر الوحدة", "الإجمالي" (column) → "إجمالي البند", "الإجمالي" (footer) → "الإجمالي المستحق", "س.ت" → "س.ت رقم:".
+  - **No schema change** — all visual + wording. Past invoices regenerate with the new design (deterministic re-render per ADR-034).
+
+### Verification
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npx next lint` — clean (only pre-existing `lib/db.ts` warning from Sprint 1)
+- ✅ `npx vitest run` — **213/213 tests green** (203 baseline + 10 new render-template cases)
+- ✅ `prisma validate` clean
+
+### Sprint 15 Exit Criteria
+- ✅ All 10 customer-facing notification types are now editable from `/admin/settings/whatsapp-templates`
+- ✅ Each template ships professional AR + EN wording out of the box
+- ✅ Admin UI shows variables panel + live preview + active toggle + reset
+- ✅ Hardcoded fallback ensures the pipeline never goes silent
+- ✅ OTP path untouched (auth security)
+- ✅ Invoice has new visual identity + tax-invoice naming + thank-you block + page numbers
+- ✅ All existing tests green; no regression
+
+**Sprint 15 closed 2026-05-03.** Single dense session.
+
+### Decisions logged this sprint
+- **ADR-067** [2026-05-03] WhatsApp templates DB-driven with hardcoded fallback; OWNER-only edits; OTP excluded; invoice polish via template rewrite (no schema migration).
+
+### Risk Log Updates
+- **No new risks.** Both new features ship behind robust fallbacks (hardcoded WhatsApp templates + deterministic invoice re-render). The blast radius of a misedit is bounded by the active toggle + reset-to-default action.
+- **NEW low-risk:** an OWNER mis-saving a broken template (e.g. removing all `{{orderNumber}}` placeholders) sends a context-poor message but doesn't break the notification queue. Mitigated by the live preview in the admin UI + the active toggle (admin can disable a broken template in 1 click).
+
+### Sprint 15 deploy-time safety
+- `prisma db push` adds 1 enum + 1 table + 1 index in <1 second.
+- `post-push.ts` seeds 10 templates on first boot post-deploy via upsert (`update: {}` skip-if-exists).
+- All call sites use `renderTemplateOrFallback` — if the templates table is empty or unreachable, hardcoded defaults kick in immediately.
+- No effect on the ongoing catalog data upload (separate table, separate concerns).
+
 

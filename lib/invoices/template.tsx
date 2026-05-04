@@ -1,10 +1,17 @@
 /**
- * React-pdf Arabic invoice template (Sprint 6 S6-D4-T1).
+ * React-pdf Arabic invoice template (Sprint 6 → Sprint 15 polish).
  *
- * Arabic-only per PRD Feature 7 — no bilingual dual-column layout. SKU codes
- * are rendered LTR inside a span; numbers use Arabic-Indic digits? No — we
- * keep Latin digits for accounting compatibility (Egyptian tax forms use
- * Latin digits too, and accounting software OCRs them more reliably).
+ * Arabic-only per PRD Feature 7. Latin digits for accounting compatibility
+ * (Egyptian tax forms + accounting software OCR more reliably).
+ *
+ * Sprint 15 polish — visual + wording (per ADR-067):
+ *   - Title becomes "فاتورة ضريبية" (tax invoice — Egyptian compliance signal).
+ *   - Accent strip at the top + bottom for brand recognition.
+ *   - Clearer section labels ("بيانات العميل" / "بيانات الدفع").
+ *   - Alternating row backgrounds (zebra) on the line-item table.
+ *   - Grand-total row uses accent color for emphasis.
+ *   - Footer carries thank-you line + return-policy reminder + page numbers.
+ *   - Subtle font-size hierarchy (10pt body, 9pt meta, 8pt micro-copy).
  *
  * Layout inputs are deterministic from the Order/OrderItem snapshots plus the
  * Invoice metadata row — see `buildInvoiceData()`. Because rendering is
@@ -68,16 +75,17 @@ export type InvoiceData = {
 };
 
 // Aligned with docs/design-system.md v2 (ADR-059): pure-white body,
-// neutral-gray panels, ink-cyan accent. Replaces the v1 warm-cream
-// paper (#F3F1EC) + warm border (#E5E2DA) that no longer match the
-// site's visual identity.
+// neutral-gray panels, ink-cyan accent.
 const COLORS = {
   ink: '#0F172A',
+  inkSoft: '#1F2937',
   muted: '#666666',
   paper: '#F7F7F7',
+  paperHover: '#F0F0F0',
   border: '#E5E5E5',
   accent: '#0A6B74',
   accentSoft: '#E6F3F4',
+  white: '#FFFFFF',
   amendedWatermark: 'rgba(181, 71, 71, 0.14)',
   amendedBorder: '#B54747',
 };
@@ -87,27 +95,65 @@ const styles = StyleSheet.create({
     fontFamily: INVOICE_FONT_FAMILY,
     fontSize: 10,
     color: COLORS.ink,
-    padding: 40,
+    paddingTop: 0,
+    paddingBottom: 60,
+    paddingHorizontal: 36,
     direction: 'rtl',
+  },
+  // Sprint 15 — accent strip across the top of every page (brand cue).
+  accentStrip: {
+    height: 6,
+    backgroundColor: COLORS.accent,
+    marginHorizontal: -36,
+    marginBottom: 24,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 18,
+    paddingBottom: 14,
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    paddingBottom: 12,
   },
-  brand: { flexDirection: 'column' },
-  brandName: { fontSize: 16, fontWeight: 700 },
+  brand: { flexDirection: 'column', flex: 1 },
+  brandName: {
+    fontSize: 17,
+    fontWeight: 700,
+    color: COLORS.ink,
+  },
+  brandTagline: {
+    fontSize: 9,
+    color: COLORS.muted,
+    marginTop: 1,
+    fontStyle: 'italic',
+  },
   brandMeta: { fontSize: 9, color: COLORS.muted, marginTop: 2 },
-  invoiceMeta: { flexDirection: 'column', alignItems: 'flex-end' },
-  invoiceTitle: { fontSize: 18, fontWeight: 700, color: COLORS.accent },
-  invoiceNumber: { fontSize: 11, marginTop: 2 },
-  invoiceDate: { fontSize: 9, color: COLORS.muted, marginTop: 2 },
+  invoiceMeta: { flexDirection: 'column', alignItems: 'flex-end', flex: 1 },
+  invoiceTitle: {
+    fontSize: 20,
+    fontWeight: 700,
+    color: COLORS.accent,
+    letterSpacing: 0.5,
+  },
+  invoiceNumber: {
+    fontSize: 12,
+    fontWeight: 700,
+    marginTop: 4,
+    color: COLORS.ink,
+  },
+  invoiceDate: { fontSize: 9, color: COLORS.muted, marginTop: 3 },
+  // Sprint 15 — bordered section heading style for the two-col grid.
+  sectionLabel: {
+    fontSize: 8,
+    color: COLORS.accent,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    fontWeight: 700,
+    letterSpacing: 0.5,
+  },
   twoCol: {
     flexDirection: 'row',
-    gap: 16,
+    gap: 14,
     marginBottom: 18,
   },
   colBox: {
@@ -115,62 +161,84 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 4,
-    padding: 10,
+    padding: 11,
     backgroundColor: COLORS.paper,
   },
-  colTitle: {
+  colBody: { fontSize: 10, lineHeight: 1.4 },
+  colLabel: {
     fontSize: 9,
     color: COLORS.muted,
-    marginBottom: 4,
+    marginRight: 4,
   },
-  colBody: { fontSize: 10 },
   amendedBanner: {
     marginTop: 8,
     marginBottom: 12,
-    padding: 6,
+    padding: 8,
     borderWidth: 1,
     borderColor: COLORS.amendedBorder,
     borderRadius: 4,
     color: COLORS.amendedBorder,
     fontSize: 10,
+    fontWeight: 700,
     textAlign: 'center',
   },
   table: {
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 4,
-    marginBottom: 12,
+    marginBottom: 14,
+    overflow: 'hidden',
   },
   th: {
     flexDirection: 'row',
-    backgroundColor: COLORS.paper,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    padding: 6,
+    backgroundColor: COLORS.accent,
+    color: COLORS.white,
+    padding: 8,
     fontSize: 9,
     fontWeight: 700,
   },
+  thText: { color: COLORS.white },
   tr: {
     flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: COLORS.border,
-    padding: 6,
+    padding: 7,
     fontSize: 10,
+    backgroundColor: COLORS.white,
+  },
+  trAlt: {
+    flexDirection: 'row',
+    borderBottomWidth: 1,
+    borderBottomColor: COLORS.border,
+    padding: 7,
+    fontSize: 10,
+    backgroundColor: COLORS.paper,
   },
   trLast: {
     flexDirection: 'row',
-    padding: 6,
+    padding: 7,
     fontSize: 10,
+    backgroundColor: COLORS.white,
+  },
+  trLastAlt: {
+    flexDirection: 'row',
+    padding: 7,
+    fontSize: 10,
+    backgroundColor: COLORS.paper,
   },
   cellSku: { width: 80 },
   cellName: { flex: 1 },
   cellQty: { width: 40, textAlign: 'center' },
-  cellPrice: { width: 70, textAlign: 'left' },
-  cellTotal: { width: 70, textAlign: 'left' },
+  cellPrice: { width: 75, textAlign: 'left' },
+  cellTotal: { width: 75, textAlign: 'left', fontWeight: 700 },
+  totalsWrap: {
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    marginBottom: 16,
+  },
   totals: {
-    alignSelf: 'flex-start',
-    width: 240,
-    padding: 10,
+    width: 260,
+    padding: 12,
     borderWidth: 1,
     borderColor: COLORS.border,
     borderRadius: 4,
@@ -179,30 +247,62 @@ const styles = StyleSheet.create({
   totalsRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginBottom: 4,
+    marginBottom: 5,
     fontSize: 10,
   },
+  totalsLabel: { color: COLORS.muted },
+  totalsValue: { color: COLORS.ink, fontWeight: 500 },
   grandRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    marginTop: 6,
-    paddingTop: 6,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    fontSize: 12,
+    marginTop: 8,
+    paddingTop: 8,
+    borderTopWidth: 1.5,
+    borderTopColor: COLORS.accent,
+    fontSize: 13,
     fontWeight: 700,
+  },
+  grandLabel: { color: COLORS.ink },
+  grandValue: { color: COLORS.accent },
+  // Sprint 15 — thank-you + return-policy reminder above the page footer.
+  noteBlock: {
+    marginTop: 8,
+    marginBottom: 4,
+    padding: 10,
+    borderRadius: 4,
+    backgroundColor: COLORS.accentSoft,
+    borderLeftWidth: 3,
+    borderLeftColor: COLORS.accent,
+  },
+  noteTitle: {
+    fontSize: 10,
+    fontWeight: 700,
+    color: COLORS.accent,
+    marginBottom: 3,
+  },
+  noteBody: {
+    fontSize: 9,
+    color: COLORS.inkSoft,
+    lineHeight: 1.45,
   },
   footer: {
     position: 'absolute',
-    bottom: 30,
-    left: 40,
-    right: 40,
+    bottom: 24,
+    left: 36,
+    right: 36,
     fontSize: 8,
     color: COLORS.muted,
     textAlign: 'center',
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     paddingTop: 8,
+  },
+  pageNum: {
+    position: 'absolute',
+    bottom: 24,
+    right: 36,
+    fontSize: 8,
+    color: COLORS.muted,
   },
   watermark: {
     position: 'absolute',
@@ -217,12 +317,10 @@ const styles = StyleSheet.create({
   },
   ltr: { direction: 'ltr' },
   logo: {
-    // Compact lockup so the wordmark "بريت باي فالكون" remains the
-    // primary visual anchor; the icon supports it instead of dominating.
-    width: 60,
-    height: 28,
+    width: 64,
+    height: 30,
     objectFit: 'contain',
-    marginBottom: 4,
+    marginBottom: 5,
   },
 });
 
@@ -246,12 +344,16 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
       language="ar"
     >
       <Page size="A4" style={styles.page}>
+        {/* Top accent strip — brand cue on every page. */}
+        <View style={styles.accentStrip} fixed />
+
         {data.isAmended ? (
           <Text style={styles.watermark} fixed>
             AMENDED
           </Text>
         ) : null}
 
+        {/* Header: brand block ↔ invoice metadata. */}
         <View style={styles.header}>
           <View style={styles.brand}>
             {data.store.logoPngBuffer ? (
@@ -260,11 +362,14 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
               <Image src={data.store.logoPngBuffer} style={styles.logo} />
             ) : null}
             <Text style={styles.brandName}>{data.store.nameAr}</Text>
-            <Text style={styles.brandMeta}>
-              س.ت: {data.store.commercialRegistryNumber}
+            <Text style={styles.brandTagline}>
+              متجر متخصص في الطابعات وأحبار الطباعة
             </Text>
             <Text style={styles.brandMeta}>
-              ب.ض: {data.store.taxCardNumber}
+              س.ت رقم: {data.store.commercialRegistryNumber}
+            </Text>
+            <Text style={styles.brandMeta}>
+              ب.ض رقم: {data.store.taxCardNumber}
             </Text>
             <Text style={styles.brandMeta}>{data.store.addressAr}</Text>
             <Text style={[styles.brandMeta, styles.ltr]}>
@@ -275,17 +380,19 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
             </Text>
           </View>
           <View style={styles.invoiceMeta}>
-            <Text style={styles.invoiceTitle}>فاتورة</Text>
+            <Text style={styles.invoiceTitle}>فاتورة ضريبية</Text>
             <Text style={[styles.invoiceNumber, styles.ltr]}>
               {data.invoiceNumber}
             </Text>
-            <Text style={styles.invoiceDate}>{formatDate(data.issuedAt)}</Text>
+            <Text style={styles.invoiceDate}>
+              تاريخ الإصدار: {formatDate(data.issuedAt)}
+            </Text>
             <Text style={[styles.invoiceDate, styles.ltr]}>
               Order: {data.orderNumber}
             </Text>
             {data.poReference ? (
               <Text style={[styles.invoiceDate, styles.ltr]}>
-                PO: {data.poReference}
+                PO Ref: {data.poReference}
               </Text>
             ) : null}
           </View>
@@ -297,11 +404,14 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
           </Text>
         ) : null}
 
+        {/* Customer + Payment grid. */}
         <View style={styles.twoCol}>
           <View style={styles.colBox}>
-            <Text style={styles.colTitle}>العميل</Text>
-            <Text style={styles.colBody}>{data.customer.name}</Text>
-            <Text style={[styles.colBody, styles.ltr]}>
+            <Text style={styles.sectionLabel}>بيانات العميل</Text>
+            <Text style={[styles.colBody, { fontWeight: 700 }]}>
+              {data.customer.name}
+            </Text>
+            <Text style={[styles.colBody, styles.ltr, { marginTop: 2 }]}>
               {data.customer.phone}
             </Text>
             {data.customer.email ? (
@@ -309,44 +419,56 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
                 {data.customer.email}
               </Text>
             ) : null}
-            <Text style={styles.colBody}>{data.customer.addressLine}</Text>
+            <Text style={[styles.colBody, { marginTop: 4 }]}>
+              {data.customer.addressLine}
+            </Text>
             {data.placedByName ? (
-              <Text style={[styles.colBody, { marginTop: 4 }]}>
-                باسم: {data.placedByName}
+              <Text style={[styles.colBody, { marginTop: 6 }]}>
+                <Text style={styles.colLabel}>مقدم الطلب:</Text>{' '}
+                {data.placedByName}
               </Text>
             ) : null}
           </View>
           <View style={styles.colBox}>
-            <Text style={styles.colTitle}>الدفع</Text>
+            <Text style={styles.sectionLabel}>بيانات الدفع</Text>
             <Text style={styles.colBody}>
-              الطريقة: {data.paymentMethodLabel}
+              <Text style={styles.colLabel}>طريقة الدفع:</Text>{' '}
+              {data.paymentMethodLabel}
             </Text>
-            <Text style={styles.colBody}>
-              الحالة: {data.paymentStatusLabel}
+            <Text style={[styles.colBody, { marginTop: 3 }]}>
+              <Text style={styles.colLabel}>حالة الدفع:</Text>{' '}
+              <Text style={{ fontWeight: 700 }}>{data.paymentStatusLabel}</Text>
             </Text>
             {data.paymentMethodNote ? (
-              <Text style={[styles.colBody, { marginTop: 4 }]}>
-                ملاحظة: {data.paymentMethodNote}
+              <Text style={[styles.colBody, { marginTop: 6 }]}>
+                <Text style={styles.colLabel}>ملاحظة:</Text>{' '}
+                {data.paymentMethodNote}
               </Text>
             ) : null}
           </View>
         </View>
 
+        {/* Line-items table — accent header + zebra rows. */}
         <View style={styles.table}>
           <View style={styles.th}>
-            <Text style={styles.cellSku}>الكود</Text>
-            <Text style={styles.cellName}>المنتج</Text>
-            <Text style={styles.cellQty}>الكمية</Text>
-            <Text style={styles.cellPrice}>السعر</Text>
-            <Text style={styles.cellTotal}>الإجمالي</Text>
+            <Text style={[styles.cellSku, styles.thText]}>كود المنتج</Text>
+            <Text style={[styles.cellName, styles.thText]}>المنتج</Text>
+            <Text style={[styles.cellQty, styles.thText]}>الكمية</Text>
+            <Text style={[styles.cellPrice, styles.thText]}>سعر الوحدة</Text>
+            <Text style={[styles.cellTotal, styles.thText]}>إجمالي البند</Text>
           </View>
           {data.lines.map((line, i) => {
             const isLast = i === data.lines.length - 1;
+            const isAlt = i % 2 === 1;
+            const rowStyle = isLast
+              ? isAlt
+                ? styles.trLastAlt
+                : styles.trLast
+              : isAlt
+                ? styles.trAlt
+                : styles.tr;
             return (
-              <View
-                key={`${line.sku}-${i}`}
-                style={isLast ? styles.trLast : styles.tr}
-              >
+              <View key={`${line.sku}-${i}`} style={rowStyle}>
                 <Text style={[styles.cellSku, styles.ltr]}>{line.sku}</Text>
                 <Text style={styles.cellName}>{line.nameAr}</Text>
                 <Text style={styles.cellQty}>{line.qty}</Text>
@@ -361,34 +483,69 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
           })}
         </View>
 
-        <View style={styles.totals}>
-          <View style={styles.totalsRow}>
-            <Text>الإجمالي قبل الخصم</Text>
-            <Text style={styles.ltr}>{money(data.subtotalEgp)}</Text>
-          </View>
-          {data.discountEgp > 0 ? (
+        {/* Totals box — accent grand-total row. */}
+        <View style={styles.totalsWrap}>
+          <View style={styles.totals}>
             <View style={styles.totalsRow}>
-              <Text>الخصم</Text>
-              <Text style={styles.ltr}>- {money(data.discountEgp)}</Text>
+              <Text style={styles.totalsLabel}>الإجمالي قبل الخصم</Text>
+              <Text style={[styles.totalsValue, styles.ltr]}>
+                {money(data.subtotalEgp)}
+              </Text>
             </View>
-          ) : null}
-          <View style={styles.totalsRow}>
-            <Text>الشحن</Text>
-            <Text style={styles.ltr}>{money(data.shippingEgp)}</Text>
-          </View>
-          <View style={styles.totalsRow}>
-            <Text>ضريبة القيمة المضافة (14%)</Text>
-            <Text style={styles.ltr}>{money(data.vatEgp)}</Text>
-          </View>
-          <View style={styles.grandRow}>
-            <Text>الإجمالي</Text>
-            <Text style={styles.ltr}>{money(data.totalEgp)}</Text>
+            {data.discountEgp > 0 ? (
+              <View style={styles.totalsRow}>
+                <Text style={styles.totalsLabel}>الخصم</Text>
+                <Text style={[styles.totalsValue, styles.ltr]}>
+                  - {money(data.discountEgp)}
+                </Text>
+              </View>
+            ) : null}
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsLabel}>الشحن</Text>
+              <Text style={[styles.totalsValue, styles.ltr]}>
+                {money(data.shippingEgp)}
+              </Text>
+            </View>
+            <View style={styles.totalsRow}>
+              <Text style={styles.totalsLabel}>ضريبة القيمة المضافة (14%)</Text>
+              <Text style={[styles.totalsValue, styles.ltr]}>
+                {money(data.vatEgp)}
+              </Text>
+            </View>
+            <View style={styles.grandRow}>
+              <Text style={styles.grandLabel}>الإجمالي المستحق</Text>
+              <Text style={[styles.grandValue, styles.ltr]}>
+                {money(data.totalEgp)}
+              </Text>
+            </View>
           </View>
         </View>
 
+        {/* Sprint 15 — thank-you + return-policy reminder. */}
+        <View style={styles.noteBlock}>
+          <Text style={styles.noteTitle}>
+            شكرًا لاختياركم {data.store.nameAr}
+          </Text>
+          <Text style={styles.noteBody}>
+            استرجاع المنتج متاح خلال 14 يومًا من تاريخ الاستلام في حالته
+            الأصلية. للاستفسار أو الاسترجاع: تواصل معنا على{' '}
+            <Text style={styles.ltr}>{data.store.phone}</Text> أو{' '}
+            <Text style={styles.ltr}>{data.store.email}</Text>
+          </Text>
+        </View>
+
+        {/* Footer — fixed across multi-page invoices. */}
         <Text style={styles.footer} fixed>
-          {data.store.nameAr} — {data.store.website} · {data.store.phone}
+          {data.store.nameAr} · {data.store.website} ·{' '}
+          <Text style={styles.ltr}>{data.store.phone}</Text>
         </Text>
+        <Text
+          style={styles.pageNum}
+          render={({ pageNumber, totalPages }) =>
+            `صفحة ${pageNumber} من ${totalPages}`
+          }
+          fixed
+        />
       </Page>
     </Document>
   );
