@@ -1,22 +1,26 @@
 /**
- * React-pdf Arabic invoice template (Sprint 6 → Sprint 15 polish).
+ * React-pdf Arabic invoice template.
  *
- * Arabic-only per PRD Feature 7. Latin digits for accounting compatibility
- * (Egyptian tax forms + accounting software OCR more reliably).
+ * Arabic-only per PRD Feature 7. Latin digits for accounting compatibility.
  *
- * Sprint 15 polish — visual + wording (per ADR-067):
- *   - Title becomes "فاتورة ضريبية" (tax invoice — Egyptian compliance signal).
- *   - Accent strip at the top + bottom for brand recognition.
+ * Sprint 15 polish (with hotfix removing react-pdf-incompatible styles):
+ *   - Title: "فاتورة ضريبية" (Egyptian tax-compliance signal).
+ *   - Bigger, accented invoice header.
  *   - Clearer section labels ("بيانات العميل" / "بيانات الدفع").
  *   - Alternating row backgrounds (zebra) on the line-item table.
- *   - Grand-total row uses accent color for emphasis.
- *   - Footer carries thank-you line + return-policy reminder + page numbers.
- *   - Subtle font-size hierarchy (10pt body, 9pt meta, 8pt micro-copy).
+ *   - Accent-colored grand-total row.
+ *   - Thank-you + return-policy callout above the page footer.
+ *   - Page numbers in the footer.
  *
- * Layout inputs are deterministic from the Order/OrderItem snapshots plus the
- * Invoice metadata row — see `buildInvoiceData()`. Because rendering is
- * deterministic, we can regenerate the same PDF bytes on-demand for every
- * download (ADR-034 — no files on disk).
+ * Hotfix removed (compatibility — react-pdf v4 + IBM Plex Arabic font):
+ *   - textTransform: uppercase (didn't render on RTL strings reliably)
+ *   - fontStyle: italic (Arabic font has no italic face)
+ *   - letterSpacing on Arabic text (font hinting issue)
+ *   - Negative-margin "accent strip" with fixed positioning (layout crash)
+ *   - 3-level nested <Text> (replaced with flat template literals)
+ *
+ * Layout inputs are deterministic — see `buildInvoiceData()`. ADR-034
+ * regenerates PDF on every download (no files on disk).
  */
 import {
   Document,
@@ -95,25 +99,17 @@ const styles = StyleSheet.create({
     fontFamily: INVOICE_FONT_FAMILY,
     fontSize: 10,
     color: COLORS.ink,
-    paddingTop: 0,
+    padding: 40,
     paddingBottom: 60,
-    paddingHorizontal: 36,
     direction: 'rtl',
-  },
-  // Sprint 15 — accent strip across the top of every page (brand cue).
-  accentStrip: {
-    height: 6,
-    backgroundColor: COLORS.accent,
-    marginHorizontal: -36,
-    marginBottom: 24,
   },
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     marginBottom: 18,
     paddingBottom: 14,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
+    borderBottomWidth: 2,
+    borderBottomColor: COLORS.accent,
   },
   brand: { flexDirection: 'column', flex: 1 },
   brandName: {
@@ -125,7 +121,6 @@ const styles = StyleSheet.create({
     fontSize: 9,
     color: COLORS.muted,
     marginTop: 1,
-    fontStyle: 'italic',
   },
   brandMeta: { fontSize: 9, color: COLORS.muted, marginTop: 2 },
   invoiceMeta: { flexDirection: 'column', alignItems: 'flex-end', flex: 1 },
@@ -133,7 +128,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 700,
     color: COLORS.accent,
-    letterSpacing: 0.5,
   },
   invoiceNumber: {
     fontSize: 12,
@@ -142,14 +136,11 @@ const styles = StyleSheet.create({
     color: COLORS.ink,
   },
   invoiceDate: { fontSize: 9, color: COLORS.muted, marginTop: 3 },
-  // Sprint 15 — bordered section heading style for the two-col grid.
   sectionLabel: {
-    fontSize: 8,
+    fontSize: 9,
     color: COLORS.accent,
     marginBottom: 4,
-    textTransform: 'uppercase',
     fontWeight: 700,
-    letterSpacing: 0.5,
   },
   twoCol: {
     flexDirection: 'row',
@@ -165,11 +156,7 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.paper,
   },
   colBody: { fontSize: 10, lineHeight: 1.4 },
-  colLabel: {
-    fontSize: 9,
-    color: COLORS.muted,
-    marginRight: 4,
-  },
+  colBodyBold: { fontSize: 10, lineHeight: 1.4, fontWeight: 700 },
   amendedBanner: {
     marginTop: 8,
     marginBottom: 12,
@@ -187,12 +174,10 @@ const styles = StyleSheet.create({
     borderColor: COLORS.border,
     borderRadius: 4,
     marginBottom: 14,
-    overflow: 'hidden',
   },
   th: {
     flexDirection: 'row',
     backgroundColor: COLORS.accent,
-    color: COLORS.white,
     padding: 8,
     fontSize: 9,
     fontWeight: 700,
@@ -257,22 +242,19 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     marginTop: 8,
     paddingTop: 8,
-    borderTopWidth: 1.5,
+    borderTopWidth: 2,
     borderTopColor: COLORS.accent,
     fontSize: 13,
     fontWeight: 700,
   },
   grandLabel: { color: COLORS.ink },
   grandValue: { color: COLORS.accent },
-  // Sprint 15 — thank-you + return-policy reminder above the page footer.
   noteBlock: {
     marginTop: 8,
     marginBottom: 4,
     padding: 10,
     borderRadius: 4,
     backgroundColor: COLORS.accentSoft,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.accent,
   },
   noteTitle: {
     fontSize: 10,
@@ -287,9 +269,9 @@ const styles = StyleSheet.create({
   },
   footer: {
     position: 'absolute',
-    bottom: 24,
-    left: 36,
-    right: 36,
+    bottom: 30,
+    left: 40,
+    right: 40,
     fontSize: 8,
     color: COLORS.muted,
     textAlign: 'center',
@@ -299,8 +281,8 @@ const styles = StyleSheet.create({
   },
   pageNum: {
     position: 'absolute',
-    bottom: 24,
-    right: 36,
+    bottom: 30,
+    right: 40,
     fontSize: 8,
     color: COLORS.muted,
   },
@@ -344,9 +326,6 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
       language="ar"
     >
       <Page size="A4" style={styles.page}>
-        {/* Top accent strip — brand cue on every page. */}
-        <View style={styles.accentStrip} fixed />
-
         {data.isAmended ? (
           <Text style={styles.watermark} fixed>
             AMENDED
@@ -366,10 +345,10 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
               متجر متخصص في الطابعات وأحبار الطباعة
             </Text>
             <Text style={styles.brandMeta}>
-              س.ت رقم: {data.store.commercialRegistryNumber}
+              {`س.ت رقم: ${data.store.commercialRegistryNumber}`}
             </Text>
             <Text style={styles.brandMeta}>
-              ب.ض رقم: {data.store.taxCardNumber}
+              {`ب.ض رقم: ${data.store.taxCardNumber}`}
             </Text>
             <Text style={styles.brandMeta}>{data.store.addressAr}</Text>
             <Text style={[styles.brandMeta, styles.ltr]}>
@@ -385,14 +364,14 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
               {data.invoiceNumber}
             </Text>
             <Text style={styles.invoiceDate}>
-              تاريخ الإصدار: {formatDate(data.issuedAt)}
+              {`تاريخ الإصدار: ${formatDate(data.issuedAt)}`}
             </Text>
             <Text style={[styles.invoiceDate, styles.ltr]}>
-              Order: {data.orderNumber}
+              {`Order: ${data.orderNumber}`}
             </Text>
             {data.poReference ? (
               <Text style={[styles.invoiceDate, styles.ltr]}>
-                PO Ref: {data.poReference}
+                {`PO Ref: ${data.poReference}`}
               </Text>
             ) : null}
           </View>
@@ -400,7 +379,7 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
 
         {data.isAmended ? (
           <Text style={styles.amendedBanner}>
-            فاتورة معدَّلة — {data.amendmentReason ?? 'تعديل'}
+            {`فاتورة معدَّلة — ${data.amendmentReason ?? 'تعديل'}`}
           </Text>
         ) : null}
 
@@ -408,9 +387,7 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
         <View style={styles.twoCol}>
           <View style={styles.colBox}>
             <Text style={styles.sectionLabel}>بيانات العميل</Text>
-            <Text style={[styles.colBody, { fontWeight: 700 }]}>
-              {data.customer.name}
-            </Text>
+            <Text style={styles.colBodyBold}>{data.customer.name}</Text>
             <Text style={[styles.colBody, styles.ltr, { marginTop: 2 }]}>
               {data.customer.phone}
             </Text>
@@ -424,25 +401,21 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
             </Text>
             {data.placedByName ? (
               <Text style={[styles.colBody, { marginTop: 6 }]}>
-                <Text style={styles.colLabel}>مقدم الطلب:</Text>{' '}
-                {data.placedByName}
+                {`مقدم الطلب: ${data.placedByName}`}
               </Text>
             ) : null}
           </View>
           <View style={styles.colBox}>
             <Text style={styles.sectionLabel}>بيانات الدفع</Text>
             <Text style={styles.colBody}>
-              <Text style={styles.colLabel}>طريقة الدفع:</Text>{' '}
-              {data.paymentMethodLabel}
+              {`طريقة الدفع: ${data.paymentMethodLabel}`}
             </Text>
-            <Text style={[styles.colBody, { marginTop: 3 }]}>
-              <Text style={styles.colLabel}>حالة الدفع:</Text>{' '}
-              <Text style={{ fontWeight: 700 }}>{data.paymentStatusLabel}</Text>
+            <Text style={[styles.colBodyBold, { marginTop: 3 }]}>
+              {`حالة الدفع: ${data.paymentStatusLabel}`}
             </Text>
             {data.paymentMethodNote ? (
               <Text style={[styles.colBody, { marginTop: 6 }]}>
-                <Text style={styles.colLabel}>ملاحظة:</Text>{' '}
-                {data.paymentMethodNote}
+                {`ملاحظة: ${data.paymentMethodNote}`}
               </Text>
             ) : null}
           </View>
@@ -496,7 +469,7 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
               <View style={styles.totalsRow}>
                 <Text style={styles.totalsLabel}>الخصم</Text>
                 <Text style={[styles.totalsValue, styles.ltr]}>
-                  - {money(data.discountEgp)}
+                  {`- ${money(data.discountEgp)}`}
                 </Text>
               </View>
             ) : null}
@@ -521,23 +494,19 @@ export function InvoiceDocument({ data }: { data: InvoiceData }) {
           </View>
         </View>
 
-        {/* Sprint 15 — thank-you + return-policy reminder. */}
+        {/* Thank-you + return-policy reminder. */}
         <View style={styles.noteBlock}>
           <Text style={styles.noteTitle}>
-            شكرًا لاختياركم {data.store.nameAr}
+            {`شكرًا لاختياركم ${data.store.nameAr}`}
           </Text>
           <Text style={styles.noteBody}>
-            استرجاع المنتج متاح خلال 14 يومًا من تاريخ الاستلام في حالته
-            الأصلية. للاستفسار أو الاسترجاع: تواصل معنا على{' '}
-            <Text style={styles.ltr}>{data.store.phone}</Text> أو{' '}
-            <Text style={styles.ltr}>{data.store.email}</Text>
+            {`استرجاع المنتج متاح خلال 14 يومًا من تاريخ الاستلام في حالته الأصلية. للاستفسار أو الاسترجاع: تواصل معنا على ${data.store.phone} أو ${data.store.email}`}
           </Text>
         </View>
 
-        {/* Footer — fixed across multi-page invoices. */}
+        {/* Footer + page numbers. */}
         <Text style={styles.footer} fixed>
-          {data.store.nameAr} · {data.store.website} ·{' '}
-          <Text style={styles.ltr}>{data.store.phone}</Text>
+          {`${data.store.nameAr} · ${data.store.website} · ${data.store.phone}`}
         </Text>
         <Text
           style={styles.pageNum}
