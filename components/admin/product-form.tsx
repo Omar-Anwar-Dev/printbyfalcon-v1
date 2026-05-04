@@ -11,6 +11,12 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  ProductJsonPaste,
+  type PasteLabels,
+  type ProductPasteApplied,
+} from '@/components/admin/product-json-paste';
+import type { ResolveItem } from '@/lib/catalog/admin-options';
 import type { ProductInput } from '@/lib/validation/catalog';
 
 type BrandOption = { id: string; label: string };
@@ -72,14 +78,20 @@ export function ProductForm({
   initial,
   brands,
   categories,
+  brandsResolve,
+  categoriesResolve,
   labels,
+  pasteLabels,
   cancelHref,
 }: {
   id?: string;
   initial?: ProductInput;
   brands: BrandOption[];
   categories: CategoryOption[];
+  brandsResolve: ResolveItem[];
+  categoriesResolve: ResolveItem[];
   labels: Labels;
+  pasteLabels: PasteLabels;
   cancelHref: string;
 }) {
   const router = useRouter();
@@ -128,6 +140,42 @@ export function ProductForm({
     [brands.length, categories],
   );
 
+  /**
+   * Sprint 16 — apply a JSON-paste patch onto form state. Spread guards keep
+   * fields the user already filled if the paste blob omits them, so partial
+   * pastes (e.g. just specs) merge cleanly into the existing form state.
+   */
+  const applyPaste = (p: ProductPasteApplied) => {
+    setState((s) => ({
+      ...s,
+      ...(p.sku !== undefined ? { sku: p.sku } : {}),
+      ...(p.brandId ? { brandId: p.brandId } : {}),
+      ...(p.categoryId ? { categoryId: p.categoryId } : {}),
+      ...(p.slug !== undefined ? { slug: p.slug } : {}),
+      ...(p.nameAr !== undefined ? { nameAr: p.nameAr } : {}),
+      ...(p.nameEn !== undefined ? { nameEn: p.nameEn } : {}),
+      ...(p.descriptionAr !== undefined
+        ? { descriptionAr: p.descriptionAr }
+        : {}),
+      ...(p.descriptionEn !== undefined
+        ? { descriptionEn: p.descriptionEn }
+        : {}),
+      ...(p.basePriceEgp !== undefined ? { basePriceEgp: p.basePriceEgp } : {}),
+      ...(p.vatExempt !== undefined ? { vatExempt: p.vatExempt } : {}),
+      ...(p.returnable !== undefined ? { returnable: p.returnable } : {}),
+      ...(p.authenticity ? { authenticity: p.authenticity } : {}),
+      ...(p.condition ? { condition: p.condition } : {}),
+      ...(p.warranty !== undefined ? { warranty: p.warranty } : {}),
+      ...(p.conditionNote !== undefined
+        ? { conditionNote: p.conditionNote }
+        : {}),
+      ...(p.status ? { status: p.status } : {}),
+    }));
+    if (p.specs) setSpecRows(specsObjectToRows(p.specs));
+    if (p.specsAr) setSpecArRows(specsObjectToRows(p.specsAr));
+    if (p.specsEn) setSpecEnRows(specsObjectToRows(p.specsEn));
+  };
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -157,6 +205,14 @@ export function ProductForm({
 
   return (
     <form method="post" onSubmit={submit} className="max-w-4xl space-y-6">
+      {/* Sprint 16 — quick-fill panel sits above the form. Collapsed by default
+          so users who don't know about JSON paste see the regular form unchanged. */}
+      <ProductJsonPaste
+        brandsResolve={brandsResolve}
+        categoriesResolve={categoriesResolve}
+        onApply={applyPaste}
+        labels={pasteLabels}
+      />
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="sku">{labels.sku}</Label>

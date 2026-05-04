@@ -52,3 +52,33 @@ export async function getCategoryOptions(
     disabled: n.status === 'ARCHIVED',
   }));
 }
+
+/**
+ * Lookup data for the JSON-paste quick-fill panel (Sprint 16). Returns the
+ * minimum needed to resolve a free-form `brand` / `category` value (id, slug,
+ * or name in either locale) back to a row id.
+ */
+export type ResolveItem = {
+  id: string;
+  slug: string;
+  nameAr: string;
+  nameEn: string;
+};
+
+export async function getBrandResolveData(): Promise<ResolveItem[]> {
+  const rows = await prisma.brand.findMany({
+    where: { status: 'ACTIVE' },
+    select: { id: true, slug: true, nameAr: true, nameEn: true },
+    orderBy: { nameEn: 'asc' },
+  });
+  return rows;
+}
+
+export async function getCategoryResolveData(): Promise<ResolveItem[]> {
+  const rows = await prisma.category.findMany({
+    where: { status: 'ACTIVE' },
+    select: { id: true, slug: true, nameAr: true, nameEn: true },
+    orderBy: { nameEn: 'asc' },
+  });
+  return rows;
+}

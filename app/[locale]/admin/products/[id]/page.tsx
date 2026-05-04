@@ -4,9 +4,12 @@ import { prisma } from '@/lib/db';
 import { requireAdmin } from '@/lib/auth';
 import {
   getBrandOptions,
+  getBrandResolveData,
   getCategoryOptions,
+  getCategoryResolveData,
 } from '@/lib/catalog/admin-options';
 import { ProductForm } from '@/components/admin/product-form';
+import { buildPasteLabels } from '@/lib/admin/paste-labels';
 import { ProductImageManager } from '@/components/admin/product-image-manager';
 import {
   CompatibilityPicker,
@@ -23,7 +26,14 @@ export default async function EditProductPage({
   const { id, locale } = await params;
   const t = await getTranslations();
 
-  const [product, brands, categories, printerModels] = await Promise.all([
+  const [
+    product,
+    brands,
+    categories,
+    brandsResolve,
+    categoriesResolve,
+    printerModels,
+  ] = await Promise.all([
     prisma.product.findUnique({
       where: { id },
       include: {
@@ -33,6 +43,8 @@ export default async function EditProductPage({
     }),
     getBrandOptions(locale),
     getCategoryOptions(locale),
+    getBrandResolveData(),
+    getCategoryResolveData(),
     prisma.printerModel.findMany({
       where: { status: 'ACTIVE' },
       include: { brand: { select: { nameAr: true, nameEn: true } } },
@@ -105,7 +117,10 @@ export default async function EditProductPage({
           }}
           brands={brands}
           categories={categories}
+          brandsResolve={brandsResolve}
+          categoriesResolve={categoriesResolve}
           cancelHref="/admin/products"
+          pasteLabels={buildPasteLabels(isAr)}
           labels={{
             sku: t('admin.catalog.products.sku'),
             brand: t('admin.catalog.products.brand'),
