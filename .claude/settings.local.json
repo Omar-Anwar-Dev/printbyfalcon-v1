@@ -80,7 +80,15 @@
       "Bash(curl -s -o /dev/null -w \"status=%{http_code}\\\\n\" \"http://localhost:3000/ar/products/hp-laserjet-pro-p2035-hp-p2035-printer\")",
       "Bash(taskkill //F //PID 29584)",
       "Bash(netstat -ano)",
-      "Bash(gh pr *)"
+      "Bash(gh pr *)",
+      "Bash(git fetch *)",
+      "Bash(git checkout *)",
+      "Bash(taskkill //PID 16276 //F)",
+      "Bash(taskkill //PID 30100 //F)",
+      "Bash(taskkill //PID 3724 //F)",
+      "Bash(taskkill //PID 6876 //F)",
+      "Bash(curl -s \"http://localhost:3000/ar\" -o \"C:/Users/Omar/AppData/Local/Temp/home-ar.html\")",
+      "Bash(curl -s \"http://localhost:3000/en\" -o \"C:/Users/Omar/AppData/Local/Temp/home-en.html\")"
     ]
   }
 }
