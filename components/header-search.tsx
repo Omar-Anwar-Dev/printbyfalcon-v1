@@ -177,10 +177,14 @@ export function HeaderSearch({ locale }: Props) {
       </form>
 
       {showDropdown ? (
+        // `text-foreground` resets the inherited text color from the ink
+        // header bar (`bg-ink text-canvas`) — without it, suggestion rows
+        // without an explicit color class render in canvas-white on the
+        // white dropdown background and become invisible.
         <div
           id={listboxId}
           role="listbox"
-          className="absolute end-0 start-0 z-50 mt-1 max-h-96 overflow-auto rounded-md border bg-background shadow-lg"
+          className="absolute end-0 start-0 z-50 mt-1 max-h-96 overflow-auto rounded-md border bg-background text-foreground shadow-lg"
         >
           {suggestions.length === 0 && !loading ? (
             <p className="p-3 text-sm text-muted-foreground">
