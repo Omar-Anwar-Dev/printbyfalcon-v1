@@ -18,8 +18,7 @@ import {
   listActiveProducts,
   type ProductListItem,
 } from '@/lib/catalog/queries';
-import { buildTree, type FlatCategory } from '@/lib/catalog/category-tree';
-import { brandLogoUrl, categoryImageUrl } from '@/lib/storage/paths';
+import { brandLogoUrl } from '@/lib/storage/paths';
 
 const HOMEPAGE_BASE_URL =
   process.env.APP_URL?.replace(/\/+$/, '') ?? 'https://printbyfalcon.com';
@@ -51,16 +50,6 @@ export async function generateMetadata(): Promise<Metadata> {
     },
   };
 }
-
-type TopCategory = {
-  id: string;
-  parentId: string | null;
-  position: number;
-  slug: string;
-  nameAr: string;
-  nameEn: string;
-  imageFilename: string | null;
-};
 
 type BrandRow = {
   id: string;
@@ -105,31 +94,13 @@ export default async function HomePage({
   const isAr = locale === 'ar';
   const typedLocale: 'ar' | 'en' = isAr ? 'ar' : 'en';
 
-  const [featured, categoryRows, brandRows] = await Promise.all([
+  const [featured, brandRows] = await Promise.all([
     safely<ProductListItem[]>(
       'listActiveProducts',
       () =>
         listActiveProducts({ page: 1, sort: 'newest' }).then((r) =>
           r.items.slice(0, 8),
         ),
-      [],
-    ),
-    safely<TopCategory[]>(
-      'categories.findMany',
-      () =>
-        prisma.category.findMany({
-          where: { status: 'ACTIVE' },
-          orderBy: [{ position: 'asc' }, { nameEn: 'asc' }],
-          select: {
-            id: true,
-            parentId: true,
-            position: true,
-            slug: true,
-            nameAr: true,
-            nameEn: true,
-            imageFilename: true,
-          },
-        }),
       [],
     ),
     safely<BrandRow[]>(
@@ -159,10 +130,6 @@ export default async function HomePage({
     ),
   ]);
 
-  const flat: FlatCategory<TopCategory>[] = categoryRows.map((r) => ({ ...r }));
-  const tree = buildTree(flat);
-  const topCategories = tree.slice(0, 6);
-
   const valueProps = [
     {
       icon: ShieldCheck,
@@ -180,10 +147,10 @@ export default async function HomePage({
     },
     {
       icon: Truck,
-      title: isAr ? 'شحن لكل المحافظات' : 'Nationwide delivery',
+      title: isAr ? 'شحن سريع' : 'Fast shipping',
       body: isAr
-        ? 'شحن لـ 27 محافظة بأسعار واضحة، وبدون مفاجآت في التسليم.'
-        : 'Delivery to all 27 governorates at clear rates, with no surprises.',
+        ? 'نوصّل لمعظم المناطق بسرعة، بأسعار شحن واضحة من أول طلب.'
+        : 'Quick delivery covering most areas, with clear shipping rates from the first order.',
     },
     {
       icon: MessageCircle,
@@ -212,27 +179,10 @@ export default async function HomePage({
               {/* Localized tagline — emphasis word matches the Arabic
                   rhythm (last word in AR / first word in EN). */}
               <span className="mt-3 block text-3xl text-foreground sm:text-4xl lg:text-5xl">
-                {/* The space between the plain text and the colored emphasis
-                    sits INSIDE one of the spans (not as a bare {' '} sibling)
-                    so the accessibility tree concatenates the heading with
-                    a real space — `{' '}` between adjacent inline children
-                    gets collapsed in some screen-reader engines. */}
-                {isAr ? (
-                  <>
-                    {'طابعات وأحبار '}
-                    <span className="text-accent-strong">أصلية ومتوافقة</span>
-                  </>
-                ) : (
-                  <>
-                    {'Printers and ink — '}
-                    <span className="text-accent-strong">
-                      genuine and compatible
-                    </span>
-                  </>
-                )}
+                {isAr ? 'طابعات وأحبار' : 'Printers and ink'}
               </span>
             </h1>
-            <p className="mt-6 max-w-xl text-base text-muted-foreground sm:text-lg">
+            <p className="mt-6 max-w-2xl text-lg leading-relaxed text-muted-foreground sm:text-xl">
               {isAr
                 ? 'متجر مصري متخصص في الطابعات وأحبار التونر والإنكجت. منتجات مختارة، أسعار منافسة، ودعم مباشر يساعدك تختار اللي يناسب طابعتك.'
                 : 'An Egypt-based store specialized in printers and ink supplies. Carefully selected products, competitive prices, and direct support to help you pick the right one for your printer.'}
@@ -329,89 +279,6 @@ export default async function HomePage({
           ))}
         </div>
       </section>
-
-      {/* ───────────────────────── Category rail ──────────────────────── */}
-      {topCategories.length > 0 ? (
-        <section className="container-page py-16">
-          <SectionHead
-            overline={isAr ? 'تصفح' : 'Browse'}
-            title={isAr ? 'الفئات' : 'Shop by category'}
-          />
-          <ul className="mt-8 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
-            {topCategories.map((cat) => {
-              const imageUrl = cat.imageFilename
-                ? categoryImageUrl(cat.imageFilename)
-                : null;
-              const name = isAr ? cat.nameAr : cat.nameEn;
-              return (
-                <li key={cat.id}>
-                  <Link
-                    href={`/categories/${cat.slug}`}
-                    aria-label={name}
-                    className={
-                      imageUrl
-                        ? 'group relative flex aspect-[5/4] flex-col justify-end overflow-hidden rounded-lg border border-border shadow-card transition-[transform,box-shadow,border-color] duration-base ease-out-smooth hover:-translate-y-0.5 hover:border-accent hover:shadow-popover'
-                        : 'group flex aspect-[5/4] flex-col justify-between rounded-lg border border-border bg-paper p-4 shadow-card transition-[transform,box-shadow,border-color] duration-base ease-out-smooth hover:-translate-y-0.5 hover:border-accent hover:shadow-popover'
-                    }
-                  >
-                    {imageUrl ? (
-                      <>
-                        <Image
-                          src={imageUrl}
-                          alt=""
-                          fill
-                          sizes="(max-width: 640px) 50vw, (max-width: 1024px) 33vw, 16vw"
-                          className="object-cover transition-transform duration-slow ease-out-smooth group-hover:scale-[1.04]"
-                          unoptimized
-                        />
-                        {/* Dark gradient overlay so the title stays readable
-                            against any photo. Strongest at the bottom where
-                            the label sits. */}
-                        <span
-                          aria-hidden
-                          className="absolute inset-0 bg-gradient-to-t from-ink/85 via-ink/40 to-transparent"
-                        />
-                        <div className="relative p-4 text-canvas">
-                          <p className="text-sm font-semibold drop-shadow">
-                            {name}
-                          </p>
-                          <p className="mt-0.5 text-xs text-canvas/80">
-                            {isAr ? 'استعرض' : 'Explore'}
-                            <ArrowRight
-                              className="ms-1 inline h-3 w-3 translate-x-0 transition-transform duration-base ease-out-smooth group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
-                              strokeWidth={1.75}
-                              aria-hidden
-                            />
-                          </p>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-accent-soft text-accent-strong">
-                          <Printer className="h-5 w-5" strokeWidth={1.75} />
-                        </span>
-                        <div>
-                          <p className="text-sm font-semibold text-foreground">
-                            {name}
-                          </p>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
-                            {isAr ? 'استعرض' : 'Explore'}
-                            <ArrowRight
-                              className="ms-1 inline h-3 w-3 translate-x-0 transition-transform duration-base ease-out-smooth group-hover:translate-x-0.5 rtl:rotate-180 rtl:group-hover:-translate-x-0.5"
-                              strokeWidth={1.75}
-                              aria-hidden
-                            />
-                          </p>
-                        </div>
-                      </>
-                    )}
-                  </Link>
-                </li>
-              );
-            })}
-          </ul>
-        </section>
-      ) : null}
 
       {/* ───────────────────────── Featured products ──────────────────── */}
       {featured.length > 0 ? (
