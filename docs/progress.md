@@ -2,10 +2,17 @@
 
 ## Status
 - **Current milestone:** **M1 reached on production 2026-05-03** — Sprint 12 dev tooling deployed via PR #66; M1 catalog cutover executed (132 real SKUs imported, 200 demo SKUs wiped, transactional test data cleared). Sprint 13 (Technical SEO + Indexing) shipped same day in branch `claude/sprint13-seo` — pending merge + deploy. M1→M2 buffer phase active.
-- **Current sprint:** **Sprint 13 — Technical SEO + Indexing — COMPLETE** ✅ (post-M1 buffer work, ADR-065). Schema.org markup + meta enhancement + sitemap upgrade + /faq route + /blog scaffold shipped. Awaiting merge + deploy.
-- **Last updated:** 2026-05-03 — Sprint 13 close-out (single dense session).
+- **Current sprint:** **Post-M1 buffer — Category nav UX hardening (2026-05-05)** ✅ — owner-requested polish on top of M1: Bar 2 hover dropdown for top-level categories, parent-category page now aggregates products from the parent + every active descendant, Position column surfaced in `/admin/categories` so the nav order is editable from the same screen. Sprint 13 (Technical SEO + Indexing) close-out still pending merge + deploy.
+- **Last updated:** 2026-05-05 — category nav UX changes shipped on `claude/recursing-black-c347ee`.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint, except Sprint 12 which runs on real-user calendar).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 13 piggy-backs on the same staging→prod path as Sprint 12.
+
+## Post-M1 buffer change — Category nav UX (2026-05-05)
+- **Bar 2 hover dropdown** — `components/categories-nav-bar.tsx` rewritten to render top-level categories with hover-triggered dropdowns (CSS-only `group-hover` + `group-focus-within` so keyboard users get the same affordance). Each dropdown shows immediate children + an "All <category>" shortcut. Categories with no children stay as plain links. Mobile path is unchanged (Bar 2 is `hidden md:block`; `MobileNav` already exposes nested categories). Verified in dev: `role="menu"`, `aria-haspopup="menu"`, chevron rotation classes all present in SSR'd HTML; Tailwind generated the `.group\/cat:hover .group-hover\/cat\:visible` rule chain.
+- **Parent category aggregates descendants** — `app/[locale]/categories/[slug]/page.tsx` now resolves the full active subtree via `buildTree` + `descendantIds`, then passes the ID array to a new `categoryIds` parameter on `listActiveProducts` (`lib/catalog/queries.ts`). Leaf categories collapse to `[id]` and behave identically to before. Verified by moving 3 products from `printers` into `inkjet-printers` in dev DB: direct count dropped from 42→39, aggregated count stayed at 42, restoration brought both back to 42.
+- **Position column in admin** — `/admin/categories` list now has a "Position" column and a one-line note (AR/EN) explaining that lower numbers appear first in the top nav. The position field itself was already editable on `/admin/categories/[id]` — this change is pure discoverability.
+- **No DB migration** — uses existing `Category.position` + `Category.parentId`; nothing to push to prod.
+- **Verification:** `npx tsc --noEmit` clean, `npx next lint` 0 errors / 1 pre-existing warning, `npx vitest run` 217/217 green, `npx next build` builds all routes including the touched ones.
 
 ## Completed Sprints
 

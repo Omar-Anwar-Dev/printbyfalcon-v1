@@ -4,9 +4,15 @@ import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 import {
   getActiveCategoryBySlug,
+  listActiveCategories,
   listActiveProducts,
   type ProductSort,
 } from '@/lib/catalog/queries';
+import {
+  buildTree,
+  descendantIds,
+  type FlatCategory,
+} from '@/lib/catalog/category-tree';
 import { ProductCard } from '@/components/catalog/product-card';
 import { Pagination } from '@/components/ui/pagination';
 import { resolveViewerPrices } from '@/lib/pricing/storefront';
@@ -82,8 +88,29 @@ export default async function CategoryPage({
   const t = await getTranslations();
   const name = isAr ? category.nameAr : category.nameEn;
 
+  // Aggregate the parent + every active descendant so opening a top-level
+  // category surfaces everything under it (not only products attached
+  // directly to that category). For a leaf category this collapses to
+  // `[category.id]` and behaves identically to the pre-aggregation flow.
+  const allCategories = await listActiveCategories();
+  const flatCats: FlatCategory<{
+    slug: string;
+    nameAr: string;
+    nameEn: string;
+  }>[] = allCategories.map((c) => ({
+    id: c.id,
+    parentId: c.parentId,
+    position: c.position,
+    slug: c.slug,
+    nameAr: c.nameAr,
+    nameEn: c.nameEn,
+  }));
+  const catTree = buildTree(flatCats);
+  const subtreeIds = Array.from(descendantIds(catTree, category.id));
+  const categoryIds = subtreeIds.length > 0 ? subtreeIds : [category.id];
+
   const { items, total, totalPages } = await listActiveProducts({
-    categoryId: category.id,
+    categoryIds,
     page,
     sort,
   });
