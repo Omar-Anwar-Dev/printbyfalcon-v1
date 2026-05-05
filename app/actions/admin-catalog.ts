@@ -411,15 +411,24 @@ export async function createProductAction(
     };
   }
 
-  const [brandExists, categoryExists, skuClash] = await Promise.all([
-    prisma.brand.count({ where: { id: parsed.data.brandId } }),
-    prisma.category.count({ where: { id: parsed.data.categoryId } }),
-    prisma.product.count({ where: { sku: parsed.data.sku } }),
-  ]);
+  const printerModelId = parsed.data.printerModelId
+    ? parsed.data.printerModelId
+    : null;
+  const [brandExists, categoryExists, skuClash, printerModelExists] =
+    await Promise.all([
+      prisma.brand.count({ where: { id: parsed.data.brandId } }),
+      prisma.category.count({ where: { id: parsed.data.categoryId } }),
+      prisma.product.count({ where: { sku: parsed.data.sku } }),
+      printerModelId
+        ? prisma.printerModel.count({ where: { id: printerModelId } })
+        : Promise.resolve(1),
+    ]);
   if (!brandExists) return { ok: false, errorKey: 'catalog.brand.not_found' };
   if (!categoryExists)
     return { ok: false, errorKey: 'catalog.category.not_found' };
   if (skuClash) return { ok: false, errorKey: 'catalog.product.sku_taken' };
+  if (!printerModelExists)
+    return { ok: false, errorKey: 'catalog.printer.not_found' };
 
   const slug = await uniqueSlug(
     parsed.data.slug ?? `${parsed.data.nameEn}-${parsed.data.sku}`,
@@ -450,6 +459,7 @@ export async function createProductAction(
         parsed.data.condition === 'USED'
           ? parsed.data.conditionNote || null
           : null,
+      printerModelId,
       status: parsed.data.status,
     },
   });
@@ -500,6 +510,16 @@ export async function updateProductAction(
         )
       : before.slug;
 
+  const printerModelId = parsed.data.printerModelId
+    ? parsed.data.printerModelId
+    : null;
+  if (printerModelId) {
+    const exists = await prisma.printerModel.count({
+      where: { id: printerModelId },
+    });
+    if (!exists) return { ok: false, errorKey: 'catalog.printer.not_found' };
+  }
+
   const after = await prisma.product.update({
     where: { id },
     data: {
@@ -524,6 +544,7 @@ export async function updateProductAction(
         parsed.data.condition === 'USED'
           ? parsed.data.conditionNote || null
           : null,
+      printerModelId,
       status: parsed.data.status,
     },
   });

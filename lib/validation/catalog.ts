@@ -67,6 +67,13 @@ export const productSchema = z.object({
   warranty: z.string().trim().max(160).default(''),
   /// Sprint 14 — free-form condition note for USED listings only.
   conditionNote: z.string().trim().max(280).default(''),
+  /// Optional FK linking a printer Product to its PrinterModel entry. Empty
+  /// string is normalised to null in the action layer so the form can submit
+  /// "no link" as a value-less <select>.
+  printerModelId: z
+    .union([z.string().cuid(), z.literal('')])
+    .nullable()
+    .optional(),
   status: z.enum(['ACTIVE', 'ARCHIVED']).default('ACTIVE'),
 });
 export type ProductInput = z.infer<typeof productSchema>;

@@ -1,5 +1,6 @@
 import { getTranslations } from 'next-intl/server';
 import { requireAdmin } from '@/lib/auth';
+import { prisma } from '@/lib/db';
 import {
   getBrandOptions,
   getBrandResolveData,
@@ -19,13 +20,23 @@ export default async function NewProductPage({
   const t = await getTranslations();
   const isAr = locale === 'ar';
 
-  const [brands, categories, brandsResolve, categoriesResolve] =
+  const [brands, categories, brandsResolve, categoriesResolve, printerModels] =
     await Promise.all([
       getBrandOptions(locale),
       getCategoryOptions(locale),
       getBrandResolveData(),
       getCategoryResolveData(),
+      prisma.printerModel.findMany({
+        where: { status: 'ACTIVE' },
+        include: { brand: { select: { nameAr: true, nameEn: true } } },
+        orderBy: [{ brand: { nameEn: 'asc' } }, { modelName: 'asc' }],
+      }),
     ]);
+
+  const printerModelOptions = printerModels.map((pm) => ({
+    id: pm.id,
+    label: `${isAr ? pm.brand.nameAr : pm.brand.nameEn} — ${pm.modelName}`,
+  }));
 
   return (
     <div className="container-page max-w-5xl py-10 md:py-14">
@@ -35,6 +46,7 @@ export default async function NewProductPage({
       <ProductForm
         brands={brands}
         categories={categories}
+        printerModels={printerModelOptions}
         brandsResolve={brandsResolve}
         categoriesResolve={categoriesResolve}
         cancelHref="/admin/products"
@@ -77,6 +89,13 @@ export default async function NewProductPage({
           archived: t('admin.common.archived'),
           save: t('admin.common.save'),
           cancel: t('admin.common.cancel'),
+          printerModel: isAr
+            ? 'موديل الطابعة (للمنتج الذي هو طابعة فقط)'
+            : 'Printer model (only when this product IS a printer)',
+          printerModelHelp: isAr
+            ? 'فقط للطابعات: اختر الموديل الذي تمثله — تظهر له المستلزمات المتوافقة في صفحة الطابعة. اتركه "—" للأحبار/الكونسوميبلز.'
+            : 'Printer products only: pick the model this listing represents — its compatible consumables will appear on its detail page. Leave as "—" for inks/consumables.',
+          printerModelNone: '—',
         }}
       />
     </div>

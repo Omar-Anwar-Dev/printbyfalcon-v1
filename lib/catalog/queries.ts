@@ -194,6 +194,142 @@ export async function getActiveProductBySlug(slug: string) {
   };
 }
 
+/**
+ * Consumables (toner / ink / cartridges) that are explicitly marked
+ * compatible with the PrinterModel the given printer Product represents.
+ *
+ * Returns an empty array when the printer Product has no `printerModelId`
+ * link OR when no ProductCompatibility row points at that PrinterModel.
+ * Bounded by `take` (default 8) so it can be embedded in a related-section
+ * grid without paginating.
+ */
+export async function listConsumablesForPrinter(
+  printerProductId: string,
+  take = 8,
+): Promise<ProductListItem[]> {
+  const printer = await prisma.product.findUnique({
+    where: { id: printerProductId },
+    select: { printerModelId: true },
+  });
+  if (!printer?.printerModelId) return [];
+
+  const [rows, globalThreshold] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        status: 'ACTIVE',
+        brand: { status: 'ACTIVE' },
+        category: { status: 'ACTIVE' },
+        compatibilities: { some: { printerModelId: printer.printerModelId } },
+      },
+      orderBy: [{ authenticity: 'asc' }, { createdAt: 'desc' }],
+      take,
+      include: {
+        brand: { select: { nameAr: true, nameEn: true, slug: true } },
+        category: { select: { nameAr: true, nameEn: true, slug: true } },
+        images: {
+          orderBy: { position: 'asc' },
+          take: 1,
+          select: { filename: true },
+        },
+        inventory: {
+          select: { currentQty: true, lowStockThreshold: true },
+        },
+      },
+    }),
+    getGlobalLowStockThreshold(),
+  ]);
+
+  return rows.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    sku: p.sku,
+    nameAr: p.nameAr,
+    nameEn: p.nameEn,
+    basePriceEgp: p.basePriceEgp.toString(),
+    authenticity: p.authenticity,
+    condition: p.condition,
+    primaryImageUrl: p.images[0]
+      ? productImageUrl(p.id, 'medium', p.images[0].filename)
+      : null,
+    brand: p.brand,
+    category: p.category,
+    stockStatus: getStockStatus(
+      { status: p.status, inventory: p.inventory },
+      globalThreshold,
+    ),
+  }));
+}
+
+/**
+ * Alternative COMPATIBLE consumables that share at least one PrinterModel
+ * with the given product. Intended for the "بدائل متوافقة" section under a
+ * GENUINE consumable's detail page — the customer landed on a genuine
+ * cartridge and we surface the cheaper compatible options that fit the same
+ * printers.
+ *
+ * Caller is expected to invoke this only on GENUINE consumables; for safety
+ * we still return [] when the source product has no compatibility links.
+ */
+export async function listAlternativeCompatibleConsumables(
+  productId: string,
+  take = 8,
+): Promise<ProductListItem[]> {
+  const links = await prisma.productCompatibility.findMany({
+    where: { productId },
+    select: { printerModelId: true },
+  });
+  if (links.length === 0) return [];
+  const printerModelIds = links.map((l) => l.printerModelId);
+
+  const [rows, globalThreshold] = await Promise.all([
+    prisma.product.findMany({
+      where: {
+        id: { not: productId },
+        status: 'ACTIVE',
+        authenticity: 'COMPATIBLE',
+        brand: { status: 'ACTIVE' },
+        category: { status: 'ACTIVE' },
+        compatibilities: { some: { printerModelId: { in: printerModelIds } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take,
+      include: {
+        brand: { select: { nameAr: true, nameEn: true, slug: true } },
+        category: { select: { nameAr: true, nameEn: true, slug: true } },
+        images: {
+          orderBy: { position: 'asc' },
+          take: 1,
+          select: { filename: true },
+        },
+        inventory: {
+          select: { currentQty: true, lowStockThreshold: true },
+        },
+      },
+    }),
+    getGlobalLowStockThreshold(),
+  ]);
+
+  return rows.map((p) => ({
+    id: p.id,
+    slug: p.slug,
+    sku: p.sku,
+    nameAr: p.nameAr,
+    nameEn: p.nameEn,
+    basePriceEgp: p.basePriceEgp.toString(),
+    authenticity: p.authenticity,
+    condition: p.condition,
+    primaryImageUrl: p.images[0]
+      ? productImageUrl(p.id, 'medium', p.images[0].filename)
+      : null,
+    brand: p.brand,
+    category: p.category,
+    stockStatus: getStockStatus(
+      { status: p.status, inventory: p.inventory },
+      globalThreshold,
+    ),
+  }));
+}
+
 export async function getActiveCategoryBySlug(slug: string) {
   const category = await prisma.category.findFirst({
     where: { slug, status: 'ACTIVE' },

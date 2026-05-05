@@ -5,6 +5,8 @@ import { Link } from '@/lib/i18n/routing';
 import {
   getActiveProductBySlug,
   listActiveProducts,
+  listAlternativeCompatibleConsumables,
+  listConsumablesForPrinter,
 } from '@/lib/catalog/queries';
 import { ProductGallery } from '@/components/catalog/product-gallery';
 import { ProductCard } from '@/components/catalog/product-card';
@@ -111,6 +113,28 @@ export default async function ProductDetailPage({
     .filter((p) => p.id !== product.id)
     .slice(0, 4);
 
+  // Compatibility-driven sections — mutually exclusive in practice.
+  //
+  //   1. Printer Product with `printerModelId`
+  //         → fetch every consumable linked to that PrinterModel.
+  //   2. GENUINE consumable with compatibility links
+  //         → fetch alternative COMPATIBLE consumables that share at least
+  //           one PrinterModel with this product (cheaper drop-in options).
+  //
+  // Both queries return [] cheaply when the data isn't there yet, so it's
+  // safe to invoke unconditionally and let the renderer hide empty sections.
+  const isPrinter = !!product.printerModelId;
+  const isGenuineConsumable =
+    !isPrinter &&
+    product.authenticity === 'GENUINE' &&
+    product.compatiblePrinters.length > 0;
+  const compatibleConsumables = isPrinter
+    ? await listConsumablesForPrinter(product.id, 8)
+    : [];
+  const alternativeConsumables = isGenuineConsumable
+    ? await listAlternativeCompatibleConsumables(product.id, 8)
+    : [];
+
   // Resolve pricing for the current viewer. The detail-page price uses the
   // same source of truth as the list page so the displayed price is stable
   // across the browse → detail transition.
@@ -119,8 +143,12 @@ export default async function ProductDetailPage({
   const resolvedDetail = resolvePrice(product, pricingCtx);
   const displayPriceEgp = resolvedDetail.finalPriceEgp.toString();
   const basePriceEgpStr = product.basePriceEgp.toString();
-  const { priceById: relatedPriceById } =
-    await resolveViewerPrices(relatedItems);
+  const [{ priceById: relatedPriceById }, compatPriceMap, altPriceMap] =
+    await Promise.all([
+      resolveViewerPrices(relatedItems),
+      resolveViewerPrices(compatibleConsumables),
+      resolveViewerPrices(alternativeConsumables),
+    ]);
 
   // Sprint 14 — bilingual specs with legacy-fallback. specsAr/specsEn ship
   // per-locale; if the locale-specific bag is empty, fall back to the legacy
@@ -395,6 +423,54 @@ export default async function ProductDetailPage({
           ) : null}
         </div>
       </div>
+
+      {compatibleConsumables.length > 0 ? (
+        <section className="mt-16 border-t border-border pt-12">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+            {isAr ? 'مستلزمات' : 'Supplies'}
+          </p>
+          <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            {isAr
+              ? 'أحبار وتونر متوافقة مع هذه الطابعة'
+              : 'Compatible ink & toner for this printer'}
+          </h2>
+          <ul className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+            {compatibleConsumables.map((p) => (
+              <li key={p.id}>
+                <ProductCard
+                  product={p}
+                  locale={isAr ? 'ar' : 'en'}
+                  finalPriceEgp={compatPriceMap.priceById.get(p.id)}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
+      {alternativeConsumables.length > 0 ? (
+        <section className="mt-16 border-t border-border pt-12">
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
+            {isAr ? 'بديل أوفر' : 'Save with compatible'}
+          </p>
+          <h2 className="mt-2 text-xl font-bold tracking-tight text-foreground sm:text-2xl">
+            {isAr
+              ? 'أحبار متوافقة لنفس الطابعات'
+              : 'Compatible alternatives that fit the same printers'}
+          </h2>
+          <ul className="mt-6 grid grid-cols-2 gap-4 md:grid-cols-4 md:gap-5">
+            {alternativeConsumables.map((p) => (
+              <li key={p.id}>
+                <ProductCard
+                  product={p}
+                  locale={isAr ? 'ar' : 'en'}
+                  finalPriceEgp={altPriceMap.priceById.get(p.id)}
+                />
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
 
       {relatedItems.length > 0 ? (
         <section className="mt-16 border-t border-border pt-12">
