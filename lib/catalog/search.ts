@@ -20,7 +20,12 @@ import { normalizeSearchTerm } from '@/lib/catalog/search-vector';
 import { getStockStatus } from '@/lib/catalog/stock';
 import { getGlobalLowStockThreshold } from '@/lib/settings/inventory';
 
-export type SearchSort = 'relevance' | 'newest' | 'price-asc' | 'price-desc';
+export type SearchSort =
+  | 'relevance'
+  | 'recommended'
+  | 'newest'
+  | 'price-asc'
+  | 'price-desc';
 
 type RawSuggestRow = {
   id: string;
@@ -375,8 +380,14 @@ function orderByFor(sort: SearchSort, rankExpr: Prisma.Sql | null): Prisma.Sql {
       return Prisma.sql`p."basePriceEgp" DESC, p."createdAt" DESC`;
     case 'newest':
       return Prisma.sql`p."createdAt" DESC`;
+    case 'recommended':
+      return Prisma.sql`p."popularityScore" DESC, p."createdAt" DESC`;
     case 'relevance':
     default:
+      // On the search results page `relevance` stays the default — once the
+      // user has typed a query, FTS rank is the strongest signal. The
+      // `recommended` sort is offered as an explicit option for users who
+      // want popularity to override match quality.
       return rankExpr
         ? Prisma.sql`${rankExpr} DESC, p."createdAt" DESC`
         : Prisma.sql`p."createdAt" DESC`;

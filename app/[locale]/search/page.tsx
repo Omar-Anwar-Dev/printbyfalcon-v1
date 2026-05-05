@@ -14,13 +14,22 @@ import { resolveViewerPrices } from '@/lib/pricing/storefront';
 
 export const dynamic = 'force-dynamic';
 
-const SORTS: SearchSort[] = ['relevance', 'newest', 'price-asc', 'price-desc'];
+const SORTS: SearchSort[] = [
+  'relevance',
+  'recommended',
+  'newest',
+  'price-asc',
+  'price-desc',
+];
 
 function parseSort(raw: unknown, hasQuery: boolean): SearchSort {
   if (typeof raw === 'string' && (SORTS as string[]).includes(raw)) {
     return raw as SearchSort;
   }
-  return hasQuery ? 'relevance' : 'newest';
+  // With a query: relevance is still the strongest signal — popularity
+  // is offered as an opt-in. Without a query: fall back to recommended
+  // (matches the catalog/category-page default).
+  return hasQuery ? 'relevance' : 'recommended';
 }
 
 function parsePage(raw: unknown): number {
@@ -156,22 +165,20 @@ export default async function SearchPage({
   const { items, total, totalPages, usedFallback } = result;
   const { priceById } = await resolveViewerPrices(items);
 
-  const sortLabel = (s: SearchSort) =>
-    s === 'relevance'
-      ? isAr
-        ? 'الأكثر صلة'
-        : 'Most Relevant'
-      : s === 'newest'
-        ? isAr
-          ? 'الأحدث'
-          : 'Newest'
-        : s === 'price-asc'
-          ? isAr
-            ? 'السعر: الأقل أولاً'
-            : 'Price: Low to High'
-          : isAr
-            ? 'السعر: الأعلى أولاً'
-            : 'Price: High to Low';
+  const sortLabel = (s: SearchSort): string => {
+    switch (s) {
+      case 'relevance':
+        return isAr ? 'الأكثر صلة' : 'Most Relevant';
+      case 'recommended':
+        return isAr ? 'موصى به' : 'Recommended';
+      case 'newest':
+        return isAr ? 'الأحدث' : 'Newest';
+      case 'price-asc':
+        return isAr ? 'السعر: الأقل أولاً' : 'Price: Low to High';
+      case 'price-desc':
+        return isAr ? 'السعر: الأعلى أولاً' : 'Price: High to Low';
+    }
+  };
 
   // Preserve current filter+query state on sort/page links
   const baseQuery: Record<string, string> = {

@@ -88,7 +88,16 @@
       "Bash(taskkill //PID 3724 //F)",
       "Bash(taskkill //PID 6876 //F)",
       "Bash(curl -s \"http://localhost:3000/ar\" -o \"C:/Users/Omar/AppData/Local/Temp/home-ar.html\")",
-      "Bash(curl -s \"http://localhost:3000/en\" -o \"C:/Users/Omar/AppData/Local/Temp/home-en.html\")"
+      "Bash(curl -s \"http://localhost:3000/en\" -o \"C:/Users/Omar/AppData/Local/Temp/home-en.html\")",
+      "Bash(git reset *)",
+      "Bash(taskkill //PID 31184 //F)",
+      "Bash(taskkill //PID 13420 //F)",
+      "Bash(taskkill //PID 10404 //F)",
+      "Bash(taskkill //PID 27964 //F)",
+      "Bash(taskkill //PID 28584 //F)",
+      "Bash(taskkill //PID 10440 //F)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npx tsx scripts/verify-popularity.ts)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npm run seed:orders)"
     ]
   }
 }

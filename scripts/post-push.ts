@@ -405,6 +405,55 @@ async function main() {
   console.warn(
     `[post-push] FTS bootstrap OK — rewrote ${rewritten} product search vectors.`,
   );
+
+  // PR 3 — recompute popularityScore once on every deploy so the new
+  // "recommended" sort works immediately after a release rather than
+  // waiting up to 24h for the nightly cron's first tick. Same SQL the
+  // worker job runs.
+  const popularityUpdated = await prisma.$executeRawUnsafe(`
+    WITH po AS (
+      SELECT
+        oi."productId",
+        SUM(oi.qty)::int AS qty
+      FROM "OrderItem" oi
+      JOIN "Order" o ON o.id = oi."orderId"
+      WHERE o."createdAt" >= NOW() - INTERVAL '90 days'
+        AND o.status NOT IN ('CANCELLED', 'RETURNED')
+      GROUP BY oi."productId"
+    ),
+    co AS (
+      SELECT
+        p."categoryId",
+        SUM(po.qty)::int AS qty
+      FROM po
+      JOIN "Product" p ON p.id = po."productId"
+      GROUP BY p."categoryId"
+    ),
+    mx AS (
+      SELECT GREATEST(COALESCE(MAX(qty), 0), 1) AS m FROM co
+    ),
+    scores AS (
+      SELECT
+        p.id AS pid,
+        COALESCE(po.qty, 0)
+          + COALESCE(ROUND(co.qty::numeric / mx.m * 10), 0)::int
+          AS score
+      FROM "Product" p
+      CROSS JOIN mx
+      LEFT JOIN po ON po."productId" = p.id
+      LEFT JOIN co ON co."categoryId" = p."categoryId"
+    )
+    UPDATE "Product" p
+    SET
+      "popularityScore" = scores.score,
+      "popularityScoredAt" = NOW()
+    FROM scores
+    WHERE scores.pid = p.id
+  `);
+  // eslint-disable-next-line no-console
+  console.warn(
+    `[post-push] popularity bootstrap OK — recomputed ${popularityUpdated} product scores.`,
+  );
 }
 
 main()

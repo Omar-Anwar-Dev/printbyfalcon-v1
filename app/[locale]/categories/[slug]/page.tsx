@@ -3,6 +3,7 @@ import type { Metadata } from 'next';
 import { getTranslations } from 'next-intl/server';
 import { Link } from '@/lib/i18n/routing';
 import {
+  DEFAULT_PRODUCT_SORT,
   getActiveCategoryBySlug,
   listActiveCategories,
   listActiveProducts,
@@ -57,12 +58,17 @@ export async function generateMetadata({
   };
 }
 
-const SORTS: ProductSort[] = ['newest', 'price-asc', 'price-desc'];
+const SORTS: ProductSort[] = [
+  'recommended',
+  'newest',
+  'price-asc',
+  'price-desc',
+];
 
 function parseSort(raw: unknown): ProductSort {
   return typeof raw === 'string' && (SORTS as string[]).includes(raw)
     ? (raw as ProductSort)
-    : 'newest';
+    : DEFAULT_PRODUCT_SORT;
 }
 function parsePage(raw: unknown): number {
   const n = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number.NaN;
