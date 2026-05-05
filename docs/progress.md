@@ -2,8 +2,8 @@
 
 ## Status
 - **Current milestone:** **M1 reached on production 2026-05-03** — Sprint 12 dev tooling deployed via PR #66; M1 catalog cutover executed (132 real SKUs imported, 200 demo SKUs wiped, transactional test data cleared). Sprint 13 (Technical SEO + Indexing) shipped same day in branch `claude/sprint13-seo` — pending merge + deploy. M1→M2 buffer phase active.
-- **Current sprint:** **Post-M1 buffer — Compatibility wiring (2026-05-06)** ✅ — owner-requested feature pass #2: schema gains `Product.printerModelId`, storefront product detail surfaces "أحبار وتونر متوافقة مع هذه الطابعة" on printers + "أحبار متوافقة لنفس الطابعات" on genuine consumables, admin product form gets a PrinterModel dropdown, and a one-shot script auto-seeds 55 PrinterModels from existing printer products. Owner runs the script + reviews + uses CompatibilityPicker to link consumables. Sprint 13 (Technical SEO) + first buffer change (Category nav UX, PR #74) still queued for merge + deploy.
-- **Last updated:** 2026-05-06 — compatibility wiring shipped on `claude/recursing-black-c347ee` (next branch).
+- **Current sprint:** **Post-M1 buffer — Home page copy rewrite (2026-05-06)** ✅ — owner-requested copy-only pass on the home page after compatibility wiring (PR #75) shipped to prod. No layout changes, no new sections, no About page. Hero h1 honest about both genuine + compatible inks; hero subtitle now states identity ("متجر مصري متخصص...") + quality + price + support; first value-prop swapped from misleading "منتجات أصلية" to "جودة وأسعار منافسة"; CTA section drops "بحث ذكي" jargon; brand chips updated to brands actually carried (HP LaserJet, Canon i-SENSYS, Samsung Xpress, Brother DCP).
+- **Last updated:** 2026-05-06 — home copy shipped on `claude/home-copy-rewrite` branch.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint, except Sprint 12 which runs on real-user calendar).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 13 piggy-backs on the same staging→prod path as Sprint 12.
 

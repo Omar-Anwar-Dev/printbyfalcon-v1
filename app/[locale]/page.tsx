@@ -166,31 +166,31 @@ export default async function HomePage({
   const valueProps = [
     {
       icon: ShieldCheck,
-      title: isAr ? 'منتجات أصلية' : 'Authentic products',
+      title: isAr ? 'جودة وأسعار منافسة' : 'Quality at fair prices',
       body: isAr
-        ? 'حبر وتونر ومستلزمات أصلية، من غير تقليد.'
-        : 'Genuine ink, toner, and supplies — no knockoffs.',
+        ? 'منتجات مختارة بعناية، أصلية أو متوافقة، بأسعار واضحة وعروض جملة للشركات.'
+        : 'Carefully selected products, genuine or compatible, at clear prices with wholesale pricing for businesses.',
     },
     {
       icon: CreditCard,
       title: isAr ? 'الدفع عند الاستلام' : 'Cash on delivery',
       body: isAr
-        ? 'أو ادفع بالبطاقة عبر بوابة آمنة.'
-        : 'Or pay by card via a secure gateway.',
+        ? 'ادفع كاش لما يوصل، أو بالكارت عبر بوابة دفع آمنة.'
+        : 'Pay cash on arrival, or by card via a secure payment gateway.',
     },
     {
       icon: Truck,
       title: isAr ? 'شحن لكل المحافظات' : 'Nationwide delivery',
       body: isAr
-        ? 'شحن سريع لـ 27 محافظة بأسعار واضحة.'
-        : 'Fast delivery to all 27 governorates.',
+        ? 'شحن لـ 27 محافظة بأسعار واضحة، وبدون مفاجآت في التسليم.'
+        : 'Delivery to all 27 governorates at clear rates, with no surprises.',
     },
     {
       icon: MessageCircle,
-      title: isAr ? 'دعم واتساب' : 'WhatsApp support',
+      title: isAr ? 'دعم مباشر' : 'Direct support',
       body: isAr
-        ? 'فريق المبيعات متاح للإجابة عن أسئلتك.'
-        : 'Sales team is a WhatsApp message away.',
+        ? 'فريقنا على واتساب يساعدك تختار المستلزم الصحيح لطابعتك.'
+        : 'Our team on WhatsApp helps you pick the right consumable for your printer.',
     },
   ];
 
@@ -220,20 +220,22 @@ export default async function HomePage({
                 {isAr ? (
                   <>
                     {'طابعات وأحبار '}
-                    <span className="text-accent-strong">أصلية</span>
+                    <span className="text-accent-strong">أصلية ومتوافقة</span>
                   </>
                 ) : (
                   <>
-                    <span className="text-accent-strong">{'Authentic '}</span>
-                    printers and ink
+                    {'Printers and ink — '}
+                    <span className="text-accent-strong">
+                      genuine and compatible
+                    </span>
                   </>
                 )}
               </span>
             </h1>
             <p className="mt-6 max-w-xl text-base text-muted-foreground sm:text-lg">
               {isAr
-                ? 'ابحث برقم موديل الطابعة لإيجاد المستلزم المناسب تمامًا. توصيل سريع، دفع عند الاستلام، ودعم واتساب من فريقنا.'
-                : 'Search by printer model to find the exact consumable. Fast delivery, cash on delivery, and WhatsApp support from our team.'}
+                ? 'متجر مصري متخصص في الطابعات وأحبار التونر والإنكجت. منتجات مختارة، أسعار منافسة، ودعم مباشر يساعدك تختار اللي يناسب طابعتك.'
+                : 'An Egypt-based store specialized in printers and ink supplies. Carefully selected products, competitive prices, and direct support to help you pick the right one for your printer.'}
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Button asChild variant="accent" size="lg">
@@ -501,17 +503,17 @@ export default async function HomePage({
           <div className="relative grid gap-8 lg:grid-cols-[1.2fr_1fr] lg:items-center">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-soft/80">
-                {isAr ? 'بحث ذكي' : 'Smart search'}
+                {isAr ? 'ابحث بموديل' : 'By model'}
               </p>
               <h2 className="mt-3 text-3xl font-bold leading-tight tracking-tight sm:text-4xl">
                 {isAr
-                  ? 'تعرف على الخرطوشة الصحيحة لطابعتك.'
+                  ? 'اعرف الخرطوشة الصح لطابعتك.'
                   : 'Find the right cartridge for your printer.'}
               </h2>
               <p className="mt-4 max-w-xl text-base text-canvas/70">
                 {isAr
-                  ? 'اكتب موديل طابعتك — HP LaserJet، Canon PIXMA، Epson EcoTank — وسنعرض لك المستلزمات المتوافقة فقط.'
-                  : 'Type your model — HP LaserJet, Canon PIXMA, Epson EcoTank — and we’ll show you only the consumables that actually fit.'}
+                  ? 'اكتب موديل طابعتك (مثلاً HP LaserJet M404 أو Canon LBP6030) وهنعرض لك المستلزمات اللي بتركّب عليها — بس.'
+                  : 'Type your model (e.g. HP LaserJet M404 or Canon LBP6030) and we’ll show you only the consumables that actually fit.'}
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button asChild variant="accent" size="lg">
@@ -538,10 +540,10 @@ export default async function HomePage({
             </div>
             <ul className="grid grid-cols-2 gap-3 text-sm lg:justify-self-end">
               {[
-                isAr ? 'HP LaserJet' : 'HP LaserJet',
-                isAr ? 'Canon PIXMA' : 'Canon PIXMA',
-                isAr ? 'Epson EcoTank' : 'Epson EcoTank',
-                isAr ? 'Brother HL' : 'Brother HL',
+                'HP LaserJet',
+                'Canon i-SENSYS',
+                'Samsung Xpress',
+                'Brother DCP',
               ].map((label) => (
                 <li
                   key={label}
