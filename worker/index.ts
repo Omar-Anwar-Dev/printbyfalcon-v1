@@ -12,6 +12,7 @@ import { cleanupExpiredOtps } from '@/lib/otp';
 import { releaseExpiredCartReservations } from '@/lib/cart/stock';
 import { reconcileStalePaymobOrders } from '@/lib/order/reconciliation';
 import { sendLowStockDigest } from '@/lib/inventory/digest';
+import { recomputePopularityScores } from '@/lib/catalog/popularity';
 import { registerEmailJob } from './jobs/send-email';
 import { registerWhatsAppJob } from './jobs/send-whatsapp';
 import { registerHeartbeatJob } from './jobs/heartbeat';
@@ -114,6 +115,21 @@ async function main() {
     if (checked > 0) {
       logger.warn({ checked, updated }, 'reconcile.paymob.done');
     }
+  });
+
+  // PR 3: nightly popularity recompute (daily 03:30 Africa/Cairo, after
+  // the 03:00 pg_dump backup so the recompute SQL runs against a steady
+  // database). Scoring formula lives in `lib/catalog/popularity.ts`.
+  await boss.createQueue('recompute-popularity');
+  await boss.schedule(
+    'recompute-popularity',
+    '30 3 * * *',
+    {},
+    { tz: 'Africa/Cairo' },
+  );
+  await boss.work<Record<string, never>>('recompute-popularity', async () => {
+    const { updated } = await recomputePopularityScores();
+    logger.info({ updated }, 'recompute_popularity.done');
   });
 
   // Sprint 6: low-stock digest (daily 08:00 Africa/Cairo).

@@ -1,7 +1,11 @@
 import { getTranslations, getLocale } from 'next-intl/server';
 import type { Metadata } from 'next';
 import { Link } from '@/lib/i18n/routing';
-import { listActiveProducts, type ProductSort } from '@/lib/catalog/queries';
+import {
+  DEFAULT_PRODUCT_SORT,
+  listActiveProducts,
+  type ProductSort,
+} from '@/lib/catalog/queries';
 import { ProductCard } from '@/components/catalog/product-card';
 import { Pagination } from '@/components/ui/pagination';
 import { resolveViewerPrices } from '@/lib/pricing/storefront';
@@ -44,12 +48,17 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-const SORTS: ProductSort[] = ['newest', 'price-asc', 'price-desc'];
+const SORTS: ProductSort[] = [
+  'recommended',
+  'newest',
+  'price-asc',
+  'price-desc',
+];
 
 function parseSort(raw: unknown): ProductSort {
   return typeof raw === 'string' && (SORTS as string[]).includes(raw)
     ? (raw as ProductSort)
-    : 'newest';
+    : DEFAULT_PRODUCT_SORT;
 }
 function parsePage(raw: unknown): number {
   const n = typeof raw === 'string' ? Number.parseInt(raw, 10) : Number.NaN;
@@ -102,18 +111,18 @@ export default async function ProductsPage({
     ]);
   const { priceById } = await resolveViewerPrices(items);
 
-  const sortLabel = (s: ProductSort) =>
-    s === 'newest'
-      ? isAr
-        ? 'الأحدث'
-        : 'Newest'
-      : s === 'price-asc'
-        ? isAr
-          ? 'السعر: الأقل أولاً'
-          : 'Price: Low to High'
-        : isAr
-          ? 'السعر: الأعلى أولاً'
-          : 'Price: High to Low';
+  const sortLabel = (s: ProductSort): string => {
+    switch (s) {
+      case 'recommended':
+        return isAr ? 'موصى به' : 'Recommended';
+      case 'newest':
+        return isAr ? 'الأحدث' : 'Newest';
+      case 'price-asc':
+        return isAr ? 'السعر: الأقل أولاً' : 'Price: Low to High';
+      case 'price-desc':
+        return isAr ? 'السعر: الأعلى أولاً' : 'Price: High to Low';
+    }
+  };
 
   // Sort + pagination links must preserve any active brand/category filter
   // so the user doesn't lose their context when paging or re-sorting.

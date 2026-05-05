@@ -285,6 +285,15 @@ model Product {
   /// with that model via `ProductCompatibility`.
   printerModelId String?
   printerModel   PrinterModel?            @relation("ProductIsPrinterModel", fields: [printerModelId], references: [id], onDelete: SetNull)
+  /// Popularity score for the default storefront sort. Computed nightly
+  /// by `worker/jobs/recompute-popularity.ts` from non-cancelled order-item
+  /// quantities over the last 90 days, plus a small category boost (so
+  /// new products in a hot category outrank new products in a quiet one).
+  /// Default 0; products with score 0 fall back to `createdAt DESC` via
+  /// the compound index, so brand-new SKUs without orders still rank by
+  /// recency. Never user-edited — recompute job is the sole writer.
+  popularityScore     Int                 @default(0)
+  popularityScoredAt  DateTime?
   // Full-text search vector — populated by `lib/catalog/search-vector.ts` on
   // product create/update + brand rename. GIN index added by scripts/post-push.ts
   // (db push doesn't emit indexes on Unsupported types).
@@ -308,6 +317,10 @@ model Product {
   /// Sprint 14 — supports the storefront condition filter facet.
   @@index([condition, status])
   @@index([printerModelId])
+  /// PR 3 — supports the new default "recommended" sort. Compound index
+  /// covers the ORDER BY popularityScore DESC, createdAt DESC chain so the
+  /// listing pages don't sort in memory.
+  @@index([popularityScore(sort: Desc), createdAt(sort: Desc)])
 }
 
 model ProductImage {

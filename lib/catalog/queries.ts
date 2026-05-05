@@ -9,7 +9,14 @@ import { productImageUrl } from '@/lib/storage/paths';
 import { getStockStatus, type StockStatus } from '@/lib/catalog/stock';
 import { getGlobalLowStockThreshold } from '@/lib/settings/inventory';
 
-export type ProductSort = 'newest' | 'price-asc' | 'price-desc';
+/// PR 3 — `recommended` is the new default. It orders by the precomputed
+/// `popularityScore` (DESC) and falls back to `createdAt` (DESC) on ties.
+/// Products with no orders get score 0, so on a cold dataset
+/// `recommended` and `newest` produce identical orderings; once the
+/// nightly recompute job has run, popular SKUs rise to the top.
+export type ProductSort = 'recommended' | 'newest' | 'price-asc' | 'price-desc';
+
+export const DEFAULT_PRODUCT_SORT: ProductSort = 'recommended';
 
 const PAGE_SIZE = 20;
 
@@ -29,21 +36,29 @@ export type ProductListItem = {
   stockStatus: StockStatus;
 };
 
-function orderByFor(sort: ProductSort) {
+// Exported for unit-testing the sort selection without needing a DB.
+export function orderByFor(sort: ProductSort) {
   switch (sort) {
     case 'price-asc':
-      return { basePriceEgp: 'asc' as const };
+      return [{ basePriceEgp: 'asc' as const }];
     case 'price-desc':
-      return { basePriceEgp: 'desc' as const };
+      return [{ basePriceEgp: 'desc' as const }];
     case 'newest':
+      return [{ createdAt: 'desc' as const }];
+    case 'recommended':
     default:
-      return { createdAt: 'desc' as const };
+      // Compound order matches the @@index([popularityScore Desc, createdAt Desc])
+      // so Postgres serves it from the index without a sort node.
+      return [
+        { popularityScore: 'desc' as const },
+        { createdAt: 'desc' as const },
+      ];
   }
 }
 
 export async function listActiveProducts({
   page = 1,
-  sort = 'newest',
+  sort = DEFAULT_PRODUCT_SORT,
   categoryId,
   categoryIds,
   brandSlug,
