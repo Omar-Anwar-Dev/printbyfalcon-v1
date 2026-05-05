@@ -2,10 +2,62 @@
 
 ## Status
 - **Current milestone:** **M1 reached on production 2026-05-03** — Sprint 12 dev tooling deployed via PR #66; M1 catalog cutover executed (132 real SKUs imported, 200 demo SKUs wiped, transactional test data cleared). Sprint 13 (Technical SEO + Indexing) shipped same day in branch `claude/sprint13-seo` — pending merge + deploy. M1→M2 buffer phase active.
-- **Current sprint:** **Post-M1 buffer — Category nav UX hardening (2026-05-05)** ✅ — owner-requested polish on top of M1: Bar 2 hover dropdown for top-level categories, parent-category page now aggregates products from the parent + every active descendant, Position column surfaced in `/admin/categories` so the nav order is editable from the same screen. Sprint 13 (Technical SEO + Indexing) close-out still pending merge + deploy.
-- **Last updated:** 2026-05-05 — category nav UX changes shipped on `claude/recursing-black-c347ee`.
+- **Current sprint:** **Post-M1 buffer — Compatibility wiring (2026-05-06)** ✅ — owner-requested feature pass #2: schema gains `Product.printerModelId`, storefront product detail surfaces "أحبار وتونر متوافقة مع هذه الطابعة" on printers + "أحبار متوافقة لنفس الطابعات" on genuine consumables, admin product form gets a PrinterModel dropdown, and a one-shot script auto-seeds 55 PrinterModels from existing printer products. Owner runs the script + reviews + uses CompatibilityPicker to link consumables. Sprint 13 (Technical SEO) + first buffer change (Category nav UX, PR #74) still queued for merge + deploy.
+- **Last updated:** 2026-05-06 — compatibility wiring shipped on `claude/recursing-black-c347ee` (next branch).
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint, except Sprint 12 which runs on real-user calendar).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 13 piggy-backs on the same staging→prod path as Sprint 12.
+
+## Post-M1 buffer change — Compatibility wiring + auto-seed (2026-05-06)
+
+Owner-requested feature pass #2 in M1→M2 buffer. Connects the storefront
+to the (previously empty) PrinterModel + ProductCompatibility tables so
+the catalog finally surfaces the printer↔consumable relationship.
+
+**Schema:** new optional `Product.printerModelId` FK ([prisma/schema.prisma:286](prisma/schema.prisma:286))
++ matching `PrinterModel.productListings` back-relation. Additive nullable
+column; safe on existing 135 prod products.
+
+**Backend:** two new query helpers in [lib/catalog/queries.ts](lib/catalog/queries.ts):
+- `listConsumablesForPrinter(productId)` — for a printer Product whose
+  `printerModelId` is set, returns the active consumables linked to that
+  PrinterModel via ProductCompatibility.
+- `listAlternativeCompatibleConsumables(productId)` — for a GENUINE
+  consumable, returns other consumables marked `COMPATIBLE` that share at
+  least one PrinterModel with this product (drop-in alternatives).
+
+**Storefront:** product detail page renders two new sections (above the
+existing "Related products" rail). Both queries return [] cheaply when no
+data exists, so adding the sections doesn't change rendering for products
+without compatibility data.
+
+**Admin:** new "Printer model" dropdown on the product form
+([components/admin/product-form.tsx](components/admin/product-form.tsx))
+— optional, only meaningful when the product IS a printer. Validation in
+[lib/validation/catalog.ts](lib/validation/catalog.ts) accepts cuid OR
+empty-string (normalised to null in the action layer). Action layer
+checks the referenced PrinterModel exists before write.
+
+**Auto-seed script:** [scripts/seed-printer-models-from-products.ts](scripts/seed-printer-models-from-products.ts)
+walks the `printers` category subtree, derives a `modelName` from each
+printer Product's English name (with brand prefix stripped), upserts a
+PrinterModel keyed by (brandId, modelName), and links `Product.printerModelId`
+to it. Idempotent. Dry-run by default; `--apply` writes; `--apply --force`
+re-links already-linked products. Produced 55 PrinterModel rows from the
+55 prod printer products in dry-run testing.
+
+**Owner workflow after deploy:**
+1. SSH to prod, run `docker compose exec app npx tsx scripts/seed-printer-models-from-products.ts` to dry-run, then re-run with `--apply` once happy.
+2. Visit `/admin/printer-models` to clean up any noisy auto-derived names (e.g. trailing "Black and White Laser" suffixes).
+3. For each consumable in `/admin/products/[id]`, use the existing CompatibilityPicker to tick which printer models it fits. Each link populates a `ProductCompatibility` row. Once a consumable has a link, the printer's detail page surfaces it under "أحبار وتونر متوافقة مع هذه الطابعة" automatically.
+
+**Verification (2026-05-06):**
+- Restored prod snapshot (135 products, 5 categories, 7 brands, 0 printer models, 0 compatibility links) into local dev DB.
+- Ran `seed-printer-models-from-products.ts --apply` → 55 PrinterModels created, 55 printer Products linked.
+- Created 2 test ProductCompatibility rows manually (HP 51A + 14A toners ↔ HP P2035 printer).
+- Visited `/ar/products/hp-laserjet-pro-p2035-hp-p2035-printer` — "أحبار وتونر متوافقة مع هذه الطابعة" section rendered with both toners. ✓
+- Temporarily flipped HP 51A `authenticity` to `GENUINE`, visited its detail page — "أحبار متوافقة لنفس الطابعات" section rendered with HP 14A as the alternative. ✓
+- Restored test data + cleaned up.
+- `npx tsc --noEmit` clean, `npx next lint` 0 errors, `npx vitest run` 217/217 green, `npx next build` succeeds.
 
 ## Post-M1 buffer change — Category nav UX (2026-05-05)
 - **Bar 2 hover dropdown** — `components/categories-nav-bar.tsx` rewritten to render top-level categories with hover-triggered dropdowns (CSS-only `group-hover` + `group-focus-within` so keyboard users get the same affordance). Each dropdown shows immediate children + an "All <category>" shortcut. Categories with no children stay as plain links. Mobile path is unchanged (Bar 2 is `hidden md:block`; `MobileNav` already exposes nested categories). Verified in dev: `role="menu"`, `aria-haspopup="menu"`, chevron rotation classes all present in SSR'd HTML; Tailwind generated the `.group\/cat:hover .group-hover\/cat\:visible` rule chain.

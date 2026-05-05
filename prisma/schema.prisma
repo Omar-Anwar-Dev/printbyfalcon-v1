@@ -277,6 +277,14 @@ model Product {
   /// "9/10 — استخدام شهرين، علبة أصلية". Ignored for NEW products in the UI.
   conditionNote String?                  @db.VarChar(280)
   status        CatalogStatus            @default(ACTIVE)
+  /// Optional link from a printer Product to its corresponding PrinterModel
+  /// entry. Only meaningful for products in printer categories — populated
+  /// either via the admin product form or the auto-seed script
+  /// (`scripts/seed-printer-models-from-products.ts`). When set, the
+  /// storefront's printer detail page surfaces all consumables compatible
+  /// with that model via `ProductCompatibility`.
+  printerModelId String?
+  printerModel   PrinterModel?            @relation("ProductIsPrinterModel", fields: [printerModelId], references: [id], onDelete: SetNull)
   // Full-text search vector — populated by `lib/catalog/search-vector.ts` on
   // product create/update + brand rename. GIN index added by scripts/post-push.ts
   // (db push doesn't emit indexes on Unsupported types).
@@ -299,6 +307,7 @@ model Product {
   @@index([authenticity])
   /// Sprint 14 — supports the storefront condition filter facet.
   @@index([condition, status])
+  @@index([printerModelId])
 }
 
 model ProductImage {
@@ -329,6 +338,10 @@ model PrinterModel {
   updatedAt DateTime      @updatedAt
 
   compatibilities ProductCompatibility[]
+  /// Reverse relation for `Product.printerModelId` — printer Products that
+  /// represent (i.e. ARE sold as) this model. Typically 0 or 1 row per
+  /// PrinterModel.
+  productListings Product[]              @relation("ProductIsPrinterModel")
 
   @@unique([brandId, modelName])
   @@index([status])

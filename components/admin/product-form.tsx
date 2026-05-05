@@ -21,6 +21,7 @@ import type { ProductInput } from '@/lib/validation/catalog';
 
 type BrandOption = { id: string; label: string };
 type CategoryOption = { id: string; label: string; disabled?: boolean };
+type PrinterModelOption = { id: string; label: string };
 
 type Labels = {
   sku: string;
@@ -56,6 +57,11 @@ type Labels = {
   archived: string;
   save: string;
   cancel: string;
+  /// PR for compatibility wiring — only meaningful when this product
+  /// represents a printer (so the storefront can surface its consumables).
+  printerModel: string;
+  printerModelHelp: string;
+  printerModelNone: string;
 };
 
 type SpecRow = { key: string; value: string };
@@ -78,6 +84,7 @@ export function ProductForm({
   initial,
   brands,
   categories,
+  printerModels,
   brandsResolve,
   categoriesResolve,
   labels,
@@ -88,6 +95,7 @@ export function ProductForm({
   initial?: ProductInput;
   brands: BrandOption[];
   categories: CategoryOption[];
+  printerModels: PrinterModelOption[];
   brandsResolve: ResolveItem[];
   categoriesResolve: ResolveItem[];
   labels: Labels;
@@ -118,6 +126,7 @@ export function ProductForm({
       condition: 'NEW',
       warranty: '',
       conditionNote: '',
+      printerModelId: null,
       status: 'ACTIVE',
     },
   );
@@ -466,6 +475,34 @@ export function ProductForm({
           addLabel={labels.addSpec}
         />
       </fieldset>
+
+      {/* Optional printer-model link. Only meaningful for products that ARE
+          a printer (not consumables) — when set, the storefront's printer
+          detail page surfaces every consumable linked to that PrinterModel
+          via ProductCompatibility. Leaving as "—" hides the section. */}
+      <div className="space-y-2">
+        <Label htmlFor="printerModel">{labels.printerModel}</Label>
+        <Select
+          id="printerModel"
+          value={state.printerModelId ?? ''}
+          onChange={(e) =>
+            setState((s) => ({
+              ...s,
+              printerModelId: e.target.value || null,
+            }))
+          }
+        >
+          <option value="">{labels.printerModelNone}</option>
+          {printerModels.map((pm) => (
+            <option key={pm.id} value={pm.id}>
+              {pm.label}
+            </option>
+          ))}
+        </Select>
+        <p className="text-xs text-muted-foreground">
+          {labels.printerModelHelp}
+        </p>
+      </div>
 
       <div className="space-y-2">
         <Label htmlFor="status">{labels.status}</Label>

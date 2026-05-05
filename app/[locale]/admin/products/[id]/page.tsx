@@ -60,6 +60,10 @@ export default async function EditProductPage({
     brandLabel: isAr ? pm.brand.nameAr : pm.brand.nameEn,
     modelName: pm.modelName,
   }));
+  const printerModelOptions = printerModels.map((pm) => ({
+    id: pm.id,
+    label: `${isAr ? pm.brand.nameAr : pm.brand.nameEn} — ${pm.modelName}`,
+  }));
   const selectedCompatIds = product.compatibilities.map(
     (c) => c.printerModelId,
   );
@@ -113,10 +117,12 @@ export default async function EditProductPage({
             condition: product.condition,
             warranty: product.warranty ?? '',
             conditionNote: product.conditionNote ?? '',
+            printerModelId: product.printerModelId,
             status: product.status,
           }}
           brands={brands}
           categories={categories}
+          printerModels={printerModelOptions}
           brandsResolve={brandsResolve}
           categoriesResolve={categoriesResolve}
           cancelHref="/admin/products"
@@ -159,6 +165,13 @@ export default async function EditProductPage({
             archived: t('admin.common.archived'),
             save: t('admin.common.save'),
             cancel: t('admin.common.cancel'),
+            printerModel: isAr
+              ? 'موديل الطابعة (للمنتج الذي هو طابعة فقط)'
+              : 'Printer model (only when this product IS a printer)',
+            printerModelHelp: isAr
+              ? 'فقط للطابعات: اختر الموديل الذي تمثله — تظهر له المستلزمات المتوافقة في صفحة الطابعة. اتركه "—" للأحبار/الكونسوميبلز.'
+              : 'Printer products only: pick the model this listing represents — its compatible consumables will appear on its detail page. Leave as "—" for inks/consumables.',
+            printerModelNone: '—',
           }}
         />
       </div>

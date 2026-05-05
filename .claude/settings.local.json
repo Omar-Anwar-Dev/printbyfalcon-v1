@@ -65,7 +65,22 @@
       "Bash(grep -oE 'group\\\\\\\\/cat:hover[^{]*\\\\{[^}]+\\\\}' /tmp/main.css)",
       "Bash(grep -oE 'group\\\\\\\\/cat:focus-within[^{]*\\\\{[^}]+\\\\}' /tmp/main.css)",
       "Bash(git check-ignore *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "Bash(gh pr create --title 'nav: category hover dropdown + descendant product aggregation' --body ' *)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npx prisma generate)",
+      "Bash(tasklist //FI \"IMAGENAME eq node.exe\")",
+      "Bash(taskkill //F //PID 10816)",
+      "Bash(grep -nA1 \"printer_model\\\\|printer-model\\\\|printerModel\" messages/ar.json)",
+      "Bash(grep -nA1 \"printer_model\\\\|printer-model\\\\|printerModel\" messages/en.json)",
+      "Bash(grep -nA2 \"\\\\\"category\\\\\":\" messages/ar.json)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npx tsx scripts/seed-printer-models-from-products.ts)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npx tsx scripts/seed-printer-models-from-products.ts --apply)",
+      "Bash(curl -s -o /dev/null -w \"status=%{http_code}\\\\n\" \"http://localhost:3000/ar/products/hp-laserjet-pro-p2035-hp-p2035-printer\")",
+      "Bash(taskkill //F //PID 29584)",
+      "Bash(netstat -ano)",
+      "Bash(gh pr *)"
     ]
   }
 }
