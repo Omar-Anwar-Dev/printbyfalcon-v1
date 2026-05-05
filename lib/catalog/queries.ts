@@ -45,6 +45,7 @@ export async function listActiveProducts({
   page = 1,
   sort = 'newest',
   categoryId,
+  categoryIds,
   brandSlug,
   categorySlug,
   condition,
@@ -52,6 +53,12 @@ export async function listActiveProducts({
   page?: number;
   sort?: ProductSort;
   categoryId?: string;
+  /// When set, products from any of these category IDs are returned. Used
+  /// by the public category page to aggregate the parent + every descendant
+  /// (so opening a parent shows everything under it, not only direct children).
+  /// Mutually exclusive with `categoryId`; if both are passed, `categoryIds`
+  /// wins.
+  categoryIds?: string[];
   brandSlug?: string;
   categorySlug?: string;
   /// Sprint 14 — filter by condition (NEW / USED). Undefined = no filter.
@@ -65,9 +72,16 @@ export async function listActiveProducts({
 }> {
   const skip = (Math.max(1, page) - 1) * PAGE_SIZE;
 
+  const categoryFilter =
+    categoryIds && categoryIds.length > 0
+      ? { categoryId: { in: categoryIds } }
+      : categoryId
+        ? { categoryId }
+        : {};
+
   const where = {
     status: 'ACTIVE' as const,
-    ...(categoryId ? { categoryId } : {}),
+    ...categoryFilter,
     ...(condition ? { condition } : {}),
     ...(brandSlug
       ? { brand: { slug: brandSlug, status: 'ACTIVE' as const } }

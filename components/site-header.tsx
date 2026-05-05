@@ -188,10 +188,17 @@ export async function SiteHeader({ locale }: { locale?: string } = {}) {
           slug: c.slug,
           nameAr: c.nameAr,
           nameEn: c.nameEn,
+          children: c.children.map((child) => ({
+            id: child.id,
+            slug: child.slug,
+            nameAr: child.nameAr,
+            nameEn: child.nameEn,
+          })),
         }))}
         isAr={isAr}
         catalogLabel={t('nav.catalog')}
         isSignedIn={!!user}
+        allLabel={allLabel}
       />
     </header>
   );

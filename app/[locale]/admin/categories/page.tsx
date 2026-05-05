@@ -65,11 +65,19 @@ export default async function AdminCategoriesPage({
           <Link href="/admin/categories/new">+ {t('admin.common.new')}</Link>
         </Button>
       </div>
+      <p className="mb-4 rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
+        {isAr
+          ? 'ترتيب الفئات في القائمة العلوية يتحدد بقيمة "الترتيب" في كل فئة (الأقل يظهر أولًا). عدّلها من صفحة تحرير الفئة.'
+          : 'The order of categories in the top nav is controlled by each category’s "Position" value (lower numbers appear first). Edit it from the category’s edit page.'}
+      </p>
       <div className="overflow-x-auto rounded-md border bg-background">
         <table className="w-full text-sm">
           <thead className="bg-muted/50">
             <tr>
               <th className="p-3 text-start">{isAr ? 'الاسم' : 'Name'}</th>
+              <th className="p-3 text-start">
+                {t('admin.catalog.categories.position')}
+              </th>
               <th className="p-3 text-start">
                 {t('admin.catalog.categories.slug')}
               </th>
@@ -82,7 +90,7 @@ export default async function AdminCategoriesPage({
             {ordered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={5}
+                  colSpan={6}
                   className="p-6 text-center text-muted-foreground"
                 >
                   {t('admin.common.noRows')}
@@ -104,6 +112,9 @@ export default async function AdminCategoriesPage({
                   <div className="text-xs text-muted-foreground">
                     {isAr ? n.nameEn : n.nameAr}
                   </div>
+                </td>
+                <td className="p-3 font-mono tabular-nums text-muted-foreground">
+                  {n.position}
                 </td>
                 <td className="p-3 font-mono text-xs">{n.slug}</td>
                 <td className="p-3">{n.productCount}</td>
