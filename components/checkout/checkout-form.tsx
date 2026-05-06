@@ -7,7 +7,7 @@ import {
   submitForReviewOrderAction,
 } from '@/app/actions/checkout';
 import { applyPromoCodeAction } from '@/app/actions/promo';
-import { GOVERNORATE_OPTIONS, governorateLabel } from '@/lib/i18n/governorates';
+import { governorateLabel } from '@/lib/i18n/governorates';
 import type { Governorate } from '@prisma/client';
 
 type SavedAddress = {
@@ -52,6 +52,14 @@ type ZoneInfo = {
   codEnabled: boolean;
   freeShippingThresholdB2cEgp: number | null;
   freeShippingThresholdB2bEgp: number | null;
+  estimatedDeliveryDaysMin: number;
+  estimatedDeliveryDaysMax: number;
+};
+
+type DeliverableGov = {
+  code: string;
+  nameAr: string;
+  nameEn: string;
 };
 
 type CodPolicyView = {
@@ -81,6 +89,19 @@ type Props = {
   cartItems: CartItemView[];
   subtotalEgp: number;
   shippingByGovernorate: Record<Governorate, ZoneInfo>;
+  /// Sprint 11.5 — deliverable list (admin can disable individual governorates).
+  /// Only governorates in this list appear in the form's dropdown; addresses
+  /// already on file with a now-disabled governorate render the raw code so
+  /// the customer sees they need to update.
+  deliverableGovernorates: DeliverableGov[];
+  /// Sprint 11.5 — runtime payment-method availability flags from
+  /// `PaymentMethodConfig`. Each radio is rendered only when its flag is
+  /// true; combined with `paymobEnabled` (ADR-064 global gate).
+  paymentMethodAvailability: {
+    codEnabled: boolean;
+    paymobCardEnabled: boolean;
+    paymobFawryEnabled: boolean;
+  };
   globalThresholds: { b2cEgp: number; b2bEgp: number };
   codPolicy: CodPolicyView;
   vatRatePercent: number;
@@ -301,6 +322,8 @@ export function CheckoutForm({
   cartItems,
   subtotalEgp,
   shippingByGovernorate,
+  deliverableGovernorates,
+  paymentMethodAvailability,
   globalThresholds,
   codPolicy,
   vatRatePercent,
@@ -675,6 +698,13 @@ export function CheckoutForm({
           )}
         </p>
       ) : null}
+      {zoneInfo ? (
+        <p className="text-xs text-muted-foreground">
+          {isAr
+            ? `التوصيل المتوقع: ${zoneInfo.estimatedDeliveryDaysMin}–${zoneInfo.estimatedDeliveryDaysMax} يوم عمل`
+            : `Estimated delivery: ${zoneInfo.estimatedDeliveryDaysMin}–${zoneInfo.estimatedDeliveryDaysMax} business days`}
+        </p>
+      ) : null}
     </aside>
   );
 
@@ -798,9 +828,9 @@ export function CheckoutForm({
                   className="w-full rounded-md border bg-background px-3 py-2"
                 >
                   <option value="">{labels.selectGov}</option>
-                  {GOVERNORATE_OPTIONS.map((g) => (
-                    <option key={g.value} value={g.value}>
-                      {isAr ? g.labelAr : g.labelEn}
+                  {deliverableGovernorates.map((g) => (
+                    <option key={g.code} value={g.code}>
+                      {isAr ? g.nameAr : g.nameEn}
                     </option>
                   ))}
                 </select>
@@ -952,70 +982,76 @@ export function CheckoutForm({
         {checkoutMode === 'payNow' ? (
           <section className="space-y-4 rounded-xl border border-border bg-paper p-5">
             <h2 className="text-base font-semibold">{labels.payment}</h2>
-            {totals.codAvailable ? (
+            {paymentMethodAvailability.codEnabled ? (
+              totals.codAvailable ? (
+                <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+                  <input
+                    type="radio"
+                    name="payment"
+                    value="COD"
+                    className="mt-1"
+                    checked={paymentMethod === 'COD'}
+                    onChange={() => setPaymentMethod('COD')}
+                  />
+                  <span>
+                    <span className="font-medium">{labels.cod}</span>
+                    <span className="block text-muted-foreground">
+                      {labels.codDescription}
+                    </span>
+                  </span>
+                </label>
+              ) : (
+                <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
+                  <span className="font-medium">{labels.cod}</span>
+                  <span className="block">
+                    {zoneInfo && totals.subtotal > codPolicy.maxOrderEgp
+                      ? labels.codOverLimit
+                      : labels.codUnavailable}
+                  </span>
+                </div>
+              )
+            ) : null}
+            {paymobEnabled && paymentMethodAvailability.paymobCardEnabled ? (
               <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
                 <input
                   type="radio"
                   name="payment"
-                  value="COD"
+                  value="PAYMOB_CARD"
                   className="mt-1"
-                  checked={paymentMethod === 'COD'}
-                  onChange={() => setPaymentMethod('COD')}
+                  checked={paymentMethod === 'PAYMOB_CARD'}
+                  onChange={() => setPaymentMethod('PAYMOB_CARD')}
                 />
                 <span>
-                  <span className="font-medium">{labels.cod}</span>
+                  <span className="font-medium">{labels.card}</span>
                   <span className="block text-muted-foreground">
-                    {labels.codDescription}
+                    {labels.cardDescription}
                   </span>
                 </span>
               </label>
-            ) : (
-              <div className="rounded-md border border-dashed p-3 text-sm text-muted-foreground">
-                <span className="font-medium">{labels.cod}</span>
-                <span className="block">
-                  {zoneInfo && totals.subtotal > codPolicy.maxOrderEgp
-                    ? labels.codOverLimit
-                    : labels.codUnavailable}
-                </span>
-              </div>
-            )}
-            {paymobEnabled ? (
-              <>
-                <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="PAYMOB_CARD"
-                    className="mt-1"
-                    checked={paymentMethod === 'PAYMOB_CARD'}
-                    onChange={() => setPaymentMethod('PAYMOB_CARD')}
-                  />
-                  <span>
-                    <span className="font-medium">{labels.card}</span>
-                    <span className="block text-muted-foreground">
-                      {labels.cardDescription}
-                    </span>
-                  </span>
-                </label>
-                <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-                  <input
-                    type="radio"
-                    name="payment"
-                    value="PAYMOB_FAWRY"
-                    className="mt-1"
-                    checked={paymentMethod === 'PAYMOB_FAWRY'}
-                    onChange={() => setPaymentMethod('PAYMOB_FAWRY')}
-                  />
-                  <span>
-                    <span className="font-medium">{labels.fawry}</span>
-                    <span className="block text-muted-foreground">
-                      {labels.fawryDescription}
-                    </span>
-                  </span>
-                </label>
-              </>
             ) : null}
-            {!paymobEnabled && !totals.codAvailable && zoneInfo ? (
+            {paymobEnabled && paymentMethodAvailability.paymobFawryEnabled ? (
+              <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
+                <input
+                  type="radio"
+                  name="payment"
+                  value="PAYMOB_FAWRY"
+                  className="mt-1"
+                  checked={paymentMethod === 'PAYMOB_FAWRY'}
+                  onChange={() => setPaymentMethod('PAYMOB_FAWRY')}
+                />
+                <span>
+                  <span className="font-medium">{labels.fawry}</span>
+                  <span className="block text-muted-foreground">
+                    {labels.fawryDescription}
+                  </span>
+                </span>
+              </label>
+            ) : null}
+            {(!paymobEnabled ||
+              (!paymentMethodAvailability.paymobCardEnabled &&
+                !paymentMethodAvailability.paymobFawryEnabled)) &&
+            !totals.codAvailable &&
+            zoneInfo ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">
                 {labels.errors['checkout.no_payment_method']}
               </div>

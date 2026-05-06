@@ -9,6 +9,8 @@ import { getFreeShipThresholds } from '@/lib/settings/shipping';
 import { getCodPolicy } from '@/lib/settings/cod';
 import { getVatRate } from '@/lib/settings/vat';
 import { isPaymobEnabled } from '@/lib/payments/feature-flags';
+import { getDeliverableGovernorates } from '@/lib/shipping/deliverable';
+import { getEnabledPaymentMethods } from '@/lib/settings/payment';
 import { CheckoutForm } from '@/components/checkout/checkout-form';
 import type { Governorate } from '@prisma/client';
 
@@ -69,35 +71,46 @@ export default async function CheckoutPage({
   const b2bCtx = await getB2BCheckoutContext();
   const viewerType: 'B2B' | 'B2C' = b2bCtx ? 'B2B' : 'B2C';
 
-  const [addresses, governorateZones, thresholds, codPolicy, vat] =
-    await Promise.all([
-      isB2C
-        ? prisma.address.findMany({
-            where: { userId: user.id },
-            orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
-          })
-        : Promise.resolve([]),
-      prisma.governorateZone.findMany({
-        select: {
-          governorate: true,
-          zone: {
-            select: {
-              id: true,
-              code: true,
-              nameAr: true,
-              nameEn: true,
-              baseRateEgp: true,
-              freeShippingThresholdB2cEgp: true,
-              freeShippingThresholdB2bEgp: true,
-              codEnabled: true,
-            },
+  const [
+    addresses,
+    governorateZones,
+    deliverableGovernorates,
+    enabledPaymentMethods,
+    thresholds,
+    codPolicy,
+    vat,
+  ] = await Promise.all([
+    isB2C
+      ? prisma.address.findMany({
+          where: { userId: user.id },
+          orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+        })
+      : Promise.resolve([]),
+    prisma.governorateZone.findMany({
+      select: {
+        governorate: true,
+        zone: {
+          select: {
+            id: true,
+            code: true,
+            nameAr: true,
+            nameEn: true,
+            baseRateEgp: true,
+            freeShippingThresholdB2cEgp: true,
+            freeShippingThresholdB2bEgp: true,
+            codEnabled: true,
+            estimatedDeliveryDaysMin: true,
+            estimatedDeliveryDaysMax: true,
           },
         },
-      }),
-      getFreeShipThresholds(),
-      getCodPolicy(),
-      getVatRate(),
-    ]);
+      },
+    }),
+    getDeliverableGovernorates(),
+    getEnabledPaymentMethods(),
+    getFreeShipThresholds(),
+    getCodPolicy(),
+    getVatRate(),
+  ]);
 
   // Build a Governorate → zone-info map for the form. If a governorate has
   // no mapping (shouldn't happen post-seed), the form shows a "contact us"
@@ -120,6 +133,8 @@ export default async function CheckoutPage({
           gz.zone.freeShippingThresholdB2bEgp !== null
             ? Number(gz.zone.freeShippingThresholdB2bEgp)
             : null,
+        estimatedDeliveryDaysMin: gz.zone.estimatedDeliveryDaysMin,
+        estimatedDeliveryDaysMax: gz.zone.estimatedDeliveryDaysMax,
       },
     ]),
   ) as Record<
@@ -133,6 +148,8 @@ export default async function CheckoutPage({
       codEnabled: boolean;
       freeShippingThresholdB2cEgp: number | null;
       freeShippingThresholdB2bEgp: number | null;
+      estimatedDeliveryDaysMin: number;
+      estimatedDeliveryDaysMax: number;
     }
   >;
 
@@ -214,6 +231,20 @@ export default async function CheckoutPage({
           }))}
           subtotalEgp={subtotal}
           shippingByGovernorate={shippingByGovernorate}
+          deliverableGovernorates={deliverableGovernorates.map((g) => ({
+            code: g.code,
+            nameAr: g.nameAr,
+            nameEn: g.nameEn,
+          }))}
+          paymentMethodAvailability={{
+            codEnabled: enabledPaymentMethods.some((m) => m.code === 'cod'),
+            paymobCardEnabled: enabledPaymentMethods.some(
+              (m) => m.code === 'paymob_card',
+            ),
+            paymobFawryEnabled: enabledPaymentMethods.some(
+              (m) => m.code === 'paymob_fawry',
+            ),
+          }}
           globalThresholds={thresholds}
           codPolicy={codPolicy}
           vatRatePercent={vat.percent}

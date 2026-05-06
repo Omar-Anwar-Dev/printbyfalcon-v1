@@ -1638,3 +1638,120 @@ Every edit + reset writes to `AuditLog` with the before/after JSON. Action keys:
 - `prisma db push` adds the table + 1 index in <1 second.
 - `post-push.ts` seeds 10 templates via upsert on first boot post-deploy.
 - Existing send paths immediately start using the DB templates (with fallback unchanged) — no manual cutover needed.
+
+---
+
+## ADR-068: Admin-editable governorates via `GovernorateConfig` sidecar — keep the enum
+
+**Date:** 2026-05-06
+**Status:** Accepted (Sprint 11.5)
+
+**Context:**
+Sprint 11.5 owner request to add/remove/edit governorates + reassign-to-zone + delivery days from the admin panel. Two paths considered:
+1. Convert the existing `Governorate` Postgres enum to a `String` column + new `Governorate` model. Preserves admin freedom to add a "28th" governorate but requires migrating `Address.governorate` (live order rows) and `GovernorateZone` (live mapping table) — non-trivial Postgres ALTER TYPE + data backfill, and `prisma db push` (the project's deploy mechanism) does not handle the conversion safely.
+2. Keep the `Governorate` enum as the natural key set + introduce a sidecar `GovernorateConfig` model that holds the admin-editable surface (nameAr/nameEn/deliverable/position/zoneId).
+
+**Decision:**
+Path 2. The enum stays. `GovernorateConfig.code` is typed as `Governorate`, which means the admin can only manage rows for the 27 enum values (one each, seeded by `post-push.ts`). "Add a governorate" semantically becomes "toggle deliverable / rename / reassign to zone"; "delete a governorate" becomes "deliverable=false" since the enum guarantees finite codes. If Egypt declares a 28th governorate (it hasn't since 2009), a developer adds an enum value + redeploys (5 min of work).
+
+**Alternatives considered:**
+- Path 1 was rejected because the `db push` workflow can't safely round-trip enum→string data, and the admin scenario where a NEW (non-Egyptian-government-recognized) governorate matters is essentially zero for an Egypt-only MVP.
+- "Just add `deliverable` to the existing `GovernorateZone` table" was considered and rejected because `GovernorateZone`'s PK is `governorate` and it's the legacy reader of `lib/shipping/resolve.ts` — extending it would have entangled the legacy read path with the new admin write path.
+
+**Consequences:**
+- `GovernorateConfig` is the source of truth for admin edits. `GovernorateZone` continues to exist solely to keep `lib/shipping/resolve.ts` working unchanged; `post-push.ts` keeps the two in lock-step on every boot, and `app/actions/admin-governorates.ts::updateGovernorateConfigAction` writes both. Sprint 12+ can migrate the resolver to read from `GovernorateConfig.zoneId` and drop `GovernorateZone`.
+- The admin UI (`/admin/settings/governorates`) explicitly notes: "new governorates can't be added from here — Egypt has 27."
+- `ShippingZone` gained `active`, `estimatedDeliveryDaysMin`, `estimatedDeliveryDaysMax` — these are unrelated to the governorate decision but landed in the same migration. Zone CRUD (create/archive/edit) is fully admin-controlled; the 5 seed zones are hard-delete-protected by code.
+- `ShippingZoneCode` enum was dropped in favor of `code: String @unique` so admin-created zones can have arbitrary slugs. Existing 5 seed values keep their original codes — no data migration impact.
+
+---
+
+## ADR-069: Payment-method runtime toggle — DB-backed visibility, env keys preserved
+
+**Date:** 2026-05-06
+**Status:** Accepted (Sprint 11.5)
+
+**Context:**
+Sprint 11.5 owner request: from the admin panel, enable/disable individual Paymob payment surfaces (Visa, Fawry pay-at-outlet, Mobile wallet) plus COD, and switch between LIVE and TEST modes. Owner explicitly **declined** moving Paymob keys into the database (consistent with ADR-056 fail-fast boot guard); the keys stay in `.env.production`. This is a layer above the global ADR-064 kill-switch (`isPaymobEnabled()`): per-method visibility + a runtime mode flip, not just a global on/off.
+
+**Decision:**
+A new `PaymentMethodConfig` table (one row per method: `code`, `enabled`, `nameAr/En`, `descriptionAr/En`, `position`, `paymobIntegrationKind`) controls **visibility** at checkout. A `Setting payment.mode` (`LIVE` / `TEST`) controls **which env key set is used** at runtime. The Paymob lib (`lib/payments/paymob.ts`) reads `<NAME>_TEST` env var first when mode=TEST, falling back to `<NAME>` if the test variant isn't set; mode=LIVE reads the original variant. Webhook HMAC verification tries both LIVE and TEST secrets in turn so late-arriving webhooks across a mode flip still verify.
+
+**Alternatives considered:**
+- **Move Paymob keys into the DB** (encrypted at rest with a master key in env). Rejected by owner — adds a moving part and breaks the boot-time env-check; the rotation runbook ([docs/paymob-key-rotation.md](paymob-key-rotation.md)) covers the legitimate need without DB-level secrets.
+- **One env-key set + use Paymob's `?sandbox=true` query param at runtime to switch live↔sandbox**. Rejected: Paymob's sandbox uses **different** integration_id values, so the same key set can't address both worlds. Two key sets is the only honest model.
+- **Hard-code COD as always-on**. Rejected for symmetry: the table is the obvious place to admin-configure COD too, and the existing per-zone COD toggle still works (it now AND's with this method-level enabled flag).
+
+**Consequences:**
+- The 4 default rows (`paymob_card`, `paymob_fawry`, `paymob_wallet`, `cod`) seed via `post-push.ts` with `update:{}` so admin edits survive redeploys.
+- Checkout's `createOrderAction` validates the chosen method has `enabled=true` server-side; bypassing the UI hides nothing.
+- The admin UI (`/admin/settings/payment-methods`) shows an "env missing" chip when a method is enabled but its env-var pair isn't present for the active mode — a quiet warning that the toggle is futile until the deploy file is fixed.
+- All toggles + mode flips emit AuditLog rows (`settings.payment_method.toggle` / `settings.payment.mode`).
+- Default mode is `LIVE`, default for `paymob_card` + `cod` is `enabled=true`, default for Fawry + wallet is `enabled=false` (consistent with ADR-022 / ADR-025 — Fawry deferred until owner requests it; wallet is a placeholder for future Paymob integration).
+- Per-method visibility AND-combines with the global ADR-064 `isPaymobEnabled()` flag: even an admin enabling `paymob_card` won't show it at checkout if the global Paymob kill-switch is off.
+
+---
+
+## ADR-070: Admin-password re-verification gate for sensitive runtime mutations
+
+**Date:** 2026-05-06
+**Status:** Accepted (Sprint 11.5)
+
+**Context:**
+Two operations introduced in Sprint 11.5 directly affect customer payment flows: toggling a payment method on/off, and switching payment mode between LIVE and TEST. A leaked admin session (or an unattended laptop) could silently flip prod into TEST and capture real customer payments against a sandbox merchant account, or disable Visa during peak traffic. Same risk class for switching Whats360 to DEV mode and silently dropping all OTP/order notifications.
+
+**Decision:**
+Sensitive admin Server Actions re-prompt the OWNER for their password and re-verify it server-side via `lib/auth/verify-admin-password.ts::verifyAdminPasswordOrThrow` before mutating state. Rate-limited at 5 attempts per admin per 15 minutes via a new `RATE_LIMIT_RULES.adminPasswordVerify` rule. Failed attempts emit `admin.password_verify.failed` audit-log rows so OWNER can see brute-force activity in the audit trail.
+
+**Scope of the gate (Sprint 11.5):**
+- `togglePaymentMethodAction`
+- `setPaymentModeAction` (Paymob LIVE/TEST)
+- `setWhatsappModeAction` (Whats360 LIVE/SANDBOX/DEV)
+
+**Out of scope (no password gate):**
+- Reading device status (no state change)
+- Sending a test WhatsApp message (low-risk — no production data + audited)
+- Editing payment-method labels (cosmetic + audited)
+- Governorate CRUD + Zone CRUD (auditing is sufficient — no money flow)
+
+**Alternatives considered:**
+- **Step-up via a second device / TOTP**. Rejected: too heavy for a 1–3-admin shop; the password gate already raises the bar past "leaked cookie" without buying a second factor.
+- **Apply the gate to every admin write**. Rejected: friction explosion; password fatigue would teach admins to type their password reflexively, defeating the gate.
+- **Skip the gate, rely on audit log alone**. Rejected: audit log is reactive; the harm is already done by the time anyone reads it.
+
+**Consequences:**
+- The helper accepts a `password` field on input schemas; UIs render a small dialog over the action button. Password is never sent in URL, never logged, validated against `User.passwordHash` (bcrypt cost 12) the same way login does.
+- Rate-limit is per-admin (subject = `admin:<userId>`) — one admin's mistakes don't lock out another.
+- Failed-attempt audit row carries `actorId` only (not the wrong password value).
+- If a future action needs the gate, wrap it the same way: parse, `verifyAdminPasswordOrThrow`, mutate, audit. No state machine needed.
+
+---
+
+## ADR-071: Whats360 transport-mode runtime switch (DB-backed; env override allowed)
+
+**Date:** 2026-05-06
+**Status:** Accepted (Sprint 11.5)
+
+**Context:**
+Sprint 11.5 owner request: from the admin panel, switch Whats360 between LIVE (real device delivery), SANDBOX (call hits Whats360 sandbox endpoint, no billing or delivery), and DEV (log-only — no HTTP call). Used during device maintenance, end-to-end testing, and quick "shut up the channel" emergencies. Whats360 token + instance ID stay in env (consistent with ADR-056). This is orthogonal to ADR-067 (admin-editable WhatsApp message *templates* — the *content*); ADR-071 controls the *transport*.
+
+**Decision:**
+A `Setting whatsapp.transport` (JSON `{ mode: 'LIVE' | 'SANDBOX' | 'DEV' }`) controls runtime behavior. `lib/whatsapp.ts::sendWhatsApp` and `sendWhatsAppDoc` await `getWhatsappMode()` on each call. Env-mode overrides (`NOTIFICATIONS_DEV_MODE=true`, `WHATS360_SANDBOX=true`) still win — they're per-environment knobs for local dev (devs force log-only) and CI (force sandbox), and admins shouldn't have to fight env-level state.
+
+**Scope:**
+- LIVE: existing Whats360 behavior — real send.
+- SANDBOX: appends `&sandbox=true` to the URL. Whats360 returns simulated success without billing or delivery.
+- DEV: short-circuits to `logger.warn` + returns `{ ok: true, externalMessageId: 'dev-...' }`. No HTTP call.
+
+**Alternatives considered:**
+- **Move the token/instance into DB-stored encrypted secrets**. Rejected by owner per ADR-069 reasoning. Mode toggle without secret movement is enough.
+- **One env flag, two values (`WHATSAPP_MODE`)**. Rejected: requires a redeploy to change. Owner specifically wants no-redeploy mode flips for emergencies.
+- **Skip DEV mode; just SANDBOX as the "off" state**. Rejected: SANDBOX still consumes a Whats360 API request; DEV is the truly no-side-effects mode worth shipping.
+
+**Consequences:**
+- All outbound paths route through `getWhatsappMode()` — one place to change the policy.
+- The admin UI (`/admin/settings/whatsapp`) detects when an env override is forcing the mode (env-state banner) so a confused owner doesn't think the DB toggle is "broken".
+- A "Test connection" button calls `getDeviceStatus()` (read-only) — useful for verifying the linked phone is online before switching to LIVE.
+- A "Send test message" button respects the active mode (DEV/SANDBOX → no real send) and audits as `settings.whatsapp.test_send`.
+- Mode flips emit AuditLog rows (`settings.whatsapp.mode`).
+- Safety net for accidental DEV mode: the OWNER must enter their password to flip — see ADR-070.

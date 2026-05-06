@@ -49,6 +49,17 @@ export async function addAddressAction(
   const parsed = addressSchema.safeParse(input);
   if (!parsed.success) return { ok: false, errorKey: 'validation.invalid' };
 
+  // Sprint 11.5 — block creating an address in a deactivated governorate.
+  // The form already filters them out client-side; this is the server-side
+  // guard against tampering or stale form state.
+  const govCheck = await prisma.governorateConfig.findUnique({
+    where: { code: parsed.data.governorate },
+    select: { deliverable: true },
+  });
+  if (!govCheck?.deliverable) {
+    return { ok: false, errorKey: 'shipping.governorate_not_deliverable' };
+  }
+
   const count = await prisma.address.count({ where: { userId: user.id } });
   if (count >= MAX_ADDRESSES_PER_USER) {
     return { ok: false, errorKey: 'address.limit_reached' };
@@ -98,6 +109,20 @@ export async function updateAddressAction(
     where: { id, userId: user.id },
   });
   if (!existing) return { ok: false, errorKey: 'address.not_found' };
+
+  // Sprint 11.5 — block updating to a deactivated governorate. Existing
+  // addresses with a now-deactivated governorate stay readable but cannot
+  // be edited to keep the same deactivated value (the customer must pick
+  // a different one or contact support).
+  if (parsed.data.governorate !== existing.governorate) {
+    const govCheck = await prisma.governorateConfig.findUnique({
+      where: { code: parsed.data.governorate },
+      select: { deliverable: true },
+    });
+    if (!govCheck?.deliverable) {
+      return { ok: false, errorKey: 'shipping.governorate_not_deliverable' };
+    }
+  }
 
   await prisma.$transaction(async (tx) => {
     if (parsed.data.isDefault && !existing.isDefault) {
