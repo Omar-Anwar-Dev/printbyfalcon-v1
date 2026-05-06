@@ -29,6 +29,12 @@ export type ProductPasteApplied = {
   /// `null` clears the link; `undefined` leaves the existing value untouched.
   /// String = resolved PrinterModel id.
   printerModelId?: string | null;
+  /// Resolved PrinterModel ids that this consumable (or any product) is
+  /// compatible with. Array = replace the existing compatibility set with
+  /// this list (empty array clears all). `undefined` = leave existing
+  /// links untouched. The actual ProductCompatibility rows are written
+  /// post-save by ProductForm via setProductCompatibilityAction.
+  compatiblePrinterModelIds?: string[];
   slug?: string;
   nameAr?: string;
   nameEn?: string;
@@ -64,29 +70,33 @@ export type PasteLabels = {
 };
 
 const SAMPLE_JSON = `{
-  "sku": "BROTHER-DCP-T530DW",
-  "brand": "Brother",
-  "category": "Ink Tank Printers",
-  "printerModel": "Brother DCP-T530DW",
-  "nameAr": "طابعة Brother DCP-T530DW لاسلكية ألوان متعددة الوظائف",
-  "nameEn": "Brother DCP-T530DW Wireless Color Ink Tank All-in-One Printer",
-  "descriptionAr": "طابعة Brother DCP-T530DW متعددة الوظائف (طباعة، نسخ، سكان) بنظام خزان حبر منخفض التكلفة.",
-  "descriptionEn": "Brother DCP-T530DW is a wireless all-in-one color ink tank printer designed for cost-efficient, high-volume printing.",
-  "basePriceEgp": 8200,
-  "authenticity": "GENUINE",
+  "sku": "HP-CF259A-COMP",
+  "brand": "HP",
+  "category": "Toner Cartridges",
+  "compatiblePrinters": [
+    "HP LaserJet Pro M404dn",
+    "HP LaserJet Pro M428dn",
+    "HP LaserJet Pro MFP M428fdw"
+  ],
+  "nameAr": "خرطوشة تونر HP 59A متوافقة (CF259A) أسود",
+  "nameEn": "HP 59A Compatible Black Toner Cartridge (CF259A)",
+  "descriptionAr": "خرطوشة تونر متوافقة بديلة لطابعات HP LaserJet Pro M404 / M428 — جودة طباعة عالية وإنتاجية حتى 3000 صفحة.",
+  "descriptionEn": "Compatible replacement toner cartridge for HP LaserJet Pro M404 / M428 printers. High print quality, up to 3,000 pages yield.",
+  "basePriceEgp": 1850,
+  "authenticity": "COMPATIBLE",
   "condition": "NEW",
-  "warranty": "ضمان سنة رسمي",
-  "vatExempt": true,
+  "warranty": "استبدال خلال 7 أيام إن وجد عيب",
+  "vatExempt": false,
   "returnable": true,
   "specsAr": {
-    "النوع": "طابعة خزان حبر",
-    "اللون": "ألوان",
-    "الاتصال": "USB 2.0 + Wi-Fi"
+    "اللون": "أسود",
+    "إنتاجية الصفحات": "3,000 صفحة",
+    "النوع": "متوافق"
   },
   "specsEn": {
-    "Type": "Ink Tank Printer",
-    "Color": "Color",
-    "Connectivity": "USB 2.0 + Wi-Fi"
+    "Color": "Black",
+    "Page yield": "3,000 pages",
+    "Type": "Compatible"
   },
   "status": "ACTIVE"
 }`;
@@ -105,14 +115,16 @@ function buildPrompt(
     .slice(0, 8)
     .map((m) => m.nameEn)
     .join(' / ');
-  return `أنا هضيف منتج جديد في كتالوج Print By Falcon. طلعلي JSON واحد بالشكل ده بالظبط (مفيش كلام قبله أو بعده):
+  return `أنا هضيف منتج جديد في كتالوج Print By Falcon. طلعلي JSON واحد بالشكل ده بالظبط (مفيش كلام قبله أو بعده). المثال تحت لحبر متوافق — لو المنتج طابعة شيل "compatiblePrinters" وحط "printerModel" بدالها:
 
 ${SAMPLE_JSON}
 
 قواعد:
 - "brand" لازم يكون اسم من القايمة دي بالظبط: ${brandList || '— مفيش brands ظاهرة —'}
 - "category" لازم يكون اسم تصنيف موجود مثل: ${catList || '— مفيش categories ظاهرة —'}
-- "printerModel" حقل اختياري — استخدمه فقط لو المنتج هو "طابعة" نفسها (مش حبر/تونر). اكتب اسم الموديل من قائمة PrinterModels الموجودة، مثلاً: ${modelList || '— مفيش printer models لسه —'}. لو مش طابعة سيب الحقل بره الـ JSON أو حطه null.
+- لو المنتج **طابعة** (مش حبر/تونر): استخدم "printerModel" (نص واحد، اسم الموديل من القايمة)، وشيل "compatiblePrinters" تماماً.
+- لو المنتج **حبر/تونر/مستلزم**: استخدم "compatiblePrinters" (قائمة بأسماء موديلات الطابعات اللي بيتركّب فيها)، وشيل "printerModel" تماماً.
+- موديلات الطابعات المتاحة (أمثلة من المسجّل): ${modelList || '— مفيش printer models لسه —'}. لو محتاج موديل مش موجود ضيفه يدوياً من /admin/printer-models الأول.
 - "specsAr" و "specsEn" نفس عدد الـ keys ونفس الترتيب.
 - الـ values نص عادي، مش markdown ولا روابط.
 - "basePriceEgp" رقم بالجنيه المصري بدون فواصل.
@@ -339,6 +351,43 @@ export function ProductJsonPaste({
           errs.push(`printerModel "${pmRaw}" not found.${hint}`);
         }
       }
+    }
+
+    // compatiblePrinters — array of PrinterModel names / slugs / cuids that
+    // this product (typically a consumable) fits. The form holds these in
+    // pendingCompat state and writes the ProductCompatibility rows via
+    // setProductCompatibilityAction after the product save succeeds. An
+    // explicit empty array `[]` is meaningful: it tells the form to clear
+    // all existing links on save.
+    const compatRaw = obj.compatiblePrinters;
+    if (Array.isArray(compatRaw)) {
+      const ids: string[] = [];
+      const seen = new Set<string>();
+      for (const entry of compatRaw) {
+        const v = asTrimmedString(entry);
+        if (!v) continue;
+        const r = resolveOption(v, printerModelsRef.current);
+        if (r.ok) {
+          if (!seen.has(r.id)) {
+            seen.add(r.id);
+            ids.push(r.id);
+          }
+        } else {
+          const hint = r.suggestions.length
+            ? ` Suggestions: ${r.suggestions.join(' | ')}`
+            : '';
+          errs.push(`compatiblePrinters: "${v}" not found.${hint}`);
+        }
+      }
+      patch.compatiblePrinterModelIds = ids;
+      applied.push(
+        ids.length === 0
+          ? 'compatiblePrinters (cleared)'
+          : `compatiblePrinters (${ids.length})`,
+      );
+    } else if (compatRaw === null) {
+      patch.compatiblePrinterModelIds = [];
+      applied.push('compatiblePrinters (cleared)');
     }
 
     const copyText = (k: keyof ProductPasteApplied, src: string) => {
