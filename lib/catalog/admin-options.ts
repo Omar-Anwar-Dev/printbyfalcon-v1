@@ -82,3 +82,45 @@ export async function getCategoryResolveData(): Promise<ResolveItem[]> {
   });
   return rows;
 }
+
+/**
+ * PrinterModel doesn't have bilingual `nameAr/nameEn` like Brand/Category —
+ * just `modelName` plus the related Brand. To make the JSON-paste resolver
+ * (which expects ResolveItem) accept all the natural ways a user might
+ * type a printer model, we expose two synthetic name forms per row:
+ *   - bare modelName ("LaserJet Pro M404dn")
+ *   - "Brand modelName" ("HP LaserJet Pro M404dn") in both languages
+ * Plus the slug. Empty array if there are no PrinterModels yet.
+ */
+export type PrinterModelResolveItem = ResolveItem & {
+  modelName: string;
+  brandNameAr: string;
+  brandNameEn: string;
+};
+
+export async function getPrinterModelResolveData(): Promise<
+  PrinterModelResolveItem[]
+> {
+  const rows = await prisma.printerModel.findMany({
+    where: { status: 'ACTIVE' },
+    select: {
+      id: true,
+      slug: true,
+      modelName: true,
+      brand: { select: { nameAr: true, nameEn: true } },
+    },
+    orderBy: [{ brand: { nameEn: 'asc' } }, { modelName: 'asc' }],
+  });
+  return rows.map((pm) => ({
+    id: pm.id,
+    slug: pm.slug,
+    modelName: pm.modelName,
+    brandNameAr: pm.brand.nameAr,
+    brandNameEn: pm.brand.nameEn,
+    // ResolveItem name fields → composite "Brand ModelName" so the existing
+    // resolveOption substring/exact matcher in product-json-paste.tsx Just
+    // Works for queries like "HP M404dn" without touching that helper.
+    nameAr: `${pm.brand.nameAr} ${pm.modelName}`,
+    nameEn: `${pm.brand.nameEn} ${pm.modelName}`,
+  }));
+}

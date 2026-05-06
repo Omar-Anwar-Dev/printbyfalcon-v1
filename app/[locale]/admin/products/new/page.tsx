@@ -6,6 +6,7 @@ import {
   getBrandResolveData,
   getCategoryOptions,
   getCategoryResolveData,
+  getPrinterModelResolveData,
 } from '@/lib/catalog/admin-options';
 import { ProductForm } from '@/components/admin/product-form';
 import { buildPasteLabels } from '@/lib/admin/paste-labels';
@@ -20,18 +21,25 @@ export default async function NewProductPage({
   const t = await getTranslations();
   const isAr = locale === 'ar';
 
-  const [brands, categories, brandsResolve, categoriesResolve, printerModels] =
-    await Promise.all([
-      getBrandOptions(locale),
-      getCategoryOptions(locale),
-      getBrandResolveData(),
-      getCategoryResolveData(),
-      prisma.printerModel.findMany({
-        where: { status: 'ACTIVE' },
-        include: { brand: { select: { nameAr: true, nameEn: true } } },
-        orderBy: [{ brand: { nameEn: 'asc' } }, { modelName: 'asc' }],
-      }),
-    ]);
+  const [
+    brands,
+    categories,
+    brandsResolve,
+    categoriesResolve,
+    printerModels,
+    printerModelsResolve,
+  ] = await Promise.all([
+    getBrandOptions(locale),
+    getCategoryOptions(locale),
+    getBrandResolveData(),
+    getCategoryResolveData(),
+    prisma.printerModel.findMany({
+      where: { status: 'ACTIVE' },
+      include: { brand: { select: { nameAr: true, nameEn: true } } },
+      orderBy: [{ brand: { nameEn: 'asc' } }, { modelName: 'asc' }],
+    }),
+    getPrinterModelResolveData(),
+  ]);
 
   const printerModelOptions = printerModels.map((pm) => ({
     id: pm.id,
@@ -49,6 +57,7 @@ export default async function NewProductPage({
         printerModels={printerModelOptions}
         brandsResolve={brandsResolve}
         categoriesResolve={categoriesResolve}
+        printerModelsResolve={printerModelsResolve}
         cancelHref="/admin/products"
         pasteLabels={buildPasteLabels(isAr)}
         labels={{

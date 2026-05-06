@@ -87,6 +87,7 @@ export function ProductForm({
   printerModels,
   brandsResolve,
   categoriesResolve,
+  printerModelsResolve,
   labels,
   pasteLabels,
   cancelHref,
@@ -98,6 +99,7 @@ export function ProductForm({
   printerModels: PrinterModelOption[];
   brandsResolve: ResolveItem[];
   categoriesResolve: ResolveItem[];
+  printerModelsResolve: ResolveItem[];
   labels: Labels;
   pasteLabels: PasteLabels;
   cancelHref: string;
@@ -179,6 +181,11 @@ export function ProductForm({
         ? { conditionNote: p.conditionNote }
         : {}),
       ...(p.status ? { status: p.status } : {}),
+      // PR for compatibility wiring — `null` clears the link, a string sets
+      // it, `undefined` leaves the existing value untouched.
+      ...(p.printerModelId !== undefined
+        ? { printerModelId: p.printerModelId }
+        : {}),
     }));
     if (p.specs) setSpecRows(specsObjectToRows(p.specs));
     if (p.specsAr) setSpecArRows(specsObjectToRows(p.specsAr));
@@ -219,6 +226,7 @@ export function ProductForm({
       <ProductJsonPaste
         brandsResolve={brandsResolve}
         categoriesResolve={categoriesResolve}
+        printerModelsResolve={printerModelsResolve}
         onApply={applyPaste}
         labels={pasteLabels}
       />

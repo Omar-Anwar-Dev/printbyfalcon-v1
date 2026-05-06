@@ -7,6 +7,7 @@ import {
   getBrandResolveData,
   getCategoryOptions,
   getCategoryResolveData,
+  getPrinterModelResolveData,
 } from '@/lib/catalog/admin-options';
 import { ProductForm } from '@/components/admin/product-form';
 import { buildPasteLabels } from '@/lib/admin/paste-labels';
@@ -33,6 +34,7 @@ export default async function EditProductPage({
     brandsResolve,
     categoriesResolve,
     printerModels,
+    printerModelsResolve,
   ] = await Promise.all([
     prisma.product.findUnique({
       where: { id },
@@ -50,6 +52,7 @@ export default async function EditProductPage({
       include: { brand: { select: { nameAr: true, nameEn: true } } },
       orderBy: [{ brand: { nameEn: 'asc' } }, { modelName: 'asc' }],
     }),
+    getPrinterModelResolveData(),
   ]);
 
   if (!product) notFound();
@@ -125,6 +128,7 @@ export default async function EditProductPage({
           printerModels={printerModelOptions}
           brandsResolve={brandsResolve}
           categoriesResolve={categoriesResolve}
+          printerModelsResolve={printerModelsResolve}
           cancelHref="/admin/products"
           pasteLabels={buildPasteLabels(isAr)}
           labels={{
