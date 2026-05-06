@@ -26,6 +26,9 @@ export type ProductPasteApplied = {
   sku?: string;
   brandId?: string;
   categoryId?: string;
+  /// `null` clears the link; `undefined` leaves the existing value untouched.
+  /// String = resolved PrinterModel id.
+  printerModelId?: string | null;
   slug?: string;
   nameAr?: string;
   nameEn?: string;
@@ -64,6 +67,7 @@ const SAMPLE_JSON = `{
   "sku": "BROTHER-DCP-T530DW",
   "brand": "Brother",
   "category": "Ink Tank Printers",
+  "printerModel": "Brother DCP-T530DW",
   "nameAr": "طابعة Brother DCP-T530DW لاسلكية ألوان متعددة الوظائف",
   "nameEn": "Brother DCP-T530DW Wireless Color Ink Tank All-in-One Printer",
   "descriptionAr": "طابعة Brother DCP-T530DW متعددة الوظائف (طباعة، نسخ، سكان) بنظام خزان حبر منخفض التكلفة.",
@@ -87,11 +91,19 @@ const SAMPLE_JSON = `{
   "status": "ACTIVE"
 }`;
 
-function buildPrompt(brands: ResolveItem[], categories: ResolveItem[]): string {
+function buildPrompt(
+  brands: ResolveItem[],
+  categories: ResolveItem[],
+  printerModels: ResolveItem[],
+): string {
   const brandList = brands.map((b) => b.nameEn).join(' / ');
   const catList = categories
     .slice(0, 12)
     .map((c) => c.nameAr)
+    .join(' / ');
+  const modelList = printerModels
+    .slice(0, 8)
+    .map((m) => m.nameEn)
     .join(' / ');
   return `أنا هضيف منتج جديد في كتالوج Print By Falcon. طلعلي JSON واحد بالشكل ده بالظبط (مفيش كلام قبله أو بعده):
 
@@ -100,6 +112,7 @@ ${SAMPLE_JSON}
 قواعد:
 - "brand" لازم يكون اسم من القايمة دي بالظبط: ${brandList || '— مفيش brands ظاهرة —'}
 - "category" لازم يكون اسم تصنيف موجود مثل: ${catList || '— مفيش categories ظاهرة —'}
+- "printerModel" حقل اختياري — استخدمه فقط لو المنتج هو "طابعة" نفسها (مش حبر/تونر). اكتب اسم الموديل من قائمة PrinterModels الموجودة، مثلاً: ${modelList || '— مفيش printer models لسه —'}. لو مش طابعة سيب الحقل بره الـ JSON أو حطه null.
 - "specsAr" و "specsEn" نفس عدد الـ keys ونفس الترتيب.
 - الـ values نص عادي، مش markdown ولا روابط.
 - "basePriceEgp" رقم بالجنيه المصري بدون فواصل.
@@ -202,11 +215,13 @@ function asStringRecord(v: unknown): Record<string, string> | undefined {
 export function ProductJsonPaste({
   brandsResolve,
   categoriesResolve,
+  printerModelsResolve,
   onApply,
   labels,
 }: {
   brandsResolve: ResolveItem[];
   categoriesResolve: ResolveItem[];
+  printerModelsResolve: ResolveItem[];
   onApply: (patch: ProductPasteApplied) => void;
   labels: PasteLabels;
 }) {
@@ -223,6 +238,8 @@ export function ProductJsonPaste({
   brandsRef.current = brandsResolve;
   const categoriesRef = useRef(categoriesResolve);
   categoriesRef.current = categoriesResolve;
+  const printerModelsRef = useRef(printerModelsResolve);
+  printerModelsRef.current = printerModelsResolve;
 
   const apply = (raw: string): { errors: string[]; applied: string[] } => {
     const errs: string[] = [];
@@ -290,6 +307,37 @@ export function ProductJsonPaste({
           ? ` Suggestions: ${r.suggestions.join(' | ')}`
           : '';
         errs.push(`category "${categoryRaw}" not found.${hint}`);
+      }
+    }
+
+    // PrinterModel — optional field, only meaningful for printer Products.
+    // Three input shapes: explicit cuid via "printerModelId", free-form name
+    // via "printerModel", or `null` to clear an existing link.
+    if (obj.printerModelId === null || obj.printerModel === null) {
+      patch.printerModelId = null;
+      applied.push('printerModel (cleared)');
+    } else {
+      const pmIdRaw = asTrimmedString(obj.printerModelId);
+      const pmRaw = asTrimmedString(obj.printerModel);
+      if (pmIdRaw) {
+        const r = resolveOption(pmIdRaw, printerModelsRef.current);
+        if (r.ok) {
+          patch.printerModelId = r.id;
+          applied.push('printerModel');
+        } else {
+          errs.push(`printerModelId "${pmIdRaw}" not found.`);
+        }
+      } else if (pmRaw) {
+        const r = resolveOption(pmRaw, printerModelsRef.current);
+        if (r.ok) {
+          patch.printerModelId = r.id;
+          applied.push('printerModel');
+        } else {
+          const hint = r.suggestions.length
+            ? ` Suggestions: ${r.suggestions.join(' | ')}`
+            : '';
+          errs.push(`printerModel "${pmRaw}" not found.${hint}`);
+        }
       }
     }
 
@@ -412,7 +460,11 @@ export function ProductJsonPaste({
   };
 
   const handleCopyPrompt = async () => {
-    const prompt = buildPrompt(brandsResolve, categoriesResolve);
+    const prompt = buildPrompt(
+      brandsResolve,
+      categoriesResolve,
+      printerModelsResolve,
+    );
     try {
       await navigator.clipboard.writeText(prompt);
       setCopied(true);

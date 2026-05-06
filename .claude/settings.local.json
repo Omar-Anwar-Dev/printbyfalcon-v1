@@ -100,7 +100,8 @@
       "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npm run seed:orders)",
       "Bash(git rebase *)",
       "Bash(git stash *)",
-      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npx tsx scripts/verify-view-tracking.ts)"
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npx tsx scripts/verify-view-tracking.ts)",
+      "Bash(git pull *)"
     ]
   }
 }
