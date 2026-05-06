@@ -19,6 +19,7 @@ import { Pagination } from '@/components/ui/pagination';
 import { resolveViewerPrices } from '@/lib/pricing/storefront';
 import { JsonLd } from '@/components/seo/json-ld';
 import { buildBreadcrumbList } from '@/lib/seo/structured-data';
+import { recordCategoryView } from '@/lib/views/record';
 
 // Dynamic rendering so B2B viewers see tier prices (Sprint 7 ADR-037).
 export const dynamic = 'force-dynamic';
@@ -89,6 +90,9 @@ export default async function CategoryPage({
 
   const category = await getActiveCategoryBySlug(slug);
   if (!category) notFound();
+
+  // PR 4 — log this view for the popularity score's category-boost term.
+  await recordCategoryView(category.id);
 
   const isAr = locale === 'ar';
   const t = await getTranslations();

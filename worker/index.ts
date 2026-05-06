@@ -13,6 +13,7 @@ import { releaseExpiredCartReservations } from '@/lib/cart/stock';
 import { reconcileStalePaymobOrders } from '@/lib/order/reconciliation';
 import { sendLowStockDigest } from '@/lib/inventory/digest';
 import { recomputePopularityScores } from '@/lib/catalog/popularity';
+import { cleanupExpiredViews } from '@/lib/views/cleanup';
 import { registerEmailJob } from './jobs/send-email';
 import { registerWhatsAppJob } from './jobs/send-whatsapp';
 import { registerHeartbeatJob } from './jobs/heartbeat';
@@ -130,6 +131,27 @@ async function main() {
   await boss.work<Record<string, never>>('recompute-popularity', async () => {
     const { updated } = await recomputePopularityScores();
     logger.info({ updated }, 'recompute_popularity.done');
+  });
+
+  // PR 4: prune ProductView + CategoryView rows older than the popularity
+  // window (90 days). Runs at 03:15 — before the recompute at 03:30 — so
+  // the recompute always sees a freshly-pruned dataset and stays cheap.
+  await boss.createQueue('cleanup-expired-views');
+  await boss.schedule(
+    'cleanup-expired-views',
+    '15 3 * * *',
+    {},
+    { tz: 'Africa/Cairo' },
+  );
+  await boss.work<Record<string, never>>('cleanup-expired-views', async () => {
+    const { productViewsDeleted, categoryViewsDeleted } =
+      await cleanupExpiredViews();
+    if (productViewsDeleted > 0 || categoryViewsDeleted > 0) {
+      logger.info(
+        { productViewsDeleted, categoryViewsDeleted },
+        'cleanup.views.done',
+      );
+    }
   });
 
   // Sprint 6: low-stock digest (daily 08:00 Africa/Cairo).

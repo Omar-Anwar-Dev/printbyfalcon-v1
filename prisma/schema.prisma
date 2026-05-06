@@ -222,6 +222,8 @@ model Category {
   updatedAt DateTime      @updatedAt
 
   products Product[]
+  /// PR 4 — view tracking back-relation. Append-only; pruned by cron.
+  views    CategoryView[]
 
   @@index([parentId, position])
   @@index([status])
@@ -309,6 +311,8 @@ model Product {
   cartItems             CartItem[]
   orderItems            OrderItem[]
   priceOverrides        CompanyPriceOverride[]
+  /// PR 4 — view tracking back-relation. Append-only; pruned by cron.
+  views                 ProductView[]
 
   @@index([brandId])
   @@index([categoryId])
@@ -369,6 +373,40 @@ model ProductCompatibility {
 
   @@id([productId, printerModelId])
   @@index([printerModelId])
+}
+
+/// PR 4 — anonymous storefront view tracking. Append-only log feeding the
+/// nightly popularity recompute (`lib/catalog/popularity.ts`). One row per
+/// SSR render of `/products/[slug]` — bot UAs are filtered at the recording
+/// layer (`lib/views/record.ts`). `sessionKey` is whatever non-PII cookie
+/// is on the request (auth session OR guest cart cookie); NULL for visitors
+/// who don't yet have either. Pruned to a 90-day window by the
+/// `cleanup-expired-views` worker cron.
+model ProductView {
+  id         String   @id @default(cuid())
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
+  sessionKey String?
+  viewedAt   DateTime @default(now())
+
+  @@index([productId, viewedAt])
+  /// Supports the cleanup cron's `WHERE viewedAt < NOW() - 90 days`.
+  @@index([viewedAt])
+}
+
+/// Sibling of ProductView — captures category-page hits so the popularity
+/// score's category-boost term can blend "categories the customer visits"
+/// with "categories the customer orders from", matching tier 1 of the
+/// owner's original sort priority list.
+model CategoryView {
+  id         String   @id @default(cuid())
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+  sessionKey String?
+  viewedAt   DateTime @default(now())
+
+  @@index([categoryId, viewedAt])
+  @@index([viewedAt])
 }
 
 // -------------------------------------------------------------------------

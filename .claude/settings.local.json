@@ -97,7 +97,10 @@
       "Bash(taskkill //PID 28584 //F)",
       "Bash(taskkill //PID 10440 //F)",
       "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npx tsx scripts/verify-popularity.ts)",
-      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npm run seed:orders)"
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npm run seed:orders)",
+      "Bash(git rebase *)",
+      "Bash(git stash *)",
+      "Bash(DATABASE_URL=\"postgres://pbf:pbf@localhost:5433/pbf_local?schema=public\" npx tsx scripts/verify-view-tracking.ts)"
     ]
   }
 }
