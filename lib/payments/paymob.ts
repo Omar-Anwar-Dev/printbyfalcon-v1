@@ -49,6 +49,22 @@ export type CreatePaymentKeyInput = {
   /// 'card' (Visa/Mastercard/Meeza) / 'fawry' (pay-at-outlet) / 'wallet'
   /// (mobile wallets). Each maps to a distinct PAYMOB_INTEGRATION_ID env var.
   integrationKind?: 'card' | 'fawry' | 'wallet';
+  /// Optional per-request webhook URL. When set, sent as `notification_url`
+  /// in the payment_keys request and **overrides** the integration-level
+  /// "Transaction Processed Callback" configured in the Paymob dashboard.
+  /// Use this to:
+  ///   1. Avoid relying on Paymob's dashboard caching (we hit a case where
+  ///      the dashboard saved the URL but the notification engine kept the
+  ///      old value — see ADR pending in this PR).
+  ///   2. Point staging traffic at staging URL even when the LIVE merchant
+  ///      account is shared (single source of truth lives in our env).
+  notificationUrl?: string;
+  /// Optional per-request browser-redirect URL. Sent as `redirection_url`
+  /// in the payment_keys request — overrides the integration-level
+  /// "Transaction Response Callback". Customer lands here after Paymob
+  /// completes the transaction (success or failure). Typically points at
+  /// our /order/confirmed/[id] page so the customer sees their own order.
+  redirectionUrl?: string;
 };
 
 export type CreatePaymentKeyOutput = {
@@ -161,7 +177,11 @@ export async function createPaymentKey(
   });
 
   // Step 3 — payment key
-  const key = await postJson<{ token: string }>(`/acceptance/payment_keys`, {
+  // notification_url + redirection_url, when present in the input, override
+  // the integration-level callbacks configured in the Paymob dashboard. We
+  // pass them here so each request explicitly tells Paymob where to call
+  // back, removing the dependency on the dashboard's cached config.
+  const paymentKeyBody: Record<string, unknown> = {
     auth_token: auth.token,
     amount_cents: String(input.amountCents),
     expiration: 3600, // 1 hour
@@ -183,7 +203,17 @@ export async function createPaymentKey(
     },
     currency: 'EGP',
     integration_id: integrationId,
-  });
+  };
+  if (input.notificationUrl) {
+    paymentKeyBody.notification_url = input.notificationUrl;
+  }
+  if (input.redirectionUrl) {
+    paymentKeyBody.redirection_url = input.redirectionUrl;
+  }
+  const key = await postJson<{ token: string }>(
+    `/acceptance/payment_keys`,
+    paymentKeyBody,
+  );
 
   return {
     paymentKey: key.token,

@@ -444,6 +444,17 @@ export async function createOrderAction(
     try {
       const [firstName, ...restParts] = parsed.data.contact.name.split(/\s+/);
       const lastName = restParts.join(' ') || firstName;
+      // Pin Paymob's callbacks to OUR canonical URLs per request, so the
+      // dashboard-level cache for the integration can never silently route
+      // notifications to the wrong host. APP_URL is set per-environment in
+      // .env.staging / .env.production and validated at boot by env-check.
+      const appUrl = process.env.APP_URL?.replace(/\/$/, '');
+      const notificationUrl = appUrl
+        ? `${appUrl}/api/webhooks/paymob`
+        : undefined;
+      const redirectionUrl = appUrl
+        ? `${appUrl}/order/confirmed/${result.order.id}`
+        : undefined;
       const key = await createPaymentKey({
         merchantOrderId: result.order.id,
         amountCents: Math.round(total * 100),
@@ -468,6 +479,8 @@ export async function createOrderAction(
           building: parsed.data.address.building?.trim() || undefined,
           state: parsed.data.address.governorate,
         },
+        notificationUrl,
+        redirectionUrl,
       });
       await prisma.order.update({
         where: { id: result.order.id },
