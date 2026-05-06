@@ -1989,4 +1989,79 @@ Mapped to the 7 criteria in `docs/implementation-plan.md` line 809-816, split in
 - All call sites use `renderTemplateOrFallback` — if the templates table is empty or unreachable, hardcoded defaults kick in immediately.
 - No effect on the ongoing catalog data upload (separate table, separate concerns).
 
+---
+
+## Sprint 11.5 — Admin-Controlled Config — COMPLETE 2026-05-06 (post-M1 buffer)
+
+Owner-driven ad-hoc sprint between Sprint 11 dev-track close-out and M1 → M2 buffer. Three explicit asks delivered, all OWNER-only, with sensitive runtime mutations gated by an admin-password re-prompt (rate-limited 5 attempts / 15 min per admin):
+
+1. **Governorates + zones + delivery days** — `GovernorateConfig` sidecar (ADR-068) keeps the `Governorate` enum + adds admin-editable `nameAr/En` + `deliverable` toggle + `position` + `zoneId`. `ShippingZone` gains `active` (soft-archive) + `estimatedDeliveryDaysMin/Max`. `ShippingZoneCode` enum dropped — `code` is now `String @unique` so admin-created zones can have arbitrary slugs. New page `/admin/settings/governorates`. Rebuilt `/admin/settings/shipping` with full zone CRUD (5 seed codes archive-only). Customer sees "Estimated delivery: 2–5 business days" at checkout; addresses in deactivated governorates rejected server-side.
+2. **Payment methods + LIVE/TEST mode** (ADR-069) — new `PaymentMethodConfig` table (4 methods: Visa, Fawry, wallet, COD) controls visibility. `Setting payment.mode` flips which env-var pair the Paymob lib reads (`<NAME>_TEST` first when mode=TEST, falls back to `<NAME>`, then dev-stub). `verifyPaymobHmac` tries both LIVE + TEST secrets so late-arriving webhooks across a mode flip still verify. New page `/admin/settings/payment-methods` with password-gated mode toggle + per-method enable + "env missing" warning. Keys **stay in env** per ADR-056. Per-method visibility AND-combines with the global ADR-064 `isPaymobEnabled()` flag.
+3. **Whats360 transport mode** (ADR-071) — `Setting whatsapp.transport` drives `lib/whatsapp.ts` at request time. LIVE = real send, SANDBOX = `&sandbox=true` (no bill/deliver), DEV = log-only no HTTP. Env overrides (`NOTIFICATIONS_DEV_MODE`, `WHATS360_SANDBOX`) still win for dev convenience; admin UI surfaces a banner when an env override is forcing the mode. New page `/admin/settings/whatsapp` with Test Connection probe + Test Send form. Keys stay in env. Orthogonal to ADR-067 (template *content*); this controls *transport*.
+
+### Cross-cutting
+
+- **`lib/auth/verify-admin-password.ts`** is the new password gate (ADR-070) with per-admin rate-limit (`RATE_LIMIT_RULES.adminPasswordVerify`, 5/15min) + audit-logged failed attempts (`admin.password_verify.failed`).
+- **`post-push.ts`** seeds 27 `GovernorateConfig` rows (mirrors enum + initial zone mapping), 4 `PaymentMethodConfig` rows (Visa+COD enabled, Fawry+wallet disabled), `Setting payment.mode = LIVE`, `Setting whatsapp.transport = { mode: LIVE }`. All `update:{}` upserts so admin edits survive redeploys.
+
+### Completed Tasks
+
+| # | Task | Status |
+|---|---|---|
+| T1 | Schema migration (`GovernorateConfig` + `PaymentMethodConfig` + `ShippingZone` extensions, drop `ShippingZoneCode` enum) | ✅ schema valid + Prisma client regenerates |
+| T2 | Admin-password verify helper + rate-limit | ✅ 7/7 vitest cases green |
+| T3 | Admin UI: governorates table + zones manager + free-ship thresholds form | ✅ all bilingual |
+| T4 | Checkout + Address enforcement (server-side governorate guard + payment-method validation + delivery-days display) | ✅ |
+| T5 | Payment-method toggle UI + LIVE/TEST mode switch (password-gated) | ✅ |
+| T6 | Whats360 mode toggle + Test Connection + test send (password-gated mode flips) | ✅ |
+| T7 | Documentation: paymob-key-rotation.md, whats360-key-rotation.md, ADRs 068/069/070/071 | ✅ |
+| T8 | Verification | ✅ tsc / lint / 263 vitest / next build all green |
+
+### Verification
+
+- ✅ `DATABASE_URL=... npx prisma validate` — schema valid
+- ✅ `DATABASE_URL=... npx prisma generate` — client regenerated
+- ✅ `npx tsc --noEmit` — typecheck clean
+- ✅ `npx next lint` — 0 errors (only pre-existing `lib/db.ts` console warning)
+- ✅ `npx vitest run` — **263/263 tests green** (origin/main baseline 256 + 7 new admin-password verify)
+- ✅ `DATABASE_URL=... npx next build` — production build succeeds; new pages compiled
+- ⏭️ Live admin walkthrough — staging-manual after deploy
+
+### Sprint 11.5 Exit Criteria — status
+
+Owner's three asks (8 sub-criteria total):
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Admin can add/edit/disable governorates + reassign to zones | ✅ `/admin/settings/governorates` |
+| 1 | Admin can add/delete zones + edit rate + delivery days | ✅ `/admin/settings/shipping` (5 seed zones archive-only) |
+| 2 | Admin can toggle Paymob methods (Visa / Fawry / Wallet) + COD | ✅ `/admin/settings/payment-methods` |
+| 2 | Admin can switch LIVE / TEST mode | ✅ Same page, password-gated |
+| 2 | Admin can rotate Paymob keys with documentation | ✅ Keys stay in env; runbook ships |
+| 2 | Sensitive flips require admin password | ✅ ADR-070 helper + UI dialog |
+| 3 | Admin can edit Whats360 mode + verify connection | ✅ `/admin/settings/whatsapp` |
+| 3 | Admin can rotate Whats360 keys with documentation | ✅ Keys stay in env; runbook ships |
+
+**8/8 fully met. Sprint 11.5 closed 2026-05-06.**
+
+### Decisions logged this sprint
+
+- **ADR-068** [2026-05-06] `GovernorateConfig` sidecar — keep the enum.
+- **ADR-069** [2026-05-06] Payment-method runtime toggle in DB + env keys preserved.
+- **ADR-070** [2026-05-06] Admin-password re-verification gate for sensitive mutations.
+- **ADR-071** [2026-05-06] Whats360 transport-mode runtime switch.
+
+### Risk Log Updates
+
+- **NEW low-risk:** Misconfigured admin could disable both COD and Paymob card simultaneously, locking out checkout. Mitigation: form surfaces a clear "no methods available — contact us on WhatsApp" message; re-enable is a one-click flip.
+- **NEW low-risk:** Switching to TEST mode without TEST env keys silently falls back to dev-stub. Surfaced via "env missing" chip on the methods page; documented in rotation runbook.
+- **R3-v2 (Whats360 outage)** — partial mitigation strengthened: "DEV" mode lets owner silence the channel during a known outage to prevent retry-storms / failed-notification noise without redeploying.
+
+### Sprint 11.5 parking lot
+
+- **Migrate `lib/shipping/resolve.ts`** to read from `GovernorateConfig.zoneId` so the legacy `GovernorateZone` table can be dropped (Sprint 12+ cleanup).
+- **Per-method admin label edits** — `updatePaymentMethodLabelsAction` exists server-side but no UI surface yet (cosmetic).
+- **Audit-log filter for sensitive flips** — append `settings.payment.mode`, `settings.whatsapp.mode`, `admin.password_verify.failed` actions to [docs/audit-log-queries.md](audit-log-queries.md) cookbook.
+- **Whats360 plan-quota widget on admin home** — daily digest of `Notification` failure rate would alert owner before customers complain.
+
 

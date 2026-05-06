@@ -33,40 +33,22 @@ type Address = {
   isDefault: boolean;
 };
 
+type GovernorateOption = {
+  code: string;
+  nameAr: string;
+  nameEn: string;
+};
+
 type Props = {
   locale: 'ar' | 'en';
   addresses: Address[];
+  /// Sprint 11.5 — passed from server (deliverable-only). Undeliverable
+  /// governorates are hidden from the dropdown so customers can't even
+  /// pick them; an existing address whose governorate was deactivated
+  /// will display its raw code in the address card but new edits force
+  /// a different choice.
+  governorates: GovernorateOption[];
 };
-
-const GOVS = [
-  'CAIRO',
-  'GIZA',
-  'QALYUBIA',
-  'ALEXANDRIA',
-  'BEHEIRA',
-  'DAKAHLIA',
-  'DAMIETTA',
-  'GHARBIA',
-  'KAFR_EL_SHEIKH',
-  'MENOUFIA',
-  'SHARQIA',
-  'ISMAILIA',
-  'PORT_SAID',
-  'SUEZ',
-  'NORTH_SINAI',
-  'SOUTH_SINAI',
-  'RED_SEA',
-  'MATRUH',
-  'NEW_VALLEY',
-  'BENI_SUEF',
-  'FAYOUM',
-  'MINYA',
-  'ASYUT',
-  'SOHAG',
-  'QENA',
-  'LUXOR',
-  'ASWAN',
-];
 
 const LABELS = {
   ar: {
@@ -158,8 +140,9 @@ const EMPTY: AddressInput = {
   isDefault: false,
 };
 
-export function AddressManager({ locale, addresses }: Props) {
+export function AddressManager({ locale, addresses, governorates }: Props) {
   const labels = LABELS[locale];
+  const isAr = locale === 'ar';
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -168,8 +151,21 @@ export function AddressManager({ locale, addresses }: Props) {
   const [deleteCandidate, setDeleteCandidate] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
+  // Sprint 11.5 — first deliverable governorate as the form's default;
+  // gracefully falls back to CAIRO if (somehow) every governorate has been
+  // deactivated by the admin.
+  const defaultGov = governorates[0]?.code ?? 'CAIRO';
+  const govLabel = (code: string): string => {
+    const g = governorates.find((gg) => gg.code === code);
+    if (g) return isAr ? g.nameAr : g.nameEn;
+    return code; // raw code if it points at a deactivated governorate
+  };
+
   function startAdd() {
-    setForm(EMPTY);
+    setForm({
+      ...EMPTY,
+      governorate: defaultGov as AddressInput['governorate'],
+    });
     setAdding(true);
     setEditingId(null);
     setErrorMsg(null);
@@ -304,9 +300,9 @@ export function AddressManager({ locale, addresses }: Props) {
                 }
                 className="w-full rounded-md border bg-background px-3 py-2"
               >
-                {GOVS.map((g) => (
-                  <option key={g} value={g}>
-                    {g}
+                {governorates.map((g) => (
+                  <option key={g.code} value={g.code}>
+                    {isAr ? g.nameAr : g.nameEn}
                   </option>
                 ))}
               </select>
@@ -439,7 +435,7 @@ export function AddressManager({ locale, addresses }: Props) {
                   </p>
                   <p className="text-muted-foreground">
                     {a.city}
-                    {a.area ? ` — ${a.area}` : ''} — {a.governorate}
+                    {a.area ? ` — ${a.area}` : ''} — {govLabel(a.governorate)}
                   </p>
                 </div>
               </div>

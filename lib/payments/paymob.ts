@@ -15,6 +15,7 @@
  * Paymob sandbox credentials.
  */
 import { logger } from '@/lib/logger';
+import { getPaymentMode } from '@/lib/settings/payment';
 
 const BASE = 'https://accept.paymob.com/api';
 
@@ -45,8 +46,9 @@ export type CreatePaymentKeyInput = {
     postalCode?: string;
     state?: string;
   };
-  /// Usually 'card' for Sprint 4. 'fawry' when Sprint 9 lands.
-  integrationKind?: 'card' | 'fawry';
+  /// 'card' (Visa/Mastercard/Meeza) / 'fawry' (pay-at-outlet) / 'wallet'
+  /// (mobile wallets). Each maps to a distinct PAYMOB_INTEGRATION_ID env var.
+  integrationKind?: 'card' | 'fawry' | 'wallet';
 };
 
 export type CreatePaymentKeyOutput = {
@@ -60,16 +62,40 @@ function env(name: string): string | undefined {
   return v && v.trim().length > 0 ? v.trim() : undefined;
 }
 
-function integrationIdFor(kind: 'card' | 'fawry'): string | undefined {
-  return kind === 'fawry'
-    ? env('PAYMOB_INTEGRATION_ID_FAWRY')
-    : env('PAYMOB_INTEGRATION_ID_CARD');
+/**
+ * Sprint 11.5 — mode-aware env reader. When `payment.mode = TEST` we look
+ * for `<NAME>_TEST` first (e.g. `PAYMOB_API_KEY_TEST`); if it's not set, we
+ * fall back to the regular var. This lets owners keep TEST + LIVE keys side
+ * by side in `.env.production` and flip between them from the admin UI
+ * without redeploying.
+ */
+function envForMode(name: string, mode: 'LIVE' | 'TEST'): string | undefined {
+  if (mode === 'TEST') {
+    const test = env(`${name}_TEST`);
+    if (test) return test;
+  }
+  return env(name);
 }
 
-export function isPaymobConfigured(kind: 'card' | 'fawry' = 'card'): boolean {
+function integrationIdFor(
+  kind: 'card' | 'fawry' | 'wallet',
+  mode: 'LIVE' | 'TEST',
+): string | undefined {
+  if (kind === 'fawry') return envForMode('PAYMOB_INTEGRATION_ID_FAWRY', mode);
+  if (kind === 'wallet')
+    return envForMode('PAYMOB_INTEGRATION_ID_WALLET', mode);
+  return envForMode('PAYMOB_INTEGRATION_ID_CARD', mode);
+}
+
+export function isPaymobConfigured(
+  kind: 'card' | 'fawry' | 'wallet' = 'card',
+): boolean {
+  // Synchronous variant — checks the current LIVE keys only. Used by Sprint 4
+  // checks that don't have an async context. Mode-aware version lives in
+  // `createPaymentKey` itself.
   return Boolean(
     env('PAYMOB_API_KEY') &&
-    integrationIdFor(kind) &&
+    integrationIdFor(kind, 'LIVE') &&
     env('PAYMOB_IFRAME_ID') &&
     env('PAYMOB_HMAC_SECRET'),
   );
@@ -94,9 +120,12 @@ export async function createPaymentKey(
   input: CreatePaymentKeyInput,
 ): Promise<CreatePaymentKeyOutput> {
   const kind = input.integrationKind ?? 'card';
-  const apiKey = env('PAYMOB_API_KEY');
-  const integrationId = integrationIdFor(kind);
-  const iframeId = env('PAYMOB_IFRAME_ID');
+  // Sprint 11.5 — read the admin-controlled mode from DB. TEST mode prefers
+  // `<NAME>_TEST` env vars, falling back to the regular set if not present.
+  const mode = await getPaymentMode();
+  const apiKey = envForMode('PAYMOB_API_KEY', mode);
+  const integrationId = integrationIdFor(kind, mode);
+  const iframeId = envForMode('PAYMOB_IFRAME_ID', mode);
 
   if (!apiKey || !integrationId || !iframeId) {
     // Dev-mode stub — points at our own confirmation page with a fake
@@ -105,7 +134,7 @@ export async function createPaymentKey(
     // all non-prefixed URLs. Arabic is the default locale; on the stub page
     // itself the language switcher still works.
     logger.warn(
-      { merchantOrderId: input.merchantOrderId, kind },
+      { merchantOrderId: input.merchantOrderId, kind, mode },
       'paymob.dev_mode.stub',
     );
     const fakeKey = `dev_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
@@ -173,8 +202,16 @@ export function verifyPaymobHmac(
   payload: Record<string, unknown>,
   providedHmac: string,
 ): boolean {
-  const secret = env('PAYMOB_HMAC_SECRET');
-  if (!secret) {
+  // Sprint 11.5 — try LIVE secret first, then TEST. Late-arriving webhooks
+  // for orders placed before a mode flip should still verify correctly.
+  // Both secrets are unique per merchant account so the chance of an
+  // accidental cross-mode match is negligible.
+  const liveSecret = env('PAYMOB_HMAC_SECRET');
+  const testSecret = env('PAYMOB_HMAC_SECRET_TEST');
+  const secrets = [liveSecret, testSecret].filter((s): s is string =>
+    Boolean(s),
+  );
+  if (secrets.length === 0) {
     logger.warn({}, 'paymob.hmac.no_secret_configured');
     return false;
   }
@@ -214,26 +251,31 @@ export function verifyPaymobHmac(
     .map((v) => (v == null ? '' : String(v)))
     .join('');
 
-  // HMAC-SHA512, hex
+  // HMAC-SHA512, hex — try each candidate secret. Constant-time compare
+  // against each so a TEST secret that doesn't match doesn't leak timing
+  // info about the LIVE secret (or vice versa).
   // eslint-disable-next-line @typescript-eslint/no-require-imports
   const crypto = require('node:crypto') as typeof import('node:crypto');
-  const computed = crypto
-    .createHmac('sha512', secret)
-    .update(concat)
-    .digest('hex');
-
-  // Length check before timingSafeEqual — a short / malformed provided HMAC
-  // would otherwise throw a RangeError inside timingSafeEqual and crash the
-  // route handler. We want a clean boolean false for any bad input.
-  if (providedHmac.length !== computed.length) return false;
-  let computedBuf: Buffer;
   let providedBuf: Buffer;
   try {
-    computedBuf = Buffer.from(computed, 'hex');
     providedBuf = Buffer.from(providedHmac, 'hex');
   } catch {
     return false;
   }
-  if (computedBuf.length !== providedBuf.length) return false;
-  return crypto.timingSafeEqual(computedBuf, providedBuf);
+  for (const secret of secrets) {
+    const computed = crypto
+      .createHmac('sha512', secret)
+      .update(concat)
+      .digest('hex');
+    if (providedHmac.length !== computed.length) continue;
+    let computedBuf: Buffer;
+    try {
+      computedBuf = Buffer.from(computed, 'hex');
+    } catch {
+      continue;
+    }
+    if (computedBuf.length !== providedBuf.length) continue;
+    if (crypto.timingSafeEqual(computedBuf, providedBuf)) return true;
+  }
+  return false;
 }

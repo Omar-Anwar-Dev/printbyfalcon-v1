@@ -133,6 +133,34 @@ export async function createOrderAction(
     return { ok: false, errorKey: 'checkout.paymob_disabled' };
   }
 
+  // Sprint 11.5 — re-validate governorate deliverability server-side. Prevents
+  // a client-side bypass (manually crafting the request to target a deactivated
+  // governorate) from creating an order we can't fulfill.
+  const govCheck = await prisma.governorateConfig.findUnique({
+    where: { code: parsed.data.address.governorate },
+    select: { deliverable: true },
+  });
+  if (!govCheck?.deliverable) {
+    return { ok: false, errorKey: 'shipping.governorate_not_deliverable' };
+  }
+
+  // Sprint 11.5 — validate the chosen payment method is enabled per
+  // `PaymentMethodConfig`. Maps form values → DB codes. The legacy
+  // `isPaymobEnabled()` gate (ADR-064) is a global kill-switch; this check
+  // is the per-method admin toggle from /admin/settings/payment-methods.
+  const methodCodeMap: Record<typeof parsed.data.paymentMethod, string> = {
+    PAYMOB_CARD: 'paymob_card',
+    PAYMOB_FAWRY: 'paymob_fawry',
+    COD: 'cod',
+  };
+  const methodCheck = await prisma.paymentMethodConfig.findUnique({
+    where: { code: methodCodeMap[parsed.data.paymentMethod] },
+    select: { enabled: true },
+  });
+  if (!methodCheck?.enabled) {
+    return { ok: false, errorKey: 'payment.method_disabled' };
+  }
+
   const user = await getOptionalUser();
   const b2bCtx = await getB2BCheckoutContext();
   const isB2BOrder = b2bCtx !== null;
@@ -606,6 +634,15 @@ export async function submitForReviewOrderAction(
   const parsed = submitForReviewSchema.safeParse(input);
   if (!parsed.success) {
     return { ok: false, errorKey: 'validation.invalid' };
+  }
+
+  // Sprint 11.5 — same governorate deliverable check as createOrderAction.
+  const govCheck = await prisma.governorateConfig.findUnique({
+    where: { code: parsed.data.address.governorate },
+    select: { deliverable: true },
+  });
+  if (!govCheck?.deliverable) {
+    return { ok: false, errorKey: 'shipping.governorate_not_deliverable' };
   }
 
   const b2bCtx = await getB2BCheckoutContext();

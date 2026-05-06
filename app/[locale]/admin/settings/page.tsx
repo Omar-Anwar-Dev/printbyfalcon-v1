@@ -22,17 +22,31 @@ export default async function AdminSettingsIndex({
     },
     {
       href: '/admin/settings/shipping',
-      title: isAr ? 'الشحن والمحافظات' : 'Shipping & governorates',
+      title: isAr ? 'الشحن والمناطق' : 'Shipping & zones',
       desc: isAr
-        ? 'أسعار الشحن لكل منطقة، حدود الشحن المجاني، وربط المحافظات بالمناطق.'
-        : 'Per-zone shipping rates, free-shipping thresholds, governorate-to-zone mapping.',
+        ? 'إنشاء وحذف المناطق، أسعار الشحن، أيام التوصيل المتوقعة، وحدود الشحن المجاني.'
+        : 'Create / delete zones, shipping rates, expected delivery days, free-shipping thresholds.',
+    },
+    {
+      href: '/admin/settings/governorates',
+      title: isAr ? 'المحافظات' : 'Governorates',
+      desc: isAr
+        ? 'تفعيل/تعطيل التوصيل لكل محافظة، تعديل الأسماء، وإعادة الربط بمنطقة شحن.'
+        : 'Toggle delivery per governorate, edit names, reassign to a shipping zone.',
+    },
+    {
+      href: '/admin/settings/payment-methods',
+      title: isAr ? 'طرق الدفع' : 'Payment methods',
+      desc: isAr
+        ? 'فعّل أو عطّل بطاقات Paymob، فوري، المحفظة، والدفع عند الاستلام، وبدّل بين وضع التشغيل التجريبي والحقيقي.'
+        : 'Enable / disable Paymob card, Fawry, wallet, and COD; switch between test and live modes.',
     },
     {
       href: '/admin/settings/cod',
-      title: isAr ? 'الدفع عند الاستلام' : 'Cash on delivery',
+      title: isAr ? 'الدفع عند الاستلام (التفاصيل)' : 'COD (details)',
       desc: isAr
-        ? 'تفعيل الدفع عند الاستلام، الرسوم، الحد الأقصى للطلب، والتوفر حسب المنطقة.'
-        : 'COD enable/disable, fee, max order value, per-zone availability.',
+        ? 'الرسوم، الحد الأقصى للطلب، والتوفر حسب المنطقة.'
+        : 'Fee, max order value, per-zone availability.',
     },
     {
       href: '/admin/settings/vat',
@@ -82,6 +96,13 @@ export default async function AdminSettingsIndex({
       desc: isAr
         ? 'تعديل صياغة رسائل واتساب التي تُرسل للعملاء (تأكيد الطلب، التسليم للشحن، إلخ).'
         : 'Edit the wording of WhatsApp messages sent to customers (order confirmed, handed to courier, etc.).',
+    },
+    {
+      href: '/admin/settings/whatsapp',
+      title: isAr ? 'الواتساب (Whats360)' : 'WhatsApp (Whats360)',
+      desc: isAr
+        ? 'وضع الإرسال (حقيقي / تجريبي / موقوف)، اختبار اتصال الجهاز، إرسال رسالة اختبار.'
+        : 'Transport mode (live / sandbox / dev), device connection check, test send.',
     },
   ];
 

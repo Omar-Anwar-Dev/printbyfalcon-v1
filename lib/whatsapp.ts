@@ -10,6 +10,7 @@
  * (exercises the API path without billing a real message — used in CI).
  */
 import { logger } from '@/lib/logger';
+import { getWhatsappMode } from '@/lib/settings/whatsapp';
 
 const DEFAULT_BASE_URL = 'https://whats360.live';
 
@@ -33,11 +34,16 @@ export type WhatsAppSendResult = {
 export async function sendWhatsApp(
   payload: WhatsAppSend,
 ): Promise<WhatsAppSendResult> {
-  const devMode = process.env.NOTIFICATIONS_DEV_MODE === 'true';
+  // Sprint 11.5 — mode is admin-controlled via Setting `whatsapp.transport`.
+  // Legacy env vars (`NOTIFICATIONS_DEV_MODE`, `WHATS360_SANDBOX`) still
+  // win at the env layer for local-dev convenience; in prod the DB mode
+  // rules.
+  const mode = await getWhatsappMode();
+  const devMode = mode === 'DEV';
+  const sandbox = mode === 'SANDBOX';
   const token = process.env.WHATS360_TOKEN;
   const instanceId = process.env.WHATS360_INSTANCE_ID;
   const baseUrl = process.env.WHATS360_BASE_URL ?? DEFAULT_BASE_URL;
-  const sandbox = process.env.WHATS360_SANDBOX === 'true';
 
   if (devMode || !token || !instanceId) {
     logger.warn(
@@ -116,11 +122,13 @@ export type WhatsAppSendDoc = {
 export async function sendWhatsAppDoc(
   payload: WhatsAppSendDoc,
 ): Promise<WhatsAppSendResult> {
-  const devMode = process.env.NOTIFICATIONS_DEV_MODE === 'true';
+  // Sprint 11.5 — mode honors admin DB setting (see sendWhatsApp).
+  const mode = await getWhatsappMode();
+  const devMode = mode === 'DEV';
+  const sandbox = mode === 'SANDBOX';
   const token = process.env.WHATS360_TOKEN;
   const instanceId = process.env.WHATS360_INSTANCE_ID;
   const baseUrl = process.env.WHATS360_BASE_URL ?? DEFAULT_BASE_URL;
-  const sandbox = process.env.WHATS360_SANDBOX === 'true';
 
   if (devMode || !token || !instanceId) {
     logger.warn(

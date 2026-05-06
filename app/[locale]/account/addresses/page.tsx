@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation';
 import type { Metadata } from 'next';
 import { prisma } from '@/lib/db';
 import { getOptionalUser } from '@/lib/auth';
+import { getDeliverableGovernorates } from '@/lib/shipping/deliverable';
 import { AddressManager } from '@/components/account/address-manager';
 
 export const dynamic = 'force-dynamic';
@@ -33,10 +34,13 @@ export default async function AccountAddressesPage({
   if (user.type === 'B2B') redirect(`/${locale}/b2b/profile`);
   if (user.type !== 'B2C') redirect(`/${locale}`);
 
-  const addresses = await prisma.address.findMany({
-    where: { userId: user.id },
-    orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
-  });
+  const [addresses, governorates] = await Promise.all([
+    prisma.address.findMany({
+      where: { userId: user.id },
+      orderBy: [{ isDefault: 'desc' }, { createdAt: 'desc' }],
+    }),
+    getDeliverableGovernorates(),
+  ]);
 
   const isAr = locale === 'ar';
   return (
@@ -68,6 +72,11 @@ export default async function AccountAddressesPage({
           apartment: a.apartment,
           notes: a.notes,
           isDefault: a.isDefault,
+        }))}
+        governorates={governorates.map((g) => ({
+          code: g.code,
+          nameAr: g.nameAr,
+          nameEn: g.nameEn,
         }))}
       />
     </main>

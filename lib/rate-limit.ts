@@ -76,6 +76,20 @@ export const RATE_LIMIT_RULES = {
     windowSeconds: 60,
   },
   /**
+   * Sprint 11.5 — admin password re-verification gate. Used before any
+   * sensitive admin action that mutates payment-method enable flags or
+   * Whats360 mode (TEST↔LIVE switch). 5 attempts per admin user per 15
+   * minutes; on trip the admin is forced to wait or sign out + back in.
+   * Tighter than `b2bLogin` because the surface is admin-only and a leaked
+   * admin session shouldn't let an attacker brute-force the password by
+   * spamming the toggle endpoint.
+   */
+  adminPasswordVerify: {
+    name: 'admin-password-verify',
+    max: 5,
+    windowSeconds: 15 * 60,
+  },
+  /**
    * Closed-beta feedback form throttle (Sprint 12 S12-D2-T3). Cap at 5
    * submissions per IP per hour so a frustrated tester doesn't spam, but a
    * legitimate "two bugs in five minutes" round still goes through.
