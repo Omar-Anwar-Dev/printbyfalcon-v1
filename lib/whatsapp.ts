@@ -208,8 +208,19 @@ export async function getDeviceStatus(): Promise<Whats360DeviceStatus> {
 
   try {
     const res = await fetch(url, { method: 'GET' });
+    // Whats360 returns the device fields at the **top level** in its real
+    // production response — verified empirically with `Falcon Support` device
+    // on 2026-05-06 returning `{ success, connected, status, logged_in,
+    // phone, ... }` flat. The earlier code assumed the fields were nested
+    // under `response.{connected,status}` (a docs-page misread); that path
+    // always evaluated false and surfaced the device as "disconnected" in
+    // the admin UI even when it was actually online. We now check both
+    // shapes so a future API version that nests them keeps working too.
     const json = (await res.json().catch(() => ({}))) as {
       success?: boolean;
+      connected?: boolean;
+      status?: string;
+      logged_in?: boolean;
       response?: { connected?: boolean; status?: string };
       error?: string;
     };
@@ -220,10 +231,16 @@ export async function getDeviceStatus(): Promise<Whats360DeviceStatus> {
         raw: json,
       };
     }
-    const connected =
+    const topLevelConnected =
+      json.connected === true ||
+      json.status === 'connected' ||
+      json.status === 'authenticated' ||
+      json.logged_in === true;
+    const nestedConnected =
       json.response?.connected === true ||
       json.response?.status === 'connected' ||
       json.response?.status === 'authenticated';
+    const connected = topLevelConnected || nestedConnected;
     return { connected, raw: json };
   } catch (err) {
     return { connected: false, error: (err as Error).message };
