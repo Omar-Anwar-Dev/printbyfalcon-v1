@@ -30,13 +30,10 @@ type Props = {
   zones: Zone[];
 };
 
-const SEED_CODES = new Set([
-  'GREATER_CAIRO',
-  'ALEX_DELTA',
-  'CANAL_SUEZ',
-  'UPPER_EGYPT',
-  'SINAI_RED_SEA_REMOTE',
-]);
+// Note: the seed-zone code list lives in `lib/shipping/seed-zone-codes.ts`
+// (not here) so the server page can import it. Bundling a constant inside
+// a `'use client'` module and re-importing it from the server breaks at
+// build time — the minifier scrambles the reference.
 
 function emptyDraft(): {
   nameAr: string;
@@ -577,5 +574,3 @@ function errMsg(key: string, isAr: boolean): string {
   if (!entry) return isAr ? 'حدث خطأ غير متوقع' : 'Unexpected error';
   return isAr ? entry.ar : entry.en;
 }
-
-export { SEED_CODES };
