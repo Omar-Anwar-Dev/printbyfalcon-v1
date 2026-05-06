@@ -4,6 +4,7 @@ import { useMemo, useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   createProductAction,
+  setProductCompatibilityAction,
   updateProductAction,
 } from '@/app/actions/admin-catalog';
 import { Button } from '@/components/ui/button';
@@ -145,6 +146,12 @@ export function ProductForm({
   /// market) but the form is symmetric — switch tabs to edit the other locale.
   const [specsTab, setSpecsTab] = useState<'ar' | 'en' | 'legacy'>('ar');
   const [error, setError] = useState<string | null>(null);
+  /// Pending compatibility list captured from a JSON-paste's `compatiblePrinters`
+  /// field. `null` means "no change" — the existing CompatibilityPicker (edit
+  /// page only) keeps its own state and saves separately. A non-null array
+  /// means the form will overwrite the product's compatibility set with these
+  /// PrinterModel ids on save (empty array = clear all).
+  const [pendingCompat, setPendingCompat] = useState<string[] | null>(null);
 
   const canSubmit = useMemo(
     () => brands.length > 0 && categories.some((c) => !c.disabled),
@@ -190,6 +197,9 @@ export function ProductForm({
     if (p.specs) setSpecRows(specsObjectToRows(p.specs));
     if (p.specsAr) setSpecArRows(specsObjectToRows(p.specsAr));
     if (p.specsEn) setSpecEnRows(specsObjectToRows(p.specsEn));
+    if (p.compatiblePrinterModelIds !== undefined) {
+      setPendingCompat(p.compatiblePrinterModelIds);
+    }
   };
 
   const submit = (e: React.FormEvent) => {
@@ -210,6 +220,26 @@ export function ProductForm({
         setError(res.errorKey);
         return;
       }
+      // Resolve the product id whether we just created it or were already
+      // editing an existing one. The compatibility action below needs it.
+      const savedProductId =
+        id ?? (('data' in res && res.data?.id) || undefined);
+
+      // If a JSON paste declared a `compatiblePrinters` list, write it now.
+      // Failure here doesn't roll back the product save (the save already
+      // succeeded) — surface the error so the owner can retry from the
+      // CompatibilityPicker on the edit page.
+      if (pendingCompat !== null && savedProductId) {
+        const compatRes = await setProductCompatibilityAction(
+          savedProductId,
+          pendingCompat,
+        );
+        if (!compatRes.ok) {
+          setError(compatRes.errorKey);
+          return;
+        }
+      }
+
       if (!id && 'data' in res && res.data) {
         router.push(`${cancelHref}/${res.data.id}`);
       } else {
@@ -230,6 +260,13 @@ export function ProductForm({
         onApply={applyPaste}
         labels={pasteLabels}
       />
+      {pendingCompat !== null ? (
+        <div className="rounded-md border border-accent/40 bg-accent-soft/40 px-3 py-2 text-xs text-accent-strong">
+          {pendingCompat.length === 0
+            ? 'سيتم مسح كل روابط التوافق (compatiblePrinters) عند الحفظ.'
+            : `سيتم ربط هذا المنتج بـ ${pendingCompat.length} موديل طابعة عند الحفظ — من حقل compatiblePrinters في الـ JSON.`}
+        </div>
+      ) : null}
       <div className="grid gap-4 md:grid-cols-3">
         <div className="space-y-2">
           <Label htmlFor="sku">{labels.sku}</Label>
