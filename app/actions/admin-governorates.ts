@@ -13,6 +13,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { Governorate } from '@prisma/client';
 import { requireAdmin } from '@/lib/auth';
+import { SHIPPING_ZONE_SEED_CODES } from '@/lib/shipping/seed-zone-codes';
 import { prisma } from '@/lib/db';
 import { logger } from '@/lib/logger';
 
@@ -359,15 +360,9 @@ export async function deleteShippingZoneAction(
     }
     // Don't allow hard-deleting the 5 seed zones — they're referenced by
     // historical orders + the audit log via `code`. The admin can archive
-    // them instead (active=false).
-    const SEED_CODES = new Set([
-      'GREATER_CAIRO',
-      'ALEX_DELTA',
-      'CANAL_SUEZ',
-      'UPPER_EGYPT',
-      'SINAI_RED_SEA_REMOTE',
-    ]);
-    if (SEED_CODES.has(zone.code)) {
+    // them instead (active=false). Set lives in lib/shipping/seed-zone-codes.ts
+    // so this action and the admin UI share one source of truth.
+    if (SHIPPING_ZONE_SEED_CODES.has(zone.code)) {
       return { ok: false, errorKey: 'shipping.zone_seed_protected' };
     }
 

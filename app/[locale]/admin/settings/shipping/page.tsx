@@ -5,7 +5,8 @@ import { Link } from '@/lib/i18n/routing';
 import { getFreeShipThresholds } from '@/lib/settings/shipping';
 import { AdminPageHeader } from '@/components/admin/admin-page-header';
 import { FreeShipThresholdsForm } from '@/components/admin/free-ship-thresholds-form';
-import { ZonesManager, SEED_CODES } from '@/components/admin/zones-manager';
+import { ZonesManager } from '@/components/admin/zones-manager';
+import { SHIPPING_ZONE_SEED_CODES } from '@/lib/shipping/seed-zone-codes';
 
 export const dynamic = 'force-dynamic';
 
@@ -51,7 +52,7 @@ export default async function ShippingSettingsPage({
     estimatedDeliveryDaysMax: z.estimatedDeliveryDaysMax,
     active: z.active,
     governorateCount: z._count.governorateConfigs,
-    isSeed: SEED_CODES.has(z.code),
+    isSeed: SHIPPING_ZONE_SEED_CODES.has(z.code),
   }));
 
   return (
