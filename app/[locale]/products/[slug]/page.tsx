@@ -23,6 +23,7 @@ import { getPricingContextForUser } from '@/lib/pricing/context';
 import { resolvePrice } from '@/lib/pricing/resolve';
 import { JsonLd } from '@/components/seo/json-ld';
 import { buildBreadcrumbList } from '@/lib/seo/structured-data';
+import { recordProductView } from '@/lib/views/record';
 
 // Dynamic so B2B tier pricing + exact stock qty render per viewer.
 export const dynamic = 'force-dynamic';
@@ -96,6 +97,10 @@ export default async function ProductDetailPage({
   const { slug, locale } = await params;
   const product = await getActiveProductBySlug(slug);
   if (!product) notFound();
+
+  // PR 4 — log this view for the popularity score. Bot UAs are filtered
+  // inside; failures are swallowed so a flaky DB never tanks the page.
+  await recordProductView(product.id);
 
   const isAr = locale === 'ar';
   const t = await getTranslations();
