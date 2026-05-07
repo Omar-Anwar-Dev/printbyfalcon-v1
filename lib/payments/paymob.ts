@@ -178,10 +178,34 @@ export async function createPaymentIntention(
     };
   }
 
+  // Items array — Paymob's Intention API enforces
+  //   sum(items[i].amount * items[i].quantity) === top-level amount.
+  // Our order's amountCents includes shipping + VAT + COD fee − discount,
+  // none of which are individual products. Modeling each product as its own
+  // item produces a mismatch (HTTP 406 unmatched_item_prices). Instead we
+  // collapse to a single synthetic line whose amount equals the full order
+  // total. The customer never sees this list — Paymob's Unified Checkout
+  // page just shows the total. Detailed line items remain on our own
+  // /order/confirmed page after payment.
+  const itemPreview = input.items
+    .slice(0, 3)
+    .map((i) => `${i.quantity}× ${i.name}`)
+    .join(', ');
+  const itemSuffix =
+    input.items.length > 3 ? ` (+${input.items.length - 3} more)` : '';
+  const itemDisplayName =
+    `${itemPreview}${itemSuffix}`.slice(0, 100) ||
+    `Order ${input.merchantOrderId}`;
+  const itemDescription =
+    input.items
+      .map((i) => `${i.quantity}× ${i.description}`)
+      .join(', ')
+      .slice(0, 250) || `Order ${input.merchantOrderId}`;
+
   // Body shape per Paymob Intention API docs:
   //   - `amount` (integer cents, smallest unit)
   //   - `payment_methods` array of integration IDs
-  //   - `items[].amount` mirrors the same cents convention
+  //   - `items` see above — single synthetic line totaling `amount`
   //   - `billing_data` keys mostly mirror the legacy payment_keys body
   //   - `special_reference` becomes `obj.order.merchant_order_id` on the
   //     webhook side (our handler uses this to find the Order)
@@ -192,12 +216,14 @@ export async function createPaymentIntention(
     amount: input.amountCents,
     currency: 'EGP',
     payment_methods: paymentMethods,
-    items: input.items.map((i) => ({
-      name: i.name,
-      amount: i.amount_cents,
-      description: i.description,
-      quantity: i.quantity,
-    })),
+    items: [
+      {
+        name: itemDisplayName,
+        amount: input.amountCents,
+        description: itemDescription,
+        quantity: 1,
+      },
+    ],
     billing_data: {
       apartment: input.billing.apartment ?? 'NA',
       email: input.billing.email,
