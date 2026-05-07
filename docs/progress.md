@@ -2,8 +2,9 @@
 
 ## Status
 - **Current milestone:** **M1 reached on production 2026-05-03** — Sprint 12 dev tooling deployed via PR #66; M1 catalog cutover executed (132 real SKUs imported, 200 demo SKUs wiped, transactional test data cleared). Sprint 13 (Technical SEO + Indexing) shipped same day in branch `claude/sprint13-seo` — pending merge + deploy. M1→M2 buffer phase active.
-- **Current sprint:** **Post-M1 buffer — JSON paste auto-compatibility (2026-05-06)** ✅ — owner ran the new ChatGPT prompt and asked for the consumable→printer compatibility links to be set automatically too (not just `printerModel` for printers themselves). JSON now accepts a `compatiblePrinters: string[]` array of PrinterModel names; each item resolves through the same matcher as `printerModel`. ProductForm holds the resolved id list in `pendingCompat` state; on save success, fires the existing `setProductCompatibilityAction(productId, ids[])` to overwrite the compatibility set in one transaction. Empty array clears all links; `undefined` leaves them untouched. Sample JSON rewritten as a consumable example (HP CF259A compatible toner) so the new field is the visible default; ChatGPT prompt rules now spell out the mutual exclusion (use `printerModel` for printers, `compatiblePrinters` for inks/toners — never both).
-- **Last updated:** 2026-05-06 — JSON auto-compat shipped on `claude/json-auto-compat` branch.
+- **Current sprint:** **Sprint 11.6 — Paymob Unified Checkout migration (2026-05-07)** ✅ — full replacement of the legacy 3-step iframe flow with `POST /v1/intention` + redirect to `accept.paymob.com/unifiedcheckout/`. Owner showed Paymob's "Customize checkout page" UI and asked to use the hosted Unified Checkout flow. Single API call instead of three; method picker (card/wallet/Fawry) moves to Paymob's branded hosted page. Env keys flipped (`PAYMOB_API_KEY` + `PAYMOB_IFRAME_ID` → `PAYMOB_PUBLIC_KEY` + `PAYMOB_SECRET_KEY`); HMAC verifier carried through unchanged. ADR-072 logged. 263/263 vitest green. See "Sprint 11.6" close-out section below for full details + owner action items before staging deploy.
+- **Last updated:** 2026-05-07 — Sprint 11.6 close-out on `claude/hopeful-franklin-e87837` branch.
+- **Prior post-M1 buffer change** [2026-05-06] JSON paste auto-compatibility (`claude/json-auto-compat` branch): JSON paste now accepts `compatiblePrinters: string[]` to auto-link consumable→printer compatibility on save (in addition to `printerModel` for printers themselves). See "Post-M1 buffer change" section below.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint, except Sprint 12 which runs on real-user calendar).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 13 piggy-backs on the same staging→prod path as Sprint 12.
 
@@ -2063,5 +2064,81 @@ Owner's three asks (8 sub-criteria total):
 - **Per-method admin label edits** — `updatePaymentMethodLabelsAction` exists server-side but no UI surface yet (cosmetic).
 - **Audit-log filter for sensitive flips** — append `settings.payment.mode`, `settings.whatsapp.mode`, `admin.password_verify.failed` actions to [docs/audit-log-queries.md](audit-log-queries.md) cookbook.
 - **Whats360 plan-quota widget on admin home** — daily digest of `Notification` failure rate would alert owner before customers complain.
+
+---
+
+## Sprint 11.6 — Paymob Unified Checkout Migration — COMPLETE 2026-05-07
+
+Standalone single-session sprint outside the planned 11/12 sequence. Owner showed the Paymob "Customize checkout page" UI (`eg.dashboard.paymob.com/settings/checkout-customization`) and asked to use that hosted Unified Checkout flow instead of the legacy iframe-embed flow shipped in Sprint 4. Full replacement, no hybrid.
+
+### Sprint 11.6 kickoff resolutions (2026-05-07)
+
+- **Scope:** full replacement of the 3-step `auth/tokens + ecommerce/orders + payment_keys → iframe` flow with one-step `POST /v1/intention` → redirect to `accept.paymob.com/unifiedcheckout/`.
+- **Methods:** owner has only the Card integration (UIG type) configured at Paymob. Wallet + Fawry/Kiosk integrations don't exist on the merchant account yet. Migration ships Card-only (matches current production posture). Wallet/Fawry additions are env-var-only later, no code change.
+- **Env-key naming:** kept `PAYMOB_INTEGRATION_ID_CARD` (no rename to `_ONLINE_CARD`) to avoid churn in env-check + admin envMissing detection.
+- **Schema:** no migrations. `Order.paymentMethod` enum keeps `PAYMOB_FAWRY` value for historical orders; new orders never select it.
+- **TEST mode:** Sprint 11.5 mode-aware `envForMode` pattern carries through; admins flip mode from `/admin/settings/payment-methods` and `_TEST` env parallels are read at runtime.
+
+### Completed Tasks — Sprint 11.6
+
+All on 2026-05-07 in a single session. Branch `claude/hopeful-franklin-e87837`.
+
+- [x] **S11.6-T1** Rewrote [lib/payments/paymob.ts](../lib/payments/paymob.ts) — `createPaymentIntention` (replaces `createPaymentKey`); `Authorization: Token <SK>` header; `payment_methods` array built from env (`CARD` always, `WALLET` + `FAWRY` opt-in if set); returns `{ clientSecret, paymobOrderId, checkoutUrl }`. Stub-mode kept (when `PAYMOB_PUBLIC_KEY` + `PAYMOB_SECRET_KEY` unset, returns dev-stub URL).
+- [x] **S11.6-T2** [verifyPaymobHmac](../lib/payments/paymob.ts) — left untouched. Same 20-field SHA512 concat. Confirmed via 7/7 vitest cases.
+- [x] **S11.6-T3** Updated [app/actions/checkout.ts](../app/actions/checkout.ts) — zod enum collapsed to `['PAYMOB_CARD', 'COD']`; `methodCodeMap` no longer includes `PAYMOB_FAWRY`; intention call replaces payment_keys call; `redirectUrl = intention.checkoutUrl`; status-event note generalized.
+- [x] **S11.6-T4** Simplified [components/checkout/checkout-form.tsx](../components/checkout/checkout-form.tsx) — `paymentMethod` state union dropped to `'PAYMOB_CARD' | 'COD'`; Fawry radio + label keys removed; Card label rebranded "الدفع الإلكتروني (Paymob)" / "Online payment (Paymob)" with description "card / wallet / Fawry as available".
+- [x] **S11.6-T5** Updated [app/[locale]/checkout/page.tsx](../app/[locale]/checkout/page.tsx) — `paymentMethodAvailability` prop dropped `paymobFawryEnabled`.
+- [x] **S11.6-T6** Rewrote [lib/order/reconciliation.ts](../lib/order/reconciliation.ts) — `GET /v1/intention/<id>/` with Secret Key auth replaces the legacy `auth/tokens + /api/ecommerce/orders/<id>/transactions` flow. Defensively probes multiple response shapes (`status`, `transactions[]`, `intention_detail.transactions[]`). `Order.paymobOrderId` now stores the intention `id` (UUID) — webhook later overwrites with numeric `obj.order.id`, harmless rotation since reconciliation only runs on PENDING orders.
+- [x] **S11.6-T7** Updated [scripts/post-push.ts](../scripts/post-push.ts) — `paymob_card` row relabeled to "Online payment (Paymob)"; `paymob_fawry` + `paymob_wallet` rows reframed as legacy/disabled (kept seeded so historical references resolve). Per `feedback_seed_upsert_update_empty.md`: `update: {}` means existing prod row keeps its old "Visa / Mastercard / Meeza" label — owner manually edits from admin UI after deploy.
+- [x] **S11.6-T8** Updated [lib/env-check.ts](../lib/env-check.ts) — `REQUIRED_WHEN_PAYMOB_ENABLED` swapped `PAYMOB_API_KEY` → `PAYMOB_PUBLIC_KEY` + `PAYMOB_SECRET_KEY`. Updated [lib/env-check.test.ts](../lib/env-check.test.ts) MINIMAL_PROD_ENV + the failure-mode case.
+- [x] **S11.6-T9** Updated all 3 env example files — [.env.example](../.env.example), [.env.staging.example](../.env.staging.example), [.env.production.example](../.env.production.example) — dropped `PAYMOB_API_KEY` / `PAYMOB_IFRAME_ID`; added `PAYMOB_PUBLIC_KEY` / `PAYMOB_SECRET_KEY` (+ `_TEST` parallels) + integration ID `_TEST` parallels + `PAYMOB_HMAC_SECRET_TEST`.
+- [x] **S11.6-T10** Updated [app/[locale]/payments/paymob/dev-stub/page.tsx](../app/[locale]/payments/paymob/dev-stub/page.tsx) — `isPaymobConfigured` no longer takes a kind argument; comment updated to reflect new env keys.
+
+### Verification (2026-05-07)
+
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npx next lint` — 0 errors (1 pre-existing console warning in `lib/db.ts`)
+- ✅ `npx vitest run` — **263/263 tests green** including 7 paymob HMAC tests + 11 env-check tests (3 of which were updated for the new key set)
+- ✅ `npx next build` — production build succeeds; all routes including `/api/webhooks/paymob`, `/[locale]/payments/paymob/dev-stub`, `/[locale]/payments/paymob/return` present
+- ⏭️ End-to-end live test against Paymob sandbox — pending owner setting the new env keys on staging + walking a real test card; documented in handoff below
+
+### Decisions logged this sprint
+
+- **ADR-072** [2026-05-07] Paymob Unified Checkout (Intention API) replaces the legacy iframe Payment Keys flow. Single API call instead of three; method selection moves to Paymob's hosted page.
+
+### Risk Log Updates
+
+- **NEW low-risk:** First time using Paymob's Intention API in production. Mitigation: dev-stub fallback when keys are unset; HMAC verification carried through unchanged (already battle-tested); reconciliation worker has multi-shape parser to absorb minor doc drift.
+- **R-Paymob-merchant-approval (ADR-064)** — unchanged. The `PAYMENTS_PAYMOB_ENABLED=false` kill-switch still works; M1 COD-only posture intact.
+
+### Owner action items before staging deploy
+
+1. **Set new env vars on staging** in `.env.staging` on VPS (single source of truth, never committed):
+   ```
+   PAYMOB_PUBLIC_KEY=egy_pk_live_VGFyqbf8Ii75UrW7VndfcDKSfeRt6buZ
+   PAYMOB_SECRET_KEY=<owner provides — egy_sk_live_…>
+   PAYMOB_INTEGRATION_ID_CARD=5650109   # UIG live
+   PAYMOB_HMAC_SECRET=9A21458B042D3945A6EF157EF4C3ECFA   # unchanged
+
+   PAYMOB_PUBLIC_KEY_TEST=egy_pk_test_7tBFQrniKlTqbDr8PI2o84JNbMnMi38u
+   PAYMOB_SECRET_KEY_TEST=<owner provides — egy_sk_test_…>
+   PAYMOB_INTEGRATION_ID_CARD_TEST=5657729   # UIG test
+   PAYMOB_HMAC_SECRET_TEST=9A21458B042D3945A6EF157EF4C3ECFA
+   ```
+2. **Remove old vars** from `.env.staging` and `.env.production` after deploy:
+   ```
+   PAYMOB_API_KEY=…    ← delete
+   PAYMOB_IFRAME_ID=…  ← delete
+   ```
+3. **In Paymob dashboard, "Customize checkout page" → "ما بعد الدفع" tab:** leave the dashboard-level URLs blank/default. Our code overrides `notification_url` + `redirection_url` per-request from `APP_URL`, so dashboard caching can never silently route notifications to the wrong host (battle-scar from Sprint 11 ops).
+4. **After deploy, in `/admin/settings/payment-methods`:** relabel the "بطاقة بنكية" / "Visa / Mastercard / Meeza" row to "الدفع الإلكتروني (Paymob)" / "Online payment (Paymob)" — `update: {}` in seed means existing rows aren't touched on redeploy.
+5. **Real test card walk on staging:** browse → cart → checkout (pick "online payment") → confirm redirect lands on `accept.paymob.com/unifiedcheckout/` with our logo + colors → complete a Paymob test card → confirm webhook fires + Order flips to PAID + invoice ships. Documented in [docs/runbook.md](runbook.md) Sprint 4 section.
+
+### Sprint 11.6 parking lot
+
+- **Drop legacy enum value:** `Order.paymentMethod = PAYMOB_FAWRY` is preserved on the schema for historical orders. A future schema cleanup (post-launch, low-priority) can rename it or remove via migration once we're confident no historical data references it.
+- **Add Wallet integration:** when Paymob approves wallet payments for the merchant, owner adds `PAYMOB_INTEGRATION_ID_WALLET=<id>` to env + redeploys. No code change; the unified checkout page surfaces wallet automatically.
+- **Add Fawry/Kiosk integration:** same as Wallet — env-only.
+- **`paymob_fawry` + `paymob_wallet` PaymentMethodConfig rows:** seeded but disabled. Cleanup task (post-launch) can hard-delete them once we're sure no admin UI logic references the codes. Cosmetic.
 
 

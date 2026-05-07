@@ -4,6 +4,10 @@ import { verifyPaymobHmac } from './paymob';
 
 /**
  * Sprint 11 S11-D8-T3 — webhook reliability tests (HMAC half).
+ * Sprint 11.6 — verifier is unchanged when migrating to Unified Checkout;
+ * Paymob still emits the same TRANSACTION webhook with the same 20-field
+ * SHA512 HMAC concat regardless of which checkout surface produced the
+ * transaction. These tests guard against the recipe drifting silently.
  *
  * Proves that `verifyPaymobHmac` is the single source of truth for Paymob
  * callback authentication: legitimate payloads pass, tampered payloads fail,

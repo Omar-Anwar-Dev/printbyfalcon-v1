@@ -29,9 +29,14 @@ const ALWAYS_REQUIRED_IN_PROD = [
  * Required only when Paymob is enabled. ADR-064 lets M1 launch COD-only by
  * setting PAYMENTS_PAYMOB_ENABLED=false; in that posture these env vars are
  * legitimately absent until merchant approval lands and the flag flips on.
+ *
+ * Sprint 11.6 — the legacy iframe flow vars (PAYMOB_API_KEY, PAYMOB_IFRAME_ID)
+ * are gone; the Intention API uses PUBLIC_KEY + SECRET_KEY auth. HMAC_SECRET
+ * + INTEGRATION_ID_CARD are unchanged.
  */
 const REQUIRED_WHEN_PAYMOB_ENABLED = [
-  'PAYMOB_API_KEY',
+  'PAYMOB_PUBLIC_KEY',
+  'PAYMOB_SECRET_KEY',
   'PAYMOB_HMAC_SECRET',
   'PAYMOB_INTEGRATION_ID_CARD',
 ] as const;

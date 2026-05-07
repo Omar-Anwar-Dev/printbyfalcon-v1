@@ -238,11 +238,12 @@ export default async function CheckoutPage({
           }))}
           paymentMethodAvailability={{
             codEnabled: enabledPaymentMethods.some((m) => m.code === 'cod'),
+            // Sprint 11.6 — `paymob_card` is the canonical "online payment via
+            // Paymob Unified Checkout" toggle. Wallet / Fawry no longer appear
+            // as separate radios on /checkout; they're chosen on the hosted
+            // Paymob page when their integrations exist in env.
             paymobCardEnabled: enabledPaymentMethods.some(
               (m) => m.code === 'paymob_card',
-            ),
-            paymobFawryEnabled: enabledPaymentMethods.some(
-              (m) => m.code === 'paymob_fawry',
             ),
           }}
           globalThresholds={thresholds}

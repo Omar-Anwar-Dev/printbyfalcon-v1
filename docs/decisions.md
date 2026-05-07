@@ -1755,3 +1755,40 @@ A `Setting whatsapp.transport` (JSON `{ mode: 'LIVE' | 'SANDBOX' | 'DEV' }`) con
 - A "Send test message" button respects the active mode (DEV/SANDBOX → no real send) and audits as `settings.whatsapp.test_send`.
 - Mode flips emit AuditLog rows (`settings.whatsapp.mode`).
 - Safety net for accidental DEV mode: the OWNER must enter their password to flip — see ADR-070.
+
+## ADR-072: Paymob Unified Checkout (Intention API) replaces the iframe Payment Keys flow
+
+**Date:** 2026-05-07
+**Status:** Accepted (Sprint 11.6)
+
+**Context:**
+Sprint 4 shipped the legacy 3-step Paymob flow: `auth/tokens` → `ecommerce/orders` → `acceptance/payment_keys` → embed `accept.paymob.com/api/acceptance/iframes/<IFRAME_ID>?payment_token=...`. The customer picked card/wallet/Fawry on our `/checkout` page, then we loaded the matching iframe per-method. Owner has now configured Paymob's **Unified Checkout** customization page (`eg.dashboard.paymob.com/settings/checkout-customization`) — a fully Paymob-hosted page at `accept.paymob.com/unifiedcheckout/?publicKey=…&clientSecret=…` that handles method selection itself, with branded logo + colors + address controlled from the dashboard. Owner wants to use that hosted page.
+
+**Decision:**
+Replace the legacy iframe flow end-to-end with Paymob's **Intention API** + **Unified Checkout** URL. Single API call (`POST /v1/intention/` with `Authorization: Token <SECRET_KEY>`) returns a `client_secret` + `intention_order_id`; we redirect the customer's browser to the Unified Checkout URL and Paymob handles the rest. The customer-side method selection UI (Card vs Fawry vs Wallet radios on `/checkout`) collapses into a single "Online payment (Paymob)" option that hands off to the hosted page.
+
+**Scope:**
+- `lib/payments/paymob.ts` — `createPaymentIntention` replaces `createPaymentKey`. One HTTP round-trip instead of three. Returns `{ clientSecret, paymobOrderId, checkoutUrl }`.
+- Auth scheme — `Authorization: Token <SECRET_KEY>` (Paymob's own header convention; NOT Bearer).
+- `payment_methods` array on the intention payload lists which integration IDs to surface on the unified page. Currently only `PAYMOB_INTEGRATION_ID_CARD` (UIG integration on owner's account) is required; `_WALLET` and `_FAWRY` are opt-in additions when those integrations exist.
+- HMAC verifier (`verifyPaymobHmac`) — unchanged. Paymob still emits the same TRANSACTION webhook with the same 20-field SHA512 concat regardless of which checkout surface produced the transaction. The webhook handler at `app/api/webhooks/paymob/route.ts` is byte-identical.
+- `Order.paymobOrderId` now stores the intention `id` (UUID) instead of `intention_order_id` (numeric); reconciliation worker queries `GET /v1/intention/<id>/`. Webhook later overwrites this with `obj.order.id` (numeric) on PAID/FAILED — harmless rotation since reconciliation only runs while `paymentStatus = PENDING`.
+- `lib/order/reconciliation.ts` — switched from `auth/tokens + /api/ecommerce/orders/<id>/transactions` (legacy API key flow) to `GET /v1/intention/<id>/` (Secret Key flow). Defensively probes multiple response shapes (`status`, `transactions[]`, `intention_detail.transactions[]`).
+- Env keys: dropped `PAYMOB_API_KEY` and `PAYMOB_IFRAME_ID` (legacy); added `PAYMOB_PUBLIC_KEY` and `PAYMOB_SECRET_KEY` (+ `_TEST` parallels). Existing `PAYMOB_HMAC_SECRET` and `PAYMOB_INTEGRATION_ID_*` carry over.
+- `Order.paymentMethod` enum — `PAYMOB_FAWRY` value preserved on the schema for historical orders, but no longer accepted as a NEW order's input. Customer-side checkout collapses to `PAYMOB_CARD` (now semantically "any online payment via Paymob") + `COD`.
+- `PaymentMethodConfig` — `paymob_fawry` and `paymob_wallet` rows seeded as legacy/disabled. Admin can keep them disabled; visibility on the hosted page is controlled at the integration level in Paymob dashboard, not here.
+
+**Alternatives considered:**
+- **Hybrid: keep iframe flow alongside Unified Checkout.** Rejected — doubles the surface to maintain (two HMAC paths, two reconciliation paths) without product benefit.
+- **Keep our existing `paymob_card` / `paymob_fawry` / `paymob_wallet` rows in the checkout UI as separate radios.** Rejected — defeats the purpose of using Unified Checkout (which is precisely the hosted "pick your method here" page). Single radio that hands off to Paymob.
+- **Add a new schema enum value `PAYMOB_ONLINE`** to capture the unified semantic. Rejected — the existing `PAYMOB_CARD` enum value is what payments + emails + invoices already key off. Reusing it (with broadened semantics) is less invasive than a migration.
+
+**Consequences:**
+- One fewer HTTP round trip per intention (3 → 1), faster checkout submission.
+- Mobile experience improves: no nested iframe → no 3DS popup quirks → no hostname mismatch.
+- Branding (logo, address, phone, colors) is owner-editable from Paymob dashboard at `eg.dashboard.paymob.com/settings/checkout-customization` without redeploying our app.
+- Adding Wallet/Fawry payment methods is an env-var change (set the `_WALLET` / `_FAWRY` integration IDs) + admin toggle, not a code change.
+- ADR-064 (M1 COD-only kill-switch) still works — `PAYMENTS_PAYMOB_ENABLED=false` short-circuits the gateway before any intention is created.
+- Sprint 11.5's mode-aware env reading (`envForMode`) carries through unchanged — `_TEST` parallels still override at runtime when admin flips `payment.mode = TEST` from /admin/settings/payment-methods.
+- Per `feedback_seed_upsert_update_empty.md`: existing prod row for `paymob_card` keeps the old "Visa / Mastercard / Meeza" label after deploy. Owner needs to manually relabel from /admin/settings/payment-methods → "الدفع الإلكتروني (Paymob)" / "Online payment (Paymob)".
+- Late-arriving webhook reliability is preserved: Paymob webhook timing/format/HMAC are identical across the two flows.

@@ -1,5 +1,6 @@
 /**
- * Dev-mode Paymob stub — only reachable when PAYMOB_API_KEY is not set.
+ * Dev-mode Paymob stub — only reachable when PAYMOB_PUBLIC_KEY +
+ * PAYMOB_SECRET_KEY are not set (Sprint 11.6 Unified Checkout migration).
  * Lets developers click "Simulate success" / "Simulate failure" to exercise
  * the webhook-equivalent code path without real Paymob sandbox credentials.
  */
@@ -9,7 +10,7 @@ import { isPaymobConfigured } from '@/lib/payments/paymob';
 
 async function devSuccess(formData: FormData) {
   'use server';
-  if (isPaymobConfigured('card')) {
+  if (isPaymobConfigured()) {
     throw new Error('Dev stub is disabled when Paymob is configured.');
   }
   const orderId = formData.get('order')?.toString();
@@ -39,7 +40,7 @@ async function devSuccess(formData: FormData) {
 
 async function devFailure(formData: FormData) {
   'use server';
-  if (isPaymobConfigured('card')) {
+  if (isPaymobConfigured()) {
     throw new Error('Dev stub is disabled when Paymob is configured.');
   }
   const orderId = formData.get('order')?.toString();
@@ -71,7 +72,7 @@ export default async function PaymobDevStubPage({
   params: Promise<{ locale: string }>;
   searchParams: Promise<{ key?: string; order?: string }>;
 }) {
-  if (isPaymobConfigured('card')) notFound();
+  if (isPaymobConfigured()) notFound();
   const { locale } = await params;
   const sp = await searchParams;
   if (!sp.order) notFound();
