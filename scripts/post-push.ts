@@ -291,34 +291,47 @@ async function main() {
     paymobIntegrationKind: string | null;
   }> = [
     {
+      // Sprint 11.6 — `paymob_card` is now the canonical "online payment via
+      // Paymob Unified Checkout" toggle. Customer picks card / wallet / Fawry
+      // on the hosted Paymob page (whichever integrations are configured at
+      // the merchant level). The legacy `paymob_fawry` / `paymob_wallet` rows
+      // below stay seeded but disabled so historical references resolve; they
+      // are no longer surfaced as separate radios on /checkout.
       code: 'paymob_card',
       enabled: true,
-      nameAr: 'فيزا / ماستركارد / ميزة',
-      nameEn: 'Visa / Mastercard / Meeza',
-      descriptionAr: 'دفع آمن بالبطاقة عبر Paymob.',
-      descriptionEn: 'Secure card payment via Paymob.',
+      nameAr: 'الدفع الإلكتروني (Paymob)',
+      nameEn: 'Online payment (Paymob)',
+      descriptionAr:
+        'هتتحول لصفحة Paymob الآمنة لإتمام الدفع (بطاقة / محفظة / فوري حسب المتاح).',
+      descriptionEn:
+        "We'll redirect to Paymob's secure checkout (card / wallet / Fawry, as available).",
       position: 1,
       paymobIntegrationKind: 'card',
     },
     {
+      // Legacy row — kept for historical Order.paymentMethod=PAYMOB_FAWRY
+      // references. Sprint 11.6 routes ALL online payments through the
+      // unified `paymob_card` row above; do not re-enable.
       code: 'paymob_fawry',
       enabled: false,
-      nameAr: 'فوري — دفع عند المنفذ',
-      nameEn: 'Fawry — pay at outlet',
-      descriptionAr:
-        'سيُولَّد كود فوري بعد إتمام الطلب. ادفع نقداً عند أي منفذ فوري.',
+      nameAr: 'فوري — دفع عند المنفذ (قديم)',
+      nameEn: 'Fawry — pay at outlet (legacy)',
+      descriptionAr: 'متاح ضمن صفحة Paymob الموحدة منذ Sprint 11.6.',
       descriptionEn:
-        'A Fawry reference code will be generated after checkout. Pay cash at any Fawry outlet.',
+        'Now available inside the unified Paymob page since Sprint 11.6.',
       position: 2,
       paymobIntegrationKind: 'fawry',
     },
     {
+      // Legacy row — see paymob_fawry note above. Wallet is offered inside
+      // the unified Paymob page when its integration ID is configured.
       code: 'paymob_wallet',
       enabled: false,
-      nameAr: 'محفظة إلكترونية',
-      nameEn: 'Mobile wallet',
-      descriptionAr: 'فودافون كاش / إتصالات كاش / أورنج كاش / واي باي.',
-      descriptionEn: 'Vodafone Cash / Etisalat Cash / Orange Cash / WE Pay.',
+      nameAr: 'محفظة إلكترونية (قديم)',
+      nameEn: 'Mobile wallet (legacy)',
+      descriptionAr: 'متاح ضمن صفحة Paymob الموحدة منذ Sprint 11.6.',
+      descriptionEn:
+        'Now available inside the unified Paymob page since Sprint 11.6.',
       position: 3,
       paymobIntegrationKind: 'wallet',
     },

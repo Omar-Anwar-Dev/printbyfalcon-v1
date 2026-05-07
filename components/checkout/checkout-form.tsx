@@ -100,7 +100,6 @@ type Props = {
   paymentMethodAvailability: {
     codEnabled: boolean;
     paymobCardEnabled: boolean;
-    paymobFawryEnabled: boolean;
   };
   globalThresholds: { b2cEgp: number; b2bEgp: number };
   codPolicy: CodPolicyView;
@@ -127,12 +126,11 @@ const LABELS = {
     apartment: 'الشقة',
     addressNotes: 'ملاحظات للتوصيل',
     payment: 'طريقة الدفع',
-    card: 'بطاقة بنكية (Paymob)',
+    card: 'الدفع الإلكتروني (Paymob)',
     cod: 'الدفع عند الاستلام',
-    fawry: 'الدفع في فوري/أمان',
     codDescription: 'ادفع نقدًا عند استلام الطلب من المندوب.',
-    cardDescription: 'هنحولك لصفحة Paymob عشان تدفع بالبطاقة بأمان.',
-    fawryDescription: 'هنديك كود مرجعي تدفع بيه نقدًا في أي منفذ فوري أو أمان.',
+    cardDescription:
+      'هنحولك لصفحة Paymob لإتمام الدفع بأمان (بطاقة / محفظة / فوري حسب المتاح).',
     codUnavailable: 'الدفع عند الاستلام غير متاح حاليًا لهذه المنطقة.',
     codOverLimit: 'قيمة الطلب تتجاوز الحد المسموح للدفع عند الاستلام.',
     notes: 'ملاحظات للطلب (اختياري)',
@@ -221,13 +219,11 @@ const LABELS = {
     apartment: 'Apartment',
     addressNotes: 'Delivery notes',
     payment: 'Payment method',
-    card: 'Credit/Debit card (Paymob)',
+    card: 'Online payment (Paymob)',
     cod: 'Cash on delivery',
-    fawry: 'Pay at Fawry / Aman outlets',
     codDescription: 'Pay cash when our courier delivers the order.',
-    cardDescription: "We'll redirect you to Paymob to pay securely.",
-    fawryDescription:
-      "We'll give you a reference code to pay cash at any Fawry or Aman outlet.",
+    cardDescription:
+      "We'll redirect you to Paymob's secure checkout (card / wallet / Fawry, as available).",
     codUnavailable: 'Cash on delivery is unavailable for this area right now.',
     codOverLimit: 'Order value exceeds the COD maximum.',
     notes: 'Order notes (optional)',
@@ -367,9 +363,14 @@ export function CheckoutForm({
   const [addressNotes, setAddressNotes] = useState('');
   const [customerNotes, setCustomerNotes] = useState('');
 
-  const [paymentMethod, setPaymentMethod] = useState<
-    'PAYMOB_CARD' | 'PAYMOB_FAWRY' | 'COD'
-  >('COD');
+  // Sprint 11.6 — Paymob Unified Checkout collapses card / wallet / Fawry
+  // into a single "Pay online" option; the customer picks the specific
+  // method on the hosted Paymob page, not here. PAYMOB_FAWRY is no longer
+  // a separate selector value (the legacy enum value still exists on the
+  // Order model for historical orders).
+  const [paymentMethod, setPaymentMethod] = useState<'PAYMOB_CARD' | 'COD'>(
+    'COD',
+  );
 
   // Sprint 9 — promo code UI state.
   const [promoInput, setPromoInput] = useState('');
@@ -1029,27 +1030,7 @@ export function CheckoutForm({
                 </span>
               </label>
             ) : null}
-            {paymobEnabled && paymentMethodAvailability.paymobFawryEnabled ? (
-              <label className="flex cursor-pointer items-start gap-3 rounded-md border p-3 text-sm">
-                <input
-                  type="radio"
-                  name="payment"
-                  value="PAYMOB_FAWRY"
-                  className="mt-1"
-                  checked={paymentMethod === 'PAYMOB_FAWRY'}
-                  onChange={() => setPaymentMethod('PAYMOB_FAWRY')}
-                />
-                <span>
-                  <span className="font-medium">{labels.fawry}</span>
-                  <span className="block text-muted-foreground">
-                    {labels.fawryDescription}
-                  </span>
-                </span>
-              </label>
-            ) : null}
-            {(!paymobEnabled ||
-              (!paymentMethodAvailability.paymobCardEnabled &&
-                !paymentMethodAvailability.paymobFawryEnabled)) &&
+            {(!paymobEnabled || !paymentMethodAvailability.paymobCardEnabled) &&
             !totals.codAvailable &&
             zoneInfo ? (
               <div className="rounded-md border border-destructive/40 bg-destructive/5 p-3 text-sm text-destructive">

@@ -5,7 +5,10 @@ const MINIMAL_PROD_ENV: NodeJS.ProcessEnv = {
   NODE_ENV: 'production',
   DATABASE_URL: 'postgres://user:pass@host/db',
   APP_URL: 'https://printbyfalcon.com',
-  PAYMOB_API_KEY: 'key',
+  // Sprint 11.6 — Unified Checkout (Intention API) keys replaced the legacy
+  // PAYMOB_API_KEY + PAYMOB_IFRAME_ID pair.
+  PAYMOB_PUBLIC_KEY: 'egy_pk_test_x',
+  PAYMOB_SECRET_KEY: 'egy_sk_test_x',
   PAYMOB_HMAC_SECRET: 'secret',
   PAYMOB_INTEGRATION_ID_CARD: '123',
   WHATS360_TOKEN: 'tok',
@@ -139,8 +142,14 @@ describe('checkProductionEnv', () => {
     const result = checkProductionEnv(env);
     expect(result.ok).toBe(false);
     if (!result.ok) {
+      // Sprint 11.6 — PAYMOB_PUBLIC_KEY is the first Intention API var
+      // checked; tests pin to it so a future re-order of the required list
+      // surfaces clearly.
       expect(result.errors).toContain(
-        'PAYMOB_API_KEY is required in production but is not set',
+        'PAYMOB_PUBLIC_KEY is required in production but is not set',
+      );
+      expect(result.errors).toContain(
+        'PAYMOB_SECRET_KEY is required in production but is not set',
       );
     }
   });

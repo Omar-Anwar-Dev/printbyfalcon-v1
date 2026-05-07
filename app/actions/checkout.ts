@@ -41,7 +41,7 @@ import { getAvailableQtyMap } from '@/lib/cart/stock';
 import { getB2BCheckoutContext } from '@/lib/b2b/checkout-context';
 import { notifySalesRepsOfPendingOrder } from '@/lib/b2b/sales-rep-notify';
 import { generateOrderNumber } from '@/lib/order/order-number';
-import { createPaymentKey } from '@/lib/payments/paymob';
+import { createPaymentIntention } from '@/lib/payments/paymob';
 import { isPaymobEnabled } from '@/lib/payments/feature-flags';
 import { enqueueJob } from '@/lib/queue';
 import { renderOrderConfirmationEmail } from '@/lib/email/order-confirmation';
@@ -89,7 +89,12 @@ const checkoutSchema = z.object({
     email: z.string().trim().email().optional().or(z.literal('')),
   }),
   address: addressSchema,
-  paymentMethod: z.enum(['PAYMOB_CARD', 'PAYMOB_FAWRY', 'COD']),
+  // Sprint 11.6 — Unified Checkout collapses online payment surfaces into
+  // ONE option (PAYMOB_CARD = "any online payment via Paymob"); the customer
+  // picks card / wallet / Fawry on the hosted Paymob page itself. The legacy
+  // PAYMOB_FAWRY value is preserved on the Order enum for historical orders
+  // but is no longer accepted as a NEW order's input.
+  paymentMethod: z.enum(['PAYMOB_CARD', 'COD']),
   customerNotes: z.string().trim().max(500).optional().or(z.literal('')),
   placedByName: z.string().trim().max(80).optional().or(z.literal('')),
   poReference: z.string().trim().max(40).optional().or(z.literal('')),
@@ -124,12 +129,8 @@ export async function createOrderAction(
   }
 
   // ADR-064 — server-side gate, defense in depth. Even if a tampered client
-  // submits PAYMOB_CARD/PAYMOB_FAWRY while the gateway is disabled, refuse.
-  if (
-    !isPaymobEnabled() &&
-    (parsed.data.paymentMethod === 'PAYMOB_CARD' ||
-      parsed.data.paymentMethod === 'PAYMOB_FAWRY')
-  ) {
+  // submits PAYMOB_CARD while the gateway is disabled, refuse.
+  if (!isPaymobEnabled() && parsed.data.paymentMethod === 'PAYMOB_CARD') {
     return { ok: false, errorKey: 'checkout.paymob_disabled' };
   }
 
@@ -150,7 +151,6 @@ export async function createOrderAction(
   // is the per-method admin toggle from /admin/settings/payment-methods.
   const methodCodeMap: Record<typeof parsed.data.paymentMethod, string> = {
     PAYMOB_CARD: 'paymob_card',
-    PAYMOB_FAWRY: 'paymob_fawry',
     COD: 'cod',
   };
   const methodCheck = await prisma.paymentMethodConfig.findUnique({
@@ -380,9 +380,7 @@ export async function createOrderAction(
           note:
             paymentMethod === 'COD'
               ? 'COD placed'
-              : paymentMethod === 'PAYMOB_FAWRY'
-                ? 'Fawry checkout started'
-                : 'Card checkout started',
+              : 'Online checkout started (Paymob Unified Checkout)',
         },
       });
       await tx.auditLog.create({
@@ -437,10 +435,7 @@ export async function createOrderAction(
     );
   }
 
-  if (
-    result.paymentMethod === 'PAYMOB_CARD' ||
-    result.paymentMethod === 'PAYMOB_FAWRY'
-  ) {
+  if (result.paymentMethod === 'PAYMOB_CARD') {
     try {
       const [firstName, ...restParts] = parsed.data.contact.name.split(/\s+/);
       const lastName = restParts.join(' ') || firstName;
@@ -455,11 +450,9 @@ export async function createOrderAction(
       const redirectionUrl = appUrl
         ? `${appUrl}/order/confirmed/${result.order.id}`
         : undefined;
-      const key = await createPaymentKey({
+      const intention = await createPaymentIntention({
         merchantOrderId: result.order.id,
         amountCents: Math.round(total * 100),
-        integrationKind:
-          result.paymentMethod === 'PAYMOB_FAWRY' ? 'fawry' : 'card',
         items: items.map((i) => ({
           name: i.product.nameEn,
           amount_cents: Math.round(Number(i.unitPriceEgpSnapshot) * 100),
@@ -484,7 +477,7 @@ export async function createOrderAction(
       });
       await prisma.order.update({
         where: { id: result.order.id },
-        data: { paymobOrderId: key.paymobOrderId },
+        data: { paymobOrderId: intention.paymobOrderId },
       });
       revalidatePath('/', 'layout');
       return {
@@ -493,13 +486,13 @@ export async function createOrderAction(
           orderId: result.order.id,
           orderNumber: result.orderNumber,
           paymentMethod: result.paymentMethod,
-          redirectUrl: key.iframeUrl,
+          redirectUrl: intention.checkoutUrl,
         },
       };
     } catch (err) {
       logger.error(
         { err: (err as Error).message, orderId: result.order.id },
-        'order.paymob.payment_key_failed',
+        'order.paymob.intention_failed',
       );
       await prisma.order.update({
         where: { id: result.order.id },

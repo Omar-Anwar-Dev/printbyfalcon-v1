@@ -1,23 +1,44 @@
 /**
- * Paymob Accept client — minimal surface for Sprint 4 (card flow only).
- * Fawry sub-integration support lands in Sprint 9 per ADR-025 by switching
- * `integration_id` in the payment-key request.
+ * Paymob Unified Checkout client (Sprint 11.6 — replaces the legacy iframe
+ * Payment Keys flow).
  *
- * Flow (hosted-iframe, 3 API calls):
- *  1. POST /api/auth/tokens                           → auth_token
- *  2. POST /api/ecommerce/orders (with auth_token)    → paymob order id
- *  3. POST /api/acceptance/payment_keys (with auth)   → payment_key
- *  4. Redirect the user to the iframe URL with payment_key
- *     https://accept.paymob.com/api/acceptance/iframes/{IFRAME_ID}?payment_token={payment_key}
+ * Old flow (3 API calls, embedded iframe):
+ *   POST /api/auth/tokens
+ *   POST /api/ecommerce/orders
+ *   POST /api/acceptance/payment_keys
+ *   redirect → accept.paymob.com/api/acceptance/iframes/<IFRAME_ID>?payment_token=...
  *
- * Dev mode: if PAYMOB_API_KEY is not set, returns a stub that points at a
- * local confirmation page so developers can exercise the full flow without
- * Paymob sandbox credentials.
+ * New flow (1 API call, hosted Unified Checkout page at accept.paymob.com):
+ *   POST /v1/intention/  (Authorization: Token <SECRET_KEY>)
+ *     → returns { client_secret, intention_order_id, id }
+ *   redirect → accept.paymob.com/unifiedcheckout/?publicKey=<PK>&clientSecret=<CS>
+ *
+ * Why we migrated:
+ *   - The customer picks card / wallet / Fawry on Paymob's branded hosted
+ *     page instead of in our /checkout UI — fewer screens, mobile-friendly.
+ *   - One integration ID per merchant covers all card schemes; wallet/fawry
+ *     can be enabled later by adding their integration IDs to env.
+ *   - Removes the iframe embed (hostname mismatch + 3DS popup hassles).
+ *   - Single Secret Key auth (`Authorization: Token <SK>`) — no separate
+ *     auth/tokens round trip.
+ *
+ * Webhook semantics are unchanged — Paymob still POSTs the same TRANSACTION
+ * event with the same 20-field SHA512 HMAC, so `verifyPaymobHmac` below is
+ * carried over without modification. The webhook handler at
+ * `app/api/webhooks/paymob/route.ts` looks up our Order by
+ * `obj.order.merchant_order_id`, which we set via `special_reference` in the
+ * intention payload.
+ *
+ * Dev mode: if PAYMOB_PUBLIC_KEY / PAYMOB_SECRET_KEY are not set, returns a
+ * stub that points at our own confirmation page so developers can exercise
+ * the full flow without sandbox credentials.
  */
 import { logger } from '@/lib/logger';
 import { getPaymentMode } from '@/lib/settings/payment';
 
-const BASE = 'https://accept.paymob.com/api';
+const BASE = 'https://accept.paymob.com';
+const INTENTION_PATH = '/v1/intention/';
+const UNIFIED_CHECKOUT_PATH = '/unifiedcheckout/';
 
 export type PaymobItem = {
   name: string;
@@ -26,8 +47,9 @@ export type PaymobItem = {
   quantity: number;
 };
 
-export type CreatePaymentKeyInput = {
-  /// Our Order.id — used as `merchant_order_id` for idempotency on the Paymob side.
+export type CreatePaymentIntentionInput = {
+  /// Our Order.id — used as `special_reference` (mirrors onto the webhook's
+  /// `obj.order.merchant_order_id` field) and stashed in `extras` for audit.
   merchantOrderId: string;
   /// Total in piastres (EGP × 100).
   amountCents: number;
@@ -46,31 +68,36 @@ export type CreatePaymentKeyInput = {
     postalCode?: string;
     state?: string;
   };
-  /// 'card' (Visa/Mastercard/Meeza) / 'fawry' (pay-at-outlet) / 'wallet'
-  /// (mobile wallets). Each maps to a distinct PAYMOB_INTEGRATION_ID env var.
-  integrationKind?: 'card' | 'fawry' | 'wallet';
   /// Optional per-request webhook URL. When set, sent as `notification_url`
-  /// in the payment_keys request and **overrides** the integration-level
+  /// in the intention payload and **overrides** the integration-level
   /// "Transaction Processed Callback" configured in the Paymob dashboard.
   /// Use this to:
   ///   1. Avoid relying on Paymob's dashboard caching (we hit a case where
   ///      the dashboard saved the URL but the notification engine kept the
-  ///      old value — see ADR pending in this PR).
+  ///      old value — historical issue from the legacy flow).
   ///   2. Point staging traffic at staging URL even when the LIVE merchant
   ///      account is shared (single source of truth lives in our env).
   notificationUrl?: string;
   /// Optional per-request browser-redirect URL. Sent as `redirection_url`
-  /// in the payment_keys request — overrides the integration-level
+  /// in the intention payload — overrides the integration-level
   /// "Transaction Response Callback". Customer lands here after Paymob
   /// completes the transaction (success or failure). Typically points at
   /// our /order/confirmed/[id] page so the customer sees their own order.
   redirectionUrl?: string;
 };
 
-export type CreatePaymentKeyOutput = {
-  paymentKey: string;
+export type CreatePaymentIntentionOutput = {
+  /// Paymob's `client_secret` — paired with the Public Key in the URL fragment
+  /// of the Unified Checkout page. Single-use, expires after the intention
+  /// completes or times out.
+  clientSecret: string;
+  /// Paymob's `intention_order_id` — stored on Order.paymobOrderId for the
+  /// reconciliation worker to query later.
   paymobOrderId: string;
-  iframeUrl: string;
+  /// Fully-built Unified Checkout URL. Customer redirects to this; the page
+  /// itself is hosted by Paymob and shows whichever payment_methods we
+  /// included in the intention.
+  checkoutUrl: string;
 };
 
 function env(name: string): string | undefined {
@@ -79,11 +106,11 @@ function env(name: string): string | undefined {
 }
 
 /**
- * Sprint 11.5 — mode-aware env reader. When `payment.mode = TEST` we look
- * for `<NAME>_TEST` first (e.g. `PAYMOB_API_KEY_TEST`); if it's not set, we
- * fall back to the regular var. This lets owners keep TEST + LIVE keys side
- * by side in `.env.production` and flip between them from the admin UI
- * without redeploying.
+ * Mode-aware env reader. When `payment.mode = TEST` we look for `<NAME>_TEST`
+ * first (e.g. `PAYMOB_SECRET_KEY_TEST`); if it's not set, we fall back to the
+ * regular var. This lets owners keep TEST + LIVE keys side by side in
+ * `.env.production` and flip between them from the admin UI without
+ * redeploying.
  */
 function envForMode(name: string, mode: 'LIVE' | 'TEST'): string | undefined {
   if (mode === 'TEST') {
@@ -93,99 +120,84 @@ function envForMode(name: string, mode: 'LIVE' | 'TEST'): string | undefined {
   return env(name);
 }
 
-function integrationIdFor(
-  kind: 'card' | 'fawry' | 'wallet',
-  mode: 'LIVE' | 'TEST',
-): string | undefined {
-  if (kind === 'fawry') return envForMode('PAYMOB_INTEGRATION_ID_FAWRY', mode);
-  if (kind === 'wallet')
-    return envForMode('PAYMOB_INTEGRATION_ID_WALLET', mode);
-  return envForMode('PAYMOB_INTEGRATION_ID_CARD', mode);
-}
-
-export function isPaymobConfigured(
-  kind: 'card' | 'fawry' | 'wallet' = 'card',
-): boolean {
-  // Synchronous variant — checks the current LIVE keys only. Used by Sprint 4
-  // checks that don't have an async context. Mode-aware version lives in
-  // `createPaymentKey` itself.
+/**
+ * Synchronous configured-check used by callers that don't have an async
+ * context (notably the dev-stub page guard). Checks the LIVE keyset only —
+ * the runtime path in `createPaymentIntention` is mode-aware.
+ */
+export function isPaymobConfigured(): boolean {
   return Boolean(
-    env('PAYMOB_API_KEY') &&
-    integrationIdFor(kind, 'LIVE') &&
-    env('PAYMOB_IFRAME_ID') &&
+    env('PAYMOB_PUBLIC_KEY') &&
+    env('PAYMOB_SECRET_KEY') &&
+    env('PAYMOB_INTEGRATION_ID_CARD') &&
     env('PAYMOB_HMAC_SECRET'),
   );
 }
 
-async function postJson<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  });
-  const json = (await res.json()) as T & { message?: string; detail?: string };
-  if (!res.ok) {
-    throw new Error(
-      `Paymob ${path} HTTP ${res.status}: ${json.message ?? json.detail ?? 'unknown error'}`,
-    );
+/**
+ * Build the array of Paymob integration IDs to expose on the Unified Checkout
+ * page for this intention. CARD is the canonical / always-on integration in
+ * Sprint 11.6; WALLET + FAWRY are opt-in via env (only included when their
+ * env var pair is set in the active mode).
+ */
+function buildPaymentMethods(mode: 'LIVE' | 'TEST'): number[] {
+  const ids: number[] = [];
+  const card = envForMode('PAYMOB_INTEGRATION_ID_CARD', mode);
+  const wallet = envForMode('PAYMOB_INTEGRATION_ID_WALLET', mode);
+  const fawry = envForMode('PAYMOB_INTEGRATION_ID_FAWRY', mode);
+  for (const v of [card, wallet, fawry]) {
+    if (!v) continue;
+    const n = Number(v);
+    if (Number.isFinite(n) && n > 0) ids.push(n);
   }
-  return json;
+  return ids;
 }
 
-export async function createPaymentKey(
-  input: CreatePaymentKeyInput,
-): Promise<CreatePaymentKeyOutput> {
-  const kind = input.integrationKind ?? 'card';
-  // Sprint 11.5 — read the admin-controlled mode from DB. TEST mode prefers
-  // `<NAME>_TEST` env vars, falling back to the regular set if not present.
+export async function createPaymentIntention(
+  input: CreatePaymentIntentionInput,
+): Promise<CreatePaymentIntentionOutput> {
   const mode = await getPaymentMode();
-  const apiKey = envForMode('PAYMOB_API_KEY', mode);
-  const integrationId = integrationIdFor(kind, mode);
-  const iframeId = envForMode('PAYMOB_IFRAME_ID', mode);
+  const publicKey = envForMode('PAYMOB_PUBLIC_KEY', mode);
+  const secretKey = envForMode('PAYMOB_SECRET_KEY', mode);
+  const paymentMethods = buildPaymentMethods(mode);
 
-  if (!apiKey || !integrationId || !iframeId) {
+  if (!publicKey || !secretKey || paymentMethods.length === 0) {
     // Dev-mode stub — points at our own confirmation page with a fake
-    // transaction id so the rest of the flow can be developed/tested.
+    // client secret so the rest of the flow can be developed/tested. The
     // `/ar/` locale prefix is required because next-intl's middleware rewrites
-    // all non-prefixed URLs. Arabic is the default locale; on the stub page
-    // itself the language switcher still works.
+    // all non-prefixed URLs.
     logger.warn(
-      { merchantOrderId: input.merchantOrderId, kind, mode },
-      'paymob.dev_mode.stub',
+      { merchantOrderId: input.merchantOrderId, mode },
+      'paymob.intention.dev_stub',
     );
     const fakeKey = `dev_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
     return {
-      paymentKey: fakeKey,
+      clientSecret: fakeKey,
       paymobOrderId: `dev-${input.merchantOrderId}`,
-      iframeUrl: `/ar/payments/paymob/dev-stub?key=${fakeKey}&order=${encodeURIComponent(input.merchantOrderId)}`,
+      checkoutUrl: `/ar/payments/paymob/dev-stub?key=${fakeKey}&order=${encodeURIComponent(input.merchantOrderId)}`,
     };
   }
 
-  // Step 1 — auth token
-  const auth = await postJson<{ token: string }>(`/auth/tokens`, {
-    api_key: apiKey,
-  });
-
-  // Step 2 — paymob order
-  const order = await postJson<{ id: number | string }>(`/ecommerce/orders`, {
-    auth_token: auth.token,
-    delivery_needed: 'false',
-    amount_cents: String(input.amountCents),
+  // Body shape per Paymob Intention API docs:
+  //   - `amount` (integer cents, smallest unit)
+  //   - `payment_methods` array of integration IDs
+  //   - `items[].amount` mirrors the same cents convention
+  //   - `billing_data` keys mostly mirror the legacy payment_keys body
+  //   - `special_reference` becomes `obj.order.merchant_order_id` on the
+  //     webhook side (our handler uses this to find the Order)
+  //   - `extras.merchant_order_id` is preserved through to the webhook for
+  //     our own audit / debugging — duplicates `special_reference`
+  //   - `notification_url` + `redirection_url` override dashboard defaults
+  const body: Record<string, unknown> = {
+    amount: input.amountCents,
     currency: 'EGP',
-    merchant_order_id: input.merchantOrderId,
-    items: input.items,
-  });
-
-  // Step 3 — payment key
-  // notification_url + redirection_url, when present in the input, override
-  // the integration-level callbacks configured in the Paymob dashboard. We
-  // pass them here so each request explicitly tells Paymob where to call
-  // back, removing the dependency on the dashboard's cached config.
-  const paymentKeyBody: Record<string, unknown> = {
-    auth_token: auth.token,
-    amount_cents: String(input.amountCents),
-    expiration: 3600, // 1 hour
-    order_id: String(order.id),
+    payment_methods: paymentMethods,
+    items: input.items.map((i) => ({
+      name: i.name,
+      amount: i.amount_cents,
+      description: i.description,
+      quantity: i.quantity,
+    })),
     billing_data: {
       apartment: input.billing.apartment ?? 'NA',
       email: input.billing.email,
@@ -201,41 +213,80 @@ export async function createPaymentKey(
       last_name: input.billing.lastName,
       state: input.billing.state ?? 'NA',
     },
-    currency: 'EGP',
-    integration_id: integrationId,
+    customer: {
+      first_name: input.billing.firstName,
+      last_name: input.billing.lastName,
+      email: input.billing.email,
+      extras: { merchant_order_id: input.merchantOrderId },
+    },
+    extras: { merchant_order_id: input.merchantOrderId },
+    special_reference: input.merchantOrderId,
   };
-  if (input.notificationUrl) {
-    paymentKeyBody.notification_url = input.notificationUrl;
+  if (input.notificationUrl) body.notification_url = input.notificationUrl;
+  if (input.redirectionUrl) body.redirection_url = input.redirectionUrl;
+
+  const res = await fetch(`${BASE}${INTENTION_PATH}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      // Paymob Intention API uses the "Token <SK>" scheme (NOT Bearer).
+      Authorization: `Token ${secretKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+  const json = (await res.json()) as {
+    id?: string;
+    client_secret?: string;
+    intention_order_id?: number | string;
+    detail?: string;
+    message?: string;
+    errors?: unknown;
+  };
+  if (!res.ok || !json.client_secret) {
+    const detail =
+      json.detail ??
+      json.message ??
+      (json.errors ? JSON.stringify(json.errors) : 'unknown');
+    throw new Error(`Paymob intention HTTP ${res.status}: ${detail}`);
   }
-  if (input.redirectionUrl) {
-    paymentKeyBody.redirection_url = input.redirectionUrl;
-  }
-  const key = await postJson<{ token: string }>(
-    `/acceptance/payment_keys`,
-    paymentKeyBody,
-  );
+
+  // The intention `id` (UUID) is what the reconciliation worker uses to
+  // query intention status via GET /v1/intention/<id>/ with the Secret Key.
+  // Fall back to `intention_order_id` (numeric) if Paymob ever drops the
+  // UUID field. The webhook later overwrites this with `obj.order.id`
+  // (numeric) once payment processes — that's a harmless rotation since
+  // reconciliation only runs while paymentStatus = PENDING (pre-webhook).
+  const paymobOrderId = String(json.id ?? json.intention_order_id ?? '');
+  const checkoutUrl =
+    `${BASE}${UNIFIED_CHECKOUT_PATH}` +
+    `?publicKey=${encodeURIComponent(publicKey)}` +
+    `&clientSecret=${encodeURIComponent(json.client_secret)}`;
 
   return {
-    paymentKey: key.token,
-    paymobOrderId: String(order.id),
-    iframeUrl: `${BASE}/acceptance/iframes/${iframeId}?payment_token=${encodeURIComponent(key.token)}`,
+    clientSecret: json.client_secret,
+    paymobOrderId,
+    checkoutUrl,
   };
 }
 
 /**
  * Verify a Paymob callback HMAC per their documented concatenation:
  * https://docs.paymob.com/v1/docs/hmac-calculation
- * The fields in the concatenation (order matters) are the shared set of keys
- * emitted on both processed-payment and delivery-confirmation webhooks.
+ *
+ * The 20-field SHA512 recipe is unchanged across the legacy iframe flow and
+ * the new Unified Checkout flow — Paymob still emits the same TRANSACTION
+ * event payload to webhooks regardless of which checkout surface produced
+ * the transaction. This means Sprint 11.6 carries the verifier forward
+ * without alteration.
  */
 export function verifyPaymobHmac(
   payload: Record<string, unknown>,
   providedHmac: string,
 ): boolean {
-  // Sprint 11.5 — try LIVE secret first, then TEST. Late-arriving webhooks
-  // for orders placed before a mode flip should still verify correctly.
-  // Both secrets are unique per merchant account so the chance of an
-  // accidental cross-mode match is negligible.
+  // Try LIVE secret first, then TEST. Late-arriving webhooks for orders
+  // placed before a mode flip should still verify correctly. Both secrets
+  // are unique per merchant account so the chance of an accidental
+  // cross-mode match is negligible.
   const liveSecret = env('PAYMOB_HMAC_SECRET');
   const testSecret = env('PAYMOB_HMAC_SECRET_TEST');
   const secrets = [liveSecret, testSecret].filter((s): s is string =>
