@@ -1792,3 +1792,30 @@ Replace the legacy iframe flow end-to-end with Paymob's **Intention API** + **Un
 - Sprint 11.5's mode-aware env reading (`envForMode`) carries through unchanged — `_TEST` parallels still override at runtime when admin flips `payment.mode = TEST` from /admin/settings/payment-methods.
 - Per `feedback_seed_upsert_update_empty.md`: existing prod row for `paymob_card` keeps the old "Visa / Mastercard / Meeza" label after deploy. Owner needs to manually relabel from /admin/settings/payment-methods → "الدفع الإلكتروني (Paymob)" / "Online payment (Paymob)".
 - Late-arriving webhook reliability is preserved: Paymob webhook timing/format/HMAC are identical across the two flows.
+
+---
+
+## ADR-073: Cloudflare Web Analytics for storefront traffic stats (no in-app analytics)
+
+**Date:** 2026-05-09
+**Status:** Accepted (post-Sprint 11.6 polish patch)
+
+**Context:**
+Owner wants visibility into storefront traffic before M1 soft launch — daily visitors and average session time, primarily to size paid-ad spend and watch for sudden drops post-launch. Original PRD scoped "BI-grade analytics" out of MVP, but a basic visitor counter is a reasonable late-stage addition. We're already on Cloudflare Free for CDN/DNS/TLS/WAF (ADR-024), so their Web Analytics product is one toggle away. Alternatives weighed against the founder's minimum-vendor + low-complexity preference.
+
+**Decision:**
+Adopt **Cloudflare Web Analytics** (free, privacy-first beacon). A small server component `components/cloudflare-analytics.tsx` injects the official `https://static.cloudflareinsights.com/beacon.min.js` script into the storefront/admin locale layout (`app/[locale]/layout.tsx` — root `app/layout.tsx` is a passthrough per ADR-060), gated by a `CLOUDFLARE_WEB_ANALYTICS_TOKEN` env var so dev / staging stay silent. Stats viewed in the Cloudflare dashboard, NOT inside the admin panel.
+
+**Alternatives considered:**
+- **In-house tracker** (`PageView` + `VisitorSession` tables, beacon endpoint, admin widget). Rejected: ~½-day of work, requires expanding cookie-consent, and we'd be reinventing what Cloudflare gives free. Reconsider in v1.1 if "analytics inside admin" becomes a real need.
+- **Umami / Plausible self-hosted**. Rejected: another Docker container on the already-tight KVM2 (1.25 GB headroom per architecture §10) for stats no better than Cloudflare's.
+- **Plausible Cloud / Vercel Analytics / Google Analytics 4**. Rejected: paid SaaS (Plausible, Vercel) or privacy-hostile + cookie-banner-disrupting (GA4). Owner's minimum-vendor stance applies.
+
+**Consequences:**
+- **Zero infrastructure cost or maintenance.** Cloudflare maintains the beacon; we just embed it.
+- **Cookieless** — beacon does not set cookies, does not track across sites, does not collect PII. Falls outside PDPL Law 151/2020's personal-data scope and the existing cookie-consent banner's "essential only" promise stays accurate. Updating `components/cookie-consent.tsx` not required.
+- **No admin-panel widget.** Owner accesses stats via the Cloudflare dashboard. If this becomes a friction point pre-M2, revisit with the in-house alternative above.
+- **Token rotation:** if the token is regenerated in Cloudflare, set the new value in `.env.production`, redeploy, done. No DB migration. Token is not a secret in the security sense — it's a public site identifier — but lives in env for consistency with our other "stamp this on every page" config.
+- Cloudflare Web Analytics measures: pageviews, unique visitors (by anonymized fingerprint, no cookies), average session duration, top pages, country/device/browser breakdown, bounce rate. **Does not** measure conversion funnels, B2C-vs-B2B segmentation, or admin-side actions — those need the in-house option if we ever want them.
+- Beacon loads `afterInteractive` (Next.js `next/script` strategy) so it does not affect TTI / LCP. Cloudflare's beacon is ~3 KB, served from their global edge.
+- Beacon mounts on every locale-routed page, including `/[locale]/admin/*`. Admin pageviews are tiny relative to storefront and won't muddy the data; if owner later wants to segment admin out, gating the component on `headers().get('x-pathname')` is one line of code.
