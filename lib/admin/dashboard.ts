@@ -1,6 +1,6 @@
 import { prisma } from '@/lib/db';
 import { listLowStockProducts } from '@/lib/inventory/low-stock';
-import type { OrderStatus } from '@prisma/client';
+import type { OrderStatus, PaymentStatus } from '@prisma/client';
 
 export type SalesDelta = {
   currentEgp: number;
@@ -16,7 +16,8 @@ export type DashboardCounts = {
   lowStockCount: number;
 };
 
-/** Orders that count toward "sales" — terminal or paid-up revenue. */
+/** Order states whose totals contribute to revenue (excludes
+ *  PendingConfirmation / Cancelled / Returned / DelayedOrIssue). */
 const SALES_STATUSES: OrderStatus[] = [
   'CONFIRMED',
   'HANDED_TO_COURIER',
@@ -24,10 +25,23 @@ const SALES_STATUSES: OrderStatus[] = [
   'DELIVERED',
 ];
 
-/** Orders that count toward "revenue" in the home dashboard — excludes
- *  cancelled/returned. */
-function paidOrEnRoute(): { status: { in: OrderStatus[] } } {
-  return { status: { in: SALES_STATUSES } };
+/** Payment states that mean "the money is in or expected to come in":
+ *  - PAID: online payment confirmed (Paymob webhook) or B2B paid out-of-band.
+ *  - PENDING_ON_DELIVERY: COD orders — money collected at delivery.
+ *  Excludes PENDING (Paymob has not confirmed), FAILED, REFUNDED. */
+const PAID_PAYMENT_STATUSES: PaymentStatus[] = ['PAID', 'PENDING_ON_DELIVERY'];
+
+/** Filter for orders that count toward revenue widgets on the home dashboard.
+ *  Both order status AND payment status must be in the allowed sets — a
+ *  CONFIRMED order with FAILED Paymob payment must NOT count. */
+function paidOrEnRoute(): {
+  status: { in: OrderStatus[] };
+  paymentStatus: { in: PaymentStatus[] };
+} {
+  return {
+    status: { in: SALES_STATUSES },
+    paymentStatus: { in: PAID_PAYMENT_STATUSES },
+  };
 }
 
 function rangeStart(days: number): Date {

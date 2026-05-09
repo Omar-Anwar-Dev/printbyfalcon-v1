@@ -2141,4 +2141,28 @@ All on 2026-05-07 in a single session. Branch `claude/hopeful-franklin-e87837`.
 - **Add Fawry/Kiosk integration:** same as Wallet — env-only.
 - **`paymob_fawry` + `paymob_wallet` PaymentMethodConfig rows:** seeded but disabled. Cleanup task (post-launch) can hard-delete them once we're sure no admin UI logic references the codes. Cosmetic.
 
+---
+
+## Post-Sprint 11.6 polish patch — 2026-05-09 (worktree `claude/hardcore-elion-c712da`)
+
+Two owner-flagged items found while testing the admin home dashboard on production after Sprint 11.6 deploy. Patched on top of Sprint 11.6 close-out before Sprint 12 (soft launch) starts.
+
+- [x] **Revenue widgets counted FAILED / PENDING Paymob orders** — owner saw `١٢٥ ج.م` on the home dashboard ("آخر 7 أيام" + "الشهر الحالي") even though both contributing orders had non-successful payments: `ORD-26-0705-00001` (paymentStatus=FAILED, 120 EGP) + `ORD-26-0605-00001` (paymentStatus=PENDING, 5 EGP). Root cause in [lib/admin/dashboard.ts](../lib/admin/dashboard.ts): `paidOrEnRoute()` filtered by `Order.status` only (CONFIRMED / HANDED_TO_COURIER / OUT_FOR_DELIVERY / DELIVERED) and never checked `paymentStatus`. New B2C Paymob orders are created at `status=CONFIRMED, paymentStatus=PENDING` *before* the webhook lands, so a webhook-FAIL or never-arriving webhook left the order CONFIRMED-but-not-paid — and counted as revenue. **Fix:** added a `PAID_PAYMENT_STATUSES` allowlist (`PAID` + `PENDING_ON_DELIVERY` for COD) and bolted it onto the same `paidOrEnRoute()` filter that all six revenue functions share — `getSalesToday`, `getSalesWeek`, `getSalesMonth`, `getSalesTrend30d`, `getTopProductsThisMonth`, `getTopCustomersThisMonth`. Same predicate `getDashboardCounts` was already using correctly for "newOrdersAwaitingAction"; just hadn't been pulled up to the shared helper. **No ADR** — this is a defect fix; the function name `paidOrEnRoute` already implied the intended semantics. **No auto-cancel** of failed orders: they stay visible in `/admin/orders` so admin can investigate / cancel manually. The Paymob hourly reconciliation cron (Sprint 4 → updated Sprint 11.6 to use Intention API) continues to flip stale PENDINGs to FAILED.
+- [x] **Cloudflare Web Analytics beacon for storefront traffic stats** — owner asked for visitor count + average browsing time before M1 soft launch. Per ADR-073, adopted Cloudflare's free privacy-first beacon (cookieless, no PDPL personal-data implications, Cloudflare already at the edge per ADR-024). Implementation: [components/cloudflare-analytics.tsx](../components/cloudflare-analytics.tsx) is a server component that renders the official `<script src="https://static.cloudflareinsights.com/beacon.min.js" data-cf-beacon='{"token":"…"}'>` only when `CLOUDFLARE_WEB_ANALYTICS_TOKEN` is set — dev / staging stay silent unless the env var is set there too. Mounted once in [app/[locale]/layout.tsx](../app/[locale]/layout.tsx) (the actual `<html>`+`<body>` host per ADR-060; root `app/layout.tsx` is a passthrough). `next/script` `strategy="afterInteractive"` keeps it off the LCP critical path. **Owner action required to activate:** in Cloudflare panel → Analytics & Logs → Web Analytics → add `printbyfalcon.com` → copy the issued token → paste into VPS `.env.production` as `CLOUDFLARE_WEB_ANALYTICS_TOKEN` → redeploy production stack. Stats then visible at https://dash.cloudflare.com/?to=/:account/web-analytics within ~5 min of first pageview.
+
+### Verification (post-patch)
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npx next lint` — clean (only pre-existing `lib/db.ts:16` console warning from Sprint 1)
+- ✅ `npx vitest run` — **263/263 tests green** (no test changes; existing fixtures unaffected)
+- ✅ `npx next build` — production build succeeds, no new warnings, beacon component compiled into root layout
+- ⏭️ Live verification — confirm `١٢٥ ج.م` drops to `٠ ج.م` on production dashboard once deploy lands; confirm Cloudflare panel begins receiving pageviews after token + deploy
+
+### Decisions logged this patch
+- **ADR-073** [2026-05-09] Cloudflare Web Analytics adopted; in-app analytics deferred. No in-admin widget for now — owner reads stats from Cloudflare dashboard.
+
+### Notes
+- The dashboard fix changes **historical** revenue figures the moment it deploys: any previously-reported number that included FAILED / PENDING orders will now be lower. Two test orders affected (125 EGP). If the owner has shared those numbers externally, expect them to drop.
+- `PENDING` Paymob orders are excluded from revenue, but they still appear in `/admin/orders`. Owner can manually cancel a stuck PENDING order if Paymob never confirms; the reconciliation cron does this automatically after ~1 hour for orders that hit Paymob's "all attempts failed" terminal state.
+- Cloudflare Web Analytics measures **pageviews + unique visitors + avg session duration + top pages + country / device / browser**. It does NOT measure: conversion rate (visit → order), B2C-vs-B2B traffic split, admin-action analytics. If the owner needs any of those during the closed beta, the in-house tracker option from the kickoff conversation is the path forward.
+
 
