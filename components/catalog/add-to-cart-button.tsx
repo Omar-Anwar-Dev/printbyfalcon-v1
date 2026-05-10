@@ -3,11 +3,16 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from '@/lib/i18n/routing';
 import { addToCartAction } from '@/app/actions/cart';
+import { newFbEventId } from '@/lib/tracking/event-id';
+import { trackEvent } from '@/lib/tracking/pixel';
 
 type Props = {
   productId: string;
   locale: 'ar' | 'en';
   disabled?: boolean;
+  /** Sprint 15: product name + final-display price (EGP) for Meta AddToCart. */
+  productName: string;
+  priceEgp: number;
 };
 
 const LABELS = {
@@ -29,7 +34,13 @@ const LABELS = {
   },
 };
 
-export function AddToCartButton({ productId, locale, disabled }: Props) {
+export function AddToCartButton({
+  productId,
+  locale,
+  disabled,
+  productName,
+  priceEgp,
+}: Props) {
   const labels = LABELS[locale];
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -44,6 +55,19 @@ export function AddToCartButton({ productId, locale, disabled }: Props) {
       if (res.ok) {
         setStatus('added');
         setTimeout(() => setStatus('idle'), 1800);
+        // Sprint 15: fire Meta AddToCart (Pixel + CAPI relay) on success.
+        // Failures inside `trackEvent` are already swallowed so a tracking
+        // hiccup can't break the cart UX.
+        const eventId = newFbEventId();
+        trackEvent('AddToCart', eventId, {
+          content_ids: [productId],
+          content_type: 'product',
+          content_name: productName,
+          contents: [{ id: productId, quantity: 1, item_price: priceEgp }],
+          num_items: 1,
+          value: priceEgp,
+          currency: 'EGP',
+        });
       } else {
         setStatus('error');
         setErrorMsg(

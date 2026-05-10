@@ -1819,3 +1819,86 @@ Adopt **Cloudflare Web Analytics** (free, privacy-first beacon). A small server 
 - Cloudflare Web Analytics measures: pageviews, unique visitors (by anonymized fingerprint, no cookies), average session duration, top pages, country/device/browser breakdown, bounce rate. **Does not** measure conversion funnels, B2C-vs-B2B segmentation, or admin-side actions — those need the in-house option if we ever want them.
 - Beacon loads `afterInteractive` (Next.js `next/script` strategy) so it does not affect TTI / LCP. Cloudflare's beacon is ~3 KB, served from their global edge.
 - Beacon mounts on every locale-routed page, including `/[locale]/admin/*`. Admin pageviews are tiny relative to storefront and won't muddy the data; if owner later wants to segment admin out, gating the component on `headers().get('x-pathname')` is one line of code.
+
+---
+
+## ADR-074: Sprint 15 introduces Meta Pixel + Conversions API for paid-ads attribution
+
+**Date:** 2026-05-10
+**Status:** Accepted (post-M1 buffer; Sprint 15)
+
+**Context:**
+Owner is launching paid Meta (Facebook / Instagram) ads with "Conversions" campaign optimization. Meta requires Pixel events (especially Purchase with `value` + `currency`) flowing back to the platform before the optimization model can train. Without it: campaigns stay in a bad-data limbo for weeks. Cloudflare Web Analytics (ADR-073) gives us anonymous traffic stats but is invisible to Meta — different problem, different tool.
+
+**Decision:**
+Adopt **Meta Pixel** (browser fbq) + **Conversions API** (server-side fires) with `event_id`-based deduplication for the same logical event. Five events: `PageView`, `ViewContent`, `AddToCart`, `InitiateCheckout`, `Purchase`. Three required env vars: `NEXT_PUBLIC_META_PIXEL_ID` (browser-exposed), `META_CAPI_ACCESS_TOKEN` (server-only), and optional `META_CAPI_TEST_EVENT_CODE` for the Events Manager Test Events tab. Implementation lives in `lib/tracking/`, `components/meta-pixel.tsx`, `components/tracking/pixel-*.tsx`, `app/api/tracking/capi/route.ts`. Sprint 15 not in original `implementation-plan.md`; sits in M1→M2 buffer per `m2-launch-plan.md` §2.4.
+
+**Alternatives considered:**
+- **Pixel-only (no CAPI).** Rejected: iOS 14.5+ ATT drops 25–35% of Pixel data; ad-blockers strip another 5–10%. Without CAPI, the ad guy's optimization runs on incomplete data → lower ROAS. CAPI was an explicit ask from the ad operator, not nice-to-have.
+- **Google Tag Manager (server-side or client) as a unified tracking shim.** Rejected: owner explicitly asked for "no complexity" — GTM adds a UI surface, a script, a debug tool, and an additional vendor (Google Tag Cloud Server) for value the engineering team won't realize. Revisit if we grow into a full marketing stack.
+- **GA4 + Pixel (dual-track analytics + ads).** Rejected: ad guy doesn't use GA4; doubling instrumentation work is wasted. Cloudflare Web Analytics already covers the basic-traffic-stat use case.
+- **Funnel tracking dashboards inside admin.** Rejected: not how the ad operator works (uses Events Manager + Ads Manager). Defer until owner needs in-house funnel reporting.
+- **Lead event for B2B signup.** Deferred (not rejected). The B2B `/b2b/apply` form would be the natural anchor; one-line add when needed. Out-of-scope for Sprint 15.
+
+**Consequences:**
+- **Performance:** Meta's `fbevents.js` is ~70 KB minified. Loaded via `next/script` `strategy="afterInteractive"` so it does NOT block FCP/LCP. CAPI relay endpoint returns 202 in <50 ms; the `graph.facebook.com` round-trip is async and bounded by a 5s timeout (so a Meta outage can't stack up requests).
+- **Match quality (EMQ):** B2B users send hashed email; B2C OTP users send hashed phone; guests send neither. All requests include hashed `_fbp` + `_fbc` cookies + IP + User-Agent (browser-driven events) — usually lifts EMQ to 6–8 / 10. Paymob-webhook-fired Purchases use only hashed email + phone (Paymob's IP/UA are not the buyer's), keeping Purchase EMQ around 5–7 — acceptable.
+- **Data integrity:** `Order.fbEventId` (UUID v4, unique, nullable for orders pre-Sprint-15) is persisted at order creation. Same value used by both the server-direct CAPI fire (Paymob webhook for cards / checkout action for COD) and the browser Pixel fire on the confirmation page. Meta dedupes on this id.
+- **Observability:** every CAPI fire logs at `capi.send.ok` / `capi.send.failed` / `capi.send.non_2xx` with `eventName + eventId`. No raw email/phone is ever logged.
+- **Currency:** hard-coded `EGP` everywhere (helper types, payload builder). If we ever add a multi-currency frontend, this becomes the upgrade point.
+
+---
+
+## ADR-075: Server-direct CAPI for Purchase, client-relay for everything else
+
+**Date:** 2026-05-10
+**Status:** Accepted (Sprint 15)
+
+**Context:**
+With Pixel + CAPI both firing for the same event, we have a choice for HOW the CAPI side fires. Two architectural paths:
+1. **Universal client-relay** — every event POSTs from the browser to `/api/tracking/capi`, which forwards to `graph.facebook.com`. Single code path, simple, but the request originates in the user's browser; if they close the tab, ad-block the relay endpoint, or lose connectivity, the CAPI fire is lost.
+2. **Server-direct from server-of-truth** — events that have a server-side moment (Paymob webhook PAID, COD checkout action commit) fire CAPI directly from that server moment, no browser involvement. More reliable, but two code paths.
+
+**Decision:**
+**Hybrid — server-direct for `Purchase`, client-relay for `PageView` / `ViewContent` / `AddToCart` / `InitiateCheckout`.**
+
+- **Server-direct Purchase.** For card orders: fired from `app/api/webhooks/paymob/route.ts` on `paymentStatus = PAID` transition (success branch only — late-arriving PAID on a cancelled order skips the fire too). For COD orders: fired from `app/actions/checkout.ts` after the order-creation transaction commits (best-effort, wrapped in try/catch + `void` so a Meta outage can NEVER bounce the customer's order). Both call `lib/tracking/purchase.ts → sendPurchaseCapi()` and pass `Order.fbEventId` so the browser Pixel fire on the confirmation page dedupes against the server fire.
+- **Client-relay for the rest.** `lib/tracking/pixel.ts → trackEvent()` does both `fbq('track', ...)` and `fetch('/api/tracking/capi', ...)` with the same `eventID`. Relay enriches with server-only signals (real client IP, User-Agent, `_fbp` / `_fbc` cookies, hashed email/phone if user is logged in), then forwards to `graph.facebook.com/v19.0/{pixelId}/events`.
+- **Relay rejects `Purchase`.** Hardcoded allowlist: `PageView` / `ViewContent` / `AddToCart` / `InitiateCheckout`. Any client trying to send `Purchase` through the relay hits a `ALLOWED_EVENTS.has(...)` gate and gets a 202 with `{ rejected: true }` — never forwarded. This is a hardening step against a hostile client trying to inject fake conversions; legitimate Purchase fires only happen server-direct.
+
+**Alternatives considered:**
+- Universal client-relay for all events. Rejected: Purchase is the highest-stakes event for ROAS attribution; losing it because a user's browser ad-blocked the relay would tank optimization. The reliability argument outweighs the duplicate-codepath cost (= ~30 lines).
+- Universal server-direct for all events (every browser event POSTs to a server endpoint that fires CAPI + tells the browser to fire Pixel). Rejected: needs a roundtrip per event; bad for hot events like ViewContent on browse-heavy sessions.
+- Server-direct only — no Pixel, just CAPI. Rejected: Meta's docs strongly recommend dual-fire with dedup; CAPI alone misses fbp / fbc cookie-based attribution that only the browser sees.
+
+**Consequences:**
+- **Two-place change for Purchase format.** The customData payload is centralized in `lib/tracking/purchase.ts → buildPurchaseCustomData()` so both call sites stay byte-identical.
+- **`PixelPurchase` component uses `trackPixelOnly`, not `trackEvent`.** Special variant in `lib/tracking/pixel.ts` that fires only the browser Pixel — skipping the relay POST that the relay would reject anyway.
+- **Race window on confirmation page.** Card customers land at `/order/confirmed/[id]` while `paymentStatus` is still `PENDING` (Paymob redirect happens before the webhook). `OrderStatusPoller` polls the status endpoint every 3s; when it flips to `PAID`, `router.refresh()` re-renders the page with `shouldFirePurchasePixel = true`, mounting `<PixelPurchase>` and firing. ~3-9 second delay between CAPI fire and Pixel fire is fine for Meta's dedup window (~7 days).
+- **Best-effort everywhere.** Both server-direct fires (webhook + COD action) wrap CAPI in try/catch and use `void`-promise pattern so failures never bounce HTTP responses or roll back transactions. A Meta outage degrades attribution quality, never order processing.
+
+---
+
+## ADR-076: Meta tracking on-by-default; banner copy updated; no opt-out toggle in v1
+
+**Date:** 2026-05-10
+**Status:** Accepted (Sprint 15)
+
+**Context:**
+The cookie-consent banner (Sprint 11 S11-D7-T3) was introduced as informational-only with the literal copy "We use essential cookies only — no advertising trackers." That claim becomes false the moment Meta Pixel ships. Two paths:
+1. **Convert the banner to a true opt-in/opt-out** with a toggle. Tracks consent state in localStorage; Pixel + CAPI fire only after explicit accept.
+2. **Update banner copy to truthfully disclose tracking; keep dismissive-only behavior.** Tracking is on-by-default.
+
+**Decision:**
+Path 2 — **truthful disclosure, on-by-default, no opt-out toggle in v1.** Cookie banner copy updated to mention Meta tracking. `/cookies` page expanded with: a dedicated "Analytics & advertising cookies" section, `_fbp` + `_fbc` cookie table entries, and a step-by-step browser-level + Meta-account-level opt-out guide. Owner explicitly asked for "no complexity" — adding a real consent toggle (with localStorage state, gated component renders, and per-event consent checks across 5 fire sites) is real engineering work that doesn't ship customer-visible value.
+
+**Alternatives considered:**
+- **Strict GDPR-style opt-in.** Rejected: Egypt's PDPL Law 151/2020 mandates disclosure (which we now have) but does not mandate prior consent for processing — disclosure + post-fact opt-out is sufficient. Strict opt-in would tank Pixel data quality (typical opt-in rates: 30-60%) without a regulatory driver.
+- **Soft opt-in: track with default consent, banner has "Reject all" button.** Deferred. Reasonable v1.1 enhancement once the basic Pixel+CAPI integration is proven and the ad-side cost of partial opt-out is understood.
+- **Apply the existing `pbf_cookie_consent` localStorage key as a tracking gate.** Rejected as confusing: that key signals "user dismissed the banner," not "user consented to tracking." Re-purposing it would make future opt-in work harder, not easier.
+
+**Consequences:**
+- **Banner copy now truthful.** Old line "No advertising trackers" replaced with "We use essential cookies to run the site, plus analytics and advertising tools (Meta Pixel) to measure our campaign performance." Both AR and EN updated.
+- **`/cookies` page expanded.** New "Analytics & advertising cookies" h2, `_fbp` + `_fbc` table, opt-out instructions covering Meta ad preferences, incognito mode, browser tracker-blockers. Last-updated date bumped to 2026-05-10.
+- **Compliance posture:** PDPL Law 151/2020 disclosure obligation met. Future v1.1 work could add a true opt-in/opt-out toggle if ad performance allows it.
+- **Future risk:** if Meta or Egyptian regulators tighten consent requirements, we'd need to ship the toggle quickly. Implementation sketch: gate the `MetaPixel` component + the `trackEvent` helper on a `localStorage.getItem('pbf_tracking_consent') === 'granted'` check; default to `granted` for existing users (grandfather them in), require new users to opt in.

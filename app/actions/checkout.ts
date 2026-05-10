@@ -52,6 +52,10 @@ import { resolveShippingQuote } from '@/lib/shipping/resolve';
 import { getVatRate, computeLineVat } from '@/lib/settings/vat';
 import { validatePromoCode, tryConsumePromoCode } from '@/lib/promo/validate';
 import { logger } from '@/lib/logger';
+import { newFbEventId } from '@/lib/tracking/event-id';
+import { sendPurchaseCapi } from '@/lib/tracking/purchase';
+import { getClientIp } from '@/lib/request-ip';
+import { headers } from 'next/headers';
 
 // SLA window for the B2B "we'll contact you within N hours" copy.
 const B2B_SFR_SLA_HOURS = 24;
@@ -279,6 +283,10 @@ export async function createOrderAction(
     result = await prisma.$transaction(async (tx) => {
       const orderNumber = await generateOrderNumber(tx);
       const paymentMethod: PaymentMethod = parsed.data.paymentMethod;
+      // Sprint 15: pre-generate the Meta Pixel/CAPI dedupe key so the
+      // server-direct CAPI fire (COD here, Paymob webhook for cards) and
+      // the browser Pixel fire (confirmation page) share the same id.
+      const fbEventId = newFbEventId();
 
       // Atomically consume promo code first so the order isn't created if
       // someone else just used the last slot.
@@ -303,6 +311,7 @@ export async function createOrderAction(
           paymentMethod,
           paymentStatus:
             paymentMethod === 'COD' ? 'PENDING_ON_DELIVERY' : 'PENDING',
+          fbEventId,
           subtotalEgp: subtotal,
           shippingEgp: shipping,
           codFeeEgp: codFee,
@@ -525,6 +534,55 @@ export async function createOrderAction(
       totalEgp: total.toFixed(2),
     });
   }
+
+  // Sprint 15: fire Meta `Purchase` to CAPI for COD orders. Card orders
+  // fire from the Paymob webhook on PAID instead — at this point a card
+  // order is still PENDING, so firing here would over-count failed
+  // payments. The browser Pixel `Purchase` fire happens on the
+  // confirmation page using the same `fbEventId` so Meta dedupes them.
+  // Wrapped in try/catch + best-effort: a Meta outage MUST NOT roll back
+  // the order or change the response to the customer.
+  if (result.paymentMethod === 'COD') {
+    try {
+      const h = await headers();
+      const ip = getClientIp(h);
+      const ua = h.get('user-agent');
+      const cookieHeader = h.get('cookie') ?? '';
+      const fbp = readCookie(cookieHeader, '_fbp');
+      const fbc = readCookie(cookieHeader, '_fbc');
+      void sendPurchaseCapi({
+        fbEventId: result.order.fbEventId ?? '',
+        eventTime: new Date(),
+        orderNumber: result.orderNumber,
+        totalEgp: total,
+        items: items.map((i) => ({
+          productId: i.product.id,
+          qty: i.qty,
+          unitPriceEgp: Number(i.unitPriceEgpSnapshot),
+        })),
+        contactEmail: parsed.data.contact.email?.trim() || null,
+        contactPhone: parsed.data.contact.phone,
+        clientIp: ip,
+        userAgent: ua,
+        fbp,
+        fbc,
+      }).catch((err) => {
+        logger.warn(
+          {
+            err: err instanceof Error ? err.message : String(err),
+            orderId: result.order.id,
+          },
+          'capi.purchase.cod_failed',
+        );
+      });
+    } catch (err) {
+      logger.warn(
+        { err: (err as Error).message, orderId: result.order.id },
+        'capi.purchase.cod_setup_failed',
+      );
+    }
+  }
+
   revalidatePath('/', 'layout');
   return {
     ok: true,
@@ -535,6 +593,21 @@ export async function createOrderAction(
       redirectUrl: `/order/confirmed/${result.order.id}`,
     },
   };
+}
+
+/**
+ * Tiny inline cookie reader for server contexts where the `Headers`
+ * `cookie` string is the source. Next.js's typed `cookies()` API would be
+ * cleaner but isn't worth the bundle / complexity for a one-off pair of
+ * lookups; keeps the action self-contained.
+ */
+function readCookie(cookieHeader: string, name: string): string | null {
+  if (!cookieHeader) return null;
+  for (const part of cookieHeader.split(';')) {
+    const [k, ...rest] = part.trim().split('=');
+    if (k === name) return rest.join('=') || null;
+  }
+  return null;
 }
 
 /**

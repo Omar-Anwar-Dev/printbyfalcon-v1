@@ -12,6 +12,7 @@ import { isPaymobEnabled } from '@/lib/payments/feature-flags';
 import { getDeliverableGovernorates } from '@/lib/shipping/deliverable';
 import { getEnabledPaymentMethods } from '@/lib/settings/payment';
 import { CheckoutForm } from '@/components/checkout/checkout-form';
+import { PixelInitiateCheckout } from '@/components/tracking/pixel-initiate-checkout';
 import type { Governorate } from '@prisma/client';
 
 export const dynamic = 'force-dynamic';
@@ -160,6 +161,14 @@ export default async function CheckoutPage({
 
   return (
     <main className="container-page max-w-5xl py-10 md:py-14">
+      <PixelInitiateCheckout
+        items={items.map((i) => ({
+          productId: i.product.id,
+          qty: i.qty,
+          unitPriceEgp: Number(i.unitPriceEgpSnapshot),
+        }))}
+        subtotalEgp={subtotal}
+      />
       <header className="mb-8 max-w-3xl">
         <p className="text-xs font-semibold uppercase tracking-[0.12em] text-accent-strong">
           {isAr ? 'إتمام الطلب' : 'Checkout'}
