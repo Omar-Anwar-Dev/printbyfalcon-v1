@@ -64,6 +64,9 @@ Nginx on the host terminates TLS (Let's Encrypt) and routes by hostname to the l
 | `SMTP_PASS` | Hostinger SMTP | hPanel → Emails → reset password, update env, restart |
 | `PAYMOB_API_KEY` | Paymob server auth | Paymob dashboard → Developers → rotate; update env, restart |
 | `PAYMOB_HMAC_SECRET` | Verifies webhook payloads | Same flow — rotate in Paymob dashboard first, then env |
+| `NEXT_PUBLIC_META_PIXEL_ID` | Meta Pixel identifier (browser-exposed by design — `NEXT_PUBLIC_*`) | Public site identifier, not a secret. If owner moves to a different Pixel, update env + redeploy. Old Pixel data stays in old Events Manager. |
+| `META_CAPI_ACCESS_TOKEN` | Server-side Conversions API auth (Sprint 15) | Events Manager → select the Pixel → Settings → Conversions API → "Generate Access Token" → copy → SSH to VPS → update `.env.production` → `docker compose -f docker/docker-compose.prod.yml --env-file .env.production up -d`. Old token invalidated immediately on regeneration. |
+| `META_CAPI_TEST_EVENT_CODE` | Optional — tags CAPI events into Events Manager → Test Events tab | Events Manager → Test Events → copy the auto-generated code → set in env temporarily → redeploy → verify dedup → unset for production. |
 | `SENTRY_DSN` / `GLITCHTIP` DSN | Error tracking | GlitchTip UI → Project settings → regenerate DSN |
 
 **If a secret leaks** (committed, screenshared, pasted in chat, disclosed in logs): treat as incident.

@@ -1,15 +1,17 @@
 'use client';
 
 /**
- * Cookie consent banner (Sprint 11 S11-D7-T3).
+ * Cookie consent banner.
  *
- * At MVP the site uses only essential cookies — pbf_session, NEXT_LOCALE,
- * pbf_cart_sid — so there's no opt-in/opt-out choice to make. This banner is
- * informational and linkable: shows once per user, dismissed by clicking
- * "Got it", persisted in localStorage so it doesn't re-appear.
+ * Sprint 11 S11-D7-T3: introduced as informational-only (essential cookies
+ * + Cloudflare Web Analytics, no advertising trackers).
  *
- * When we eventually add analytics / marketing trackers (v1.1), this banner
- * becomes the anchor point for the opt-in toggle.
+ * Sprint 15 update: site now runs Meta Pixel + Conversions API for paid
+ * Meta ads attribution. Banner copy was updated to truthfully disclose
+ * this. Tracking is on-by-default; the `/cookies` page documents the
+ * browser-level opt-out path. No in-banner opt-out toggle in v1 — owner
+ * preference for minimum complexity. Future v1.1 work could add a true
+ * opt-in/opt-out toggle if ad performance allows it.
  */
 import { useEffect, useState } from 'react';
 
@@ -50,8 +52,8 @@ export function CookieConsent({ locale }: Props) {
   }
 
   const message = isAr
-    ? 'نستخدم ملفات تعريف الارتباط الضرورية فقط (جلسة الدخول، اللغة، السلة) لتشغيل الموقع. لا تتبّع إعلاني.'
-    : 'We use essential cookies only (session, language, cart) to run the site. No advertising trackers.';
+    ? 'نستخدم ملفات تعريف الارتباط الضرورية لتشغيل الموقع، بالإضافة إلى أدوات تحليل وإعلانات (Meta Pixel) لقياس فعالية حملاتنا.'
+    : 'We use essential cookies to run the site, plus analytics and advertising tools (Meta Pixel) to measure our campaign performance.';
   const more = isAr ? 'المزيد' : 'Learn more';
   const ok = isAr ? 'حسنًا' : 'Got it';
 

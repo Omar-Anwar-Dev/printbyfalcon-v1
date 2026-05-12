@@ -783,6 +783,14 @@ model Order {
   paymobOrderId       String?
   paymobTransactionId String? @unique
 
+  // Sprint 15: Meta Pixel + Conversions API event_id for Purchase. Generated
+  // server-side at order creation as a UUID v4 so the same value is consumed
+  // by (a) the CAPI fire from the Paymob webhook / COD action and (b) the
+  // Pixel fire on the confirmation page — Meta uses `event_id` to dedupe
+  // server- and browser-sent events. Nullable for orders created before the
+  // Sprint 15 deploy. Unique to be defensive against accidental reuse.
+  fbEventId String? @unique
+
   // Courier handoff — populated when the order transitions to HANDED_TO_COURIER.
   courierId            String?
   courier              Courier?  @relation(fields: [courierId], references: [id], onDelete: SetNull)

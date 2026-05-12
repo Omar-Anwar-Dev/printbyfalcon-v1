@@ -7,6 +7,7 @@ import { enqueueOrderConfirmationEmail } from '@/app/actions/checkout';
 import { logger } from '@/lib/logger';
 import { checkAndIncrement, RATE_LIMIT_RULES } from '@/lib/rate-limit';
 import { getClientIp } from '@/lib/request-ip';
+import { sendPurchaseCapi } from '@/lib/tracking/purchase';
 
 export const dynamic = 'force-dynamic';
 export const runtime = 'nodejs';
@@ -186,6 +187,53 @@ export async function POST(request: Request) {
     }
 
     logger.info({ orderId: order.id, txnId }, 'paymob.webhook.order_paid');
+
+    // Sprint 15: fire Meta `Purchase` to CAPI server-direct using the
+    // pre-generated `Order.fbEventId` so it dedupes against the Pixel
+    // fire on the confirmation page when the buyer returns from Paymob.
+    // Best-effort — a CAPI failure must NEVER bounce the webhook
+    // response (Paymob would retry-storm + the order could re-PAID-loop).
+    // This request is from Paymob, not the buyer — IP / UA / fbp / fbc
+    // cookies are Paymob's, not useful for Meta matching, so we pass null
+    // and let Meta match on hashed email + phone alone (still EMQ ~5–7).
+    if (order.fbEventId) {
+      try {
+        const trackingItems = await prisma.orderItem.findMany({
+          where: { orderId: order.id },
+          select: { productId: true, qty: true, unitPriceEgp: true },
+        });
+        void sendPurchaseCapi({
+          fbEventId: order.fbEventId,
+          eventTime: new Date(),
+          orderNumber: order.orderNumber,
+          totalEgp: Number(order.totalEgp),
+          items: trackingItems.map((i) => ({
+            productId: i.productId,
+            qty: i.qty,
+            unitPriceEgp: Number(i.unitPriceEgp),
+          })),
+          contactEmail: order.contactEmail,
+          contactPhone: order.contactPhone,
+          clientIp: null,
+          userAgent: null,
+          fbp: null,
+          fbc: null,
+        }).catch((err) => {
+          logger.warn(
+            {
+              err: err instanceof Error ? err.message : String(err),
+              orderId: order.id,
+            },
+            'capi.purchase.paymob_failed',
+          );
+        });
+      } catch (err) {
+        logger.warn(
+          { err: (err as Error).message, orderId: order.id },
+          'capi.purchase.paymob_setup_failed',
+        );
+      }
+    }
 
     // Sprint 6 — fire invoice delivery on PAID. Best-effort; failure here
     // doesn't block the webhook's 200 response so Paymob never retries.

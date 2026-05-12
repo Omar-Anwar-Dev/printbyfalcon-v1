@@ -24,6 +24,7 @@ import { resolvePrice } from '@/lib/pricing/resolve';
 import { JsonLd } from '@/components/seo/json-ld';
 import { buildBreadcrumbList } from '@/lib/seo/structured-data';
 import { recordProductView } from '@/lib/views/record';
+import { PixelViewContent } from '@/components/tracking/pixel-view-content';
 
 // Dynamic so B2B tier pricing + exact stock qty render per viewer.
 export const dynamic = 'force-dynamic';
@@ -222,6 +223,12 @@ export default async function ProductDetailPage({
   return (
     <main className="container-page py-8 md:py-12">
       <JsonLd data={[productSchema, breadcrumbSchema]} id="product-schema" />
+      <PixelViewContent
+        productId={product.id}
+        productName={name}
+        productCategory={categoryName}
+        priceEgp={Number(displayPriceEgp)}
+      />
       <nav
         aria-label={isAr ? 'المسار' : 'Breadcrumbs'}
         className="mb-6 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
@@ -330,6 +337,8 @@ export default async function ProductDetailPage({
             <AddToCartButton
               productId={product.id}
               locale={isAr ? 'ar' : 'en'}
+              productName={name}
+              priceEgp={Number(displayPriceEgp)}
             />
           )}
 

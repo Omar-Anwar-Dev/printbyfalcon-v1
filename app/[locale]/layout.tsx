@@ -10,6 +10,7 @@ import { ToastProvider } from '@/components/ui/toast';
 import { WhatsAppChatButton } from '@/components/whatsapp-chat-button';
 import { CookieConsent } from '@/components/cookie-consent';
 import { CloudflareAnalytics } from '@/components/cloudflare-analytics';
+import { MetaPixel } from '@/components/meta-pixel';
 import { JsonLd } from '@/components/seo/json-ld';
 import { locales, localeDir } from '@/lib/i18n/config';
 import { getStoreInfo } from '@/lib/settings/store-info';
@@ -210,6 +211,7 @@ export default async function LocaleLayout({ children, params }: Props) {
           </ToastProvider>
         </NextIntlClientProvider>
         <CloudflareAnalytics />
+        <MetaPixel />
       </body>
     </html>
   );

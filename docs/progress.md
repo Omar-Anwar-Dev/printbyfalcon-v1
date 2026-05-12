@@ -2,8 +2,9 @@
 
 ## Status
 - **Current milestone:** **M1 reached on production 2026-05-03** — Sprint 12 dev tooling deployed via PR #66; M1 catalog cutover executed (132 real SKUs imported, 200 demo SKUs wiped, transactional test data cleared). Sprint 13 (Technical SEO + Indexing) shipped same day in branch `claude/sprint13-seo` — pending merge + deploy. M1→M2 buffer phase active.
-- **Current sprint:** **Sprint 11.6 — Paymob Unified Checkout migration (2026-05-07)** ✅ — full replacement of the legacy 3-step iframe flow with `POST /v1/intention` + redirect to `accept.paymob.com/unifiedcheckout/`. Owner showed Paymob's "Customize checkout page" UI and asked to use the hosted Unified Checkout flow. Single API call instead of three; method picker (card/wallet/Fawry) moves to Paymob's branded hosted page. Env keys flipped (`PAYMOB_API_KEY` + `PAYMOB_IFRAME_ID` → `PAYMOB_PUBLIC_KEY` + `PAYMOB_SECRET_KEY`); HMAC verifier carried through unchanged. ADR-072 logged. 263/263 vitest green. See "Sprint 11.6" close-out section below for full details + owner action items before staging deploy.
-- **Last updated:** 2026-05-07 — Sprint 11.6 close-out on `claude/hopeful-franklin-e87837` branch.
+- **Current sprint:** **Sprint 15 — Meta Pixel + Conversions API — COMPLETE 2026-05-10** ✅ on branch `claude/sharp-payne-2e0358`. Pixel base code + 5 events (PageView / ViewContent / AddToCart / InitiateCheckout / Purchase) + CAPI server-direct for Purchase + client-relay for the rest, with `Order.fbEventId` (UUID v4) keying Pixel↔CAPI dedup. ADR-074 / 075 / 076 logged. 275/275 vitest green (+12 new). Owner action items below before staging deploy: (1) confirm Pixel ID + access token are in `.env.production`; (2) optionally set `META_CAPI_TEST_EVENT_CODE` for first-deploy verification in Events Manager → Test Events tab.
+- **Prior sprint:** **Sprint 11.6 — Paymob Unified Checkout migration (2026-05-07)** ✅ — full replacement of the legacy 3-step iframe flow with `POST /v1/intention` + redirect to `accept.paymob.com/unifiedcheckout/`. Env keys flipped (`PAYMOB_API_KEY` + `PAYMOB_IFRAME_ID` → `PAYMOB_PUBLIC_KEY` + `PAYMOB_SECRET_KEY`); HMAC verifier carried through unchanged. ADR-072 logged. 263/263 vitest green. See "Sprint 11.6" close-out section below.
+- **Last updated:** 2026-05-10 — Sprint 15 kickoff on `claude/sharp-payne-2e0358` branch.
 - **Prior post-M1 buffer change** [2026-05-06] JSON paste auto-compatibility (`claude/json-auto-compat` branch): JSON paste now accepts `compatiblePrinters: string[]` to auto-link consumable→printer compatibility on save (in addition to `printerModel` for printers themselves). See "Post-M1 buffer change" section below.
 - **Work week in effect:** Sun–Thu (Egyptian standard); holiday/calendar adjustments ignored per owner's pacing (single dense session per sprint, except Sprint 12 which runs on real-user calendar).
 - **Deploy cadence:** each sprint deployed to staging + production before the next one starts (owner preference, 2026-04-19). Sprint 13 piggy-backs on the same staging→prod path as Sprint 12.
@@ -2164,5 +2165,105 @@ Two owner-flagged items found while testing the admin home dashboard on producti
 - The dashboard fix changes **historical** revenue figures the moment it deploys: any previously-reported number that included FAILED / PENDING orders will now be lower. Two test orders affected (125 EGP). If the owner has shared those numbers externally, expect them to drop.
 - `PENDING` Paymob orders are excluded from revenue, but they still appear in `/admin/orders`. Owner can manually cancel a stuck PENDING order if Paymob never confirms; the reconciliation cron does this automatically after ~1 hour for orders that hit Paymob's "all attempts failed" terminal state.
 - Cloudflare Web Analytics measures **pageviews + unique visitors + avg session duration + top pages + country / device / browser**. It does NOT measure: conversion rate (visit → order), B2C-vs-B2B traffic split, admin-action analytics. If the owner needs any of those during the closed beta, the in-house tracker option from the kickoff conversation is the path forward.
+
+---
+
+## Sprint 15 — Meta Pixel + Conversions API — COMPLETE 2026-05-10
+
+### Sprint 15 kickoff resolutions (2026-05-10)
+
+- **Sprint scope:** post-M1 buffer work, not in original `implementation-plan.md` sprint list. Logged as ADR-074. Sits in M1→M2 buffer per [m2-launch-plan.md §2.4](m2-launch-plan.md). Triggered by owner: ad guy is starting paid Meta ads with "Conversions" campaign optimization, which requires Pixel + Purchase event data flowing back to Meta before optimization can train.
+- **What's in:** Meta Pixel (browser-side `fbq`) + Conversions API / CAPI (server-side `graph.facebook.com/v19.0/{pixelId}/events`) + 5 events: PageView, ViewContent, AddToCart, InitiateCheckout, Purchase. Both Pixel and CAPI fire for every event with a shared `event_id` so Meta dedupes them (best practice; lifts EMQ score; recovers iOS 14.5+ ATT data loss).
+- **What's out:** GA4, Google Tag Manager, conversion-funnel dashboards in admin, opt-out toggles in cookie banner. Owner explicitly asked for "no complexity" — these can land in v1.1 if needed. Cloudflare Web Analytics (ADR-073) continues to handle generic traffic stats.
+- **Lead event deferred:** B2B signup *would* be the natural Lead event but the storefront currently submits B2B applications via `/b2b/apply` form. Adding Lead tracking there is a one-line addition once the rest of the tracking stack is live; parking until owner asks.
+- **Performance budget:** Meta's `fbevents.js` is ~70 KB minified. Loaded via `next/script strategy="afterInteractive"` so it does NOT block FCP/LCP. CAPI relay endpoint returns 202 immediately and forwards to Meta async — never blocks user interaction.
+- **Privacy posture:** Tracking is on-by-default. Cookie consent banner copy updated to disclose Meta tracking ("No advertising trackers" line removed; replaced with truthful disclosure). No opt-out toggle in v1; the `/cookies` page documents how to opt out via browser-level controls. PDPL Law 151/2020 obligation: disclose the processing — done in banner + cookies page. Future v1.1 work could add a true opt-in/opt-out toggle if ad performance allows it.
+- **Server-direct vs client-relay split for CAPI:** `Purchase` fires server-direct (from Paymob webhook for card orders, from `app/actions/checkout.ts` for COD orders). All other events fire from client → relay endpoint → CAPI. Rationale: Purchase is the highest-stakes event for ad ROAS; server-direct guarantees it fires even if user closes browser before confirmation page loads. Other events are best-effort and don't justify the extra server roundtrip.
+- **Event ID strategy:** UUID v4 per event. For Purchase, generated at order creation (`prisma.order.create`) and stored on `Order.fbEventId @unique` so the same ID is used by Pixel (read on confirmation page) and CAPI (fired from server). For other events, generated client-side and passed to relay endpoint; no DB persistence needed.
+- **Match quality (EMQ):** CAPI payload includes hashed (SHA-256, lowercased + trimmed) email + phone for users we know about (B2B login email, B2C OTP phone, guest checkout contact info), plus `_fbp` + `_fbc` cookies (browser-set by `fbevents.js`), client IP, User-Agent. These fields are how Meta matches CAPI events to the original ad click.
+
+### Tasks shipped (single dense session)
+
+#### Schema + lib/tracking foundation
+- [x] **S15-T1** Added `Order.fbEventId String? @unique` to [prisma/schema.prisma](../prisma/schema.prisma). Nullable so legacy orders (pre-Sprint-15) keep working; unique to defend against accidental ID reuse.
+- [x] **S15-T2** New `lib/tracking/` module — five files, all under 150 lines:
+  - [events.ts](../lib/tracking/events.ts) — shared types (`FbEventName`, `FbCustomData`, `RelayPayload`).
+  - [event-id.ts](../lib/tracking/event-id.ts) — thin `crypto.randomUUID()` wrapper.
+  - [hash.ts](../lib/tracking/hash.ts) — SHA-256 PII normalizer; Egyptian phone `01XXXXXXXXX` → `201XXXXXXXXX` E.164-minus-`+` format documented in code.
+  - [capi.ts](../lib/tracking/capi.ts) — server-side Graph API client. 5s hard timeout, env-gated no-op, structured error logging (no PII in logs).
+  - [pixel.ts](../lib/tracking/pixel.ts) — client-side helpers `trackEvent()` (fires both Pixel + relay) and `trackPixelOnly()` (Pixel only, used by Purchase).
+  - [purchase.ts](../lib/tracking/purchase.ts) — `buildPurchaseCustomData()` + `sendPurchaseCapi()`; pure builder + thin send wrapper, used by both COD checkout action AND Paymob webhook.
+
+#### Pixel base code + CAPI relay
+- [x] **S15-T3** [components/meta-pixel.tsx](../components/meta-pixel.tsx) — Meta's verbatim install snippet wrapped in `next/script strategy="afterInteractive"` + `<noscript>` fallback. Same env-gated pattern as `CloudflareAnalytics` (ADR-073). Mounted in [app/[locale]/layout.tsx](../app/[locale]/layout.tsx) next to `<CloudflareAnalytics />` so it loads on every storefront + admin page (admin pageviews are negligible noise; no value in gating).
+- [x] **S15-T4** [app/api/tracking/capi/route.ts](../app/api/tracking/capi/route.ts) — POST endpoint that accepts the four browser-driven event names, rejects `Purchase` (server-direct only), reads `_fbp` + `_fbc` from request cookies + IP + UA, hydrates user email/phone from session, forwards to `graph.facebook.com/v19.0/{pixelId}/events`. Always 202; rate-limited per IP via the existing `webhook` rule (1000/min).
+
+#### Browser event wiring (4 events × Pixel + CAPI relay)
+- [x] **S15-T5** [components/tracking/pixel-view-content.tsx](../components/tracking/pixel-view-content.tsx) — new client component, mounted in [app/[locale]/products/[slug]/page.tsx](../app/[locale]/products/[slug]/page.tsx). Fires `ViewContent` with `value` = viewer's resolved final price, `content_ids` = `[product.id]`, `content_name`, `content_category`.
+- [x] **S15-T6** [components/catalog/add-to-cart-button.tsx](../components/catalog/add-to-cart-button.tsx) updated — fires `AddToCart` on success branch with `value` = unit price, `contents` array, `num_items`. New props `productName` + `priceEgp` flow through from product detail page.
+- [x] **S15-T7** [components/tracking/pixel-initiate-checkout.tsx](../components/tracking/pixel-initiate-checkout.tsx) — new client component, mounted in [app/[locale]/checkout/page.tsx](../app/[locale]/checkout/page.tsx). Fires `InitiateCheckout` on mount with cart subtotal + all line items.
+
+#### Purchase event (server-direct CAPI + client Pixel)
+- [x] **S15-T8 (1/4)** `fbEventId` generated in [app/actions/checkout.ts](../app/actions/checkout.ts) inside the order-creation transaction; passed to `tx.order.create({ data: { ..., fbEventId } })` so it lands atomically with the order row.
+- [x] **S15-T8 (2/4)** COD path: server-direct CAPI fire from [app/actions/checkout.ts](../app/actions/checkout.ts) after the transaction commits. Uses real client IP / UA / `_fbp` / `_fbc` cookies (request is from the buyer). Wrapped in try/catch + `void` so a Meta outage NEVER rolls back the order or changes the response.
+- [x] **S15-T8 (3/4)** Paymob card path: server-direct CAPI fire from [app/api/webhooks/paymob/route.ts](../app/api/webhooks/paymob/route.ts) inside the success branch, after the PAID transaction commits, gated on `order.fbEventId` AND `!orderAlreadyCancelled`. Passes nulls for IP / UA / cookies (Paymob's, not the buyer's) — Meta matches on hashed email + phone alone.
+- [x] **S15-T8 (4/4)** [components/tracking/pixel-purchase.tsx](../components/tracking/pixel-purchase.tsx) — new client component, mounted in [app/[locale]/order/confirmed/[id]/page.tsx](../app/[locale]/order/confirmed/[id]/page.tsx). Uses `trackPixelOnly` (NOT `trackEvent` — the relay rejects Purchase, so the relay POST would be wasted). Conditional render: COD always; PAYMOB_CARD only when `paymentStatus = PAID`. The `OrderStatusPoller`'s `router.refresh()` covers the PENDING→PAID transition while the buyer is on the page.
+
+#### Cookie consent + privacy-page disclosure
+- [x] **S15-T9** [components/cookie-consent.tsx](../components/cookie-consent.tsx) banner copy updated AR + EN — old "No advertising trackers" line removed; replaced with truthful "We use essential cookies… plus analytics and advertising tools (Meta Pixel)…". `/cookies` page ([app/[locale]/cookies/page.tsx](../app/[locale]/cookies/page.tsx)) gained an "Analytics & advertising cookies" h2, `_fbp` + `_fbc` table entries, and a step-by-step opt-out section (Meta ad preferences, incognito mode, tracker-blocker extensions, third-party cookie block). Last-updated date bumped 2026-05-10.
+
+#### Docs + env
+- [x] **S15-T10** [.env.example](../.env.example) + [.env.production.example](../.env.production.example) + [.env.staging.example](../.env.staging.example) gained the three Meta keys with usage notes. [docs/runbook.md](runbook.md) §3 secrets table gained rotation procedures for `NEXT_PUBLIC_META_PIXEL_ID`, `META_CAPI_ACCESS_TOKEN`, `META_CAPI_TEST_EVENT_CODE`. [docs/decisions.md](decisions.md) gained ADR-074 (sprint scope), ADR-075 (CAPI architecture: server-direct Purchase + client-relay rest), ADR-076 (tracking-on-by-default + banner copy update).
+
+#### Tests (added with the sprint)
+- [x] [lib/tracking/hash.test.ts](../lib/tracking/hash.test.ts) — 8 tests covering email + phone normalization (Egyptian local format → E.164, formatting strip, edge cases for null/short/long).
+- [x] [lib/tracking/purchase.test.ts](../lib/tracking/purchase.test.ts) — 4 tests covering the canonical Purchase shape, null-productId filtering, empty cart, EGP currency lock.
+
+(T11 — Sprint 15 section in `implementation-plan.md` — dropped per the post-M1 convention: post-M1 sprints live in `progress.md` only, with an ADR explaining they're outside the original sprint plan.)
+
+### Verification (final)
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npx next lint` — clean (only pre-existing `lib/db.ts:16` warning from Sprint 1)
+- ✅ `npx vitest run` — **275/275 tests green** (was 263; +12 new from `lib/tracking/`)
+- ✅ `npx next build` — production build succeeds; new route `/api/tracking/capi` compiled into the route map
+- ⏭️ Meta Events Manager Test Events tab walkthrough — runs against staging post-deploy. Owner action: set `META_CAPI_TEST_EVENT_CODE` in `.env.staging` to the auto-generated code from Events Manager → Test Events; redeploy staging; load storefront → confirm PageView shows in Test Events; open product → ViewContent; add to cart → AddToCart; reach checkout → InitiateCheckout; place test order (COD) → Purchase with `value` + `currency: EGP`. Confirm dedup status = "Successfully deduplicated" on Purchase. Document EMQ score (target ≥ 6.0 / 10).
+
+### Sprint 15 Exit Criteria
+- ✅ `Order.fbEventId String? @unique` schema field added (additive; `prisma db push` applies on container restart).
+- ✅ Meta Pixel base code mounted on every locale-routed page; PageView fires automatically; `<noscript>` fallback for JS-disabled visitors.
+- ✅ Five events (PageView, ViewContent, AddToCart, InitiateCheckout, Purchase) wired with `event_id`-based dedup between Pixel + CAPI.
+- ✅ Purchase fires server-direct from the server-of-truth (Paymob webhook for cards, checkout action for COD); Pixel mirror on confirmation page.
+- ✅ Hashed email + phone (SHA-256, Egyptian-phone-aware normalizer) sent to CAPI. `_fbp` + `_fbc` cookies + IP + UA included for browser-driven events.
+- ✅ Performance: `fbevents.js` loaded `afterInteractive`; CAPI relay returns 202 in <50 ms; CAPI fire bounded by 5s hard timeout.
+- ✅ Failures logged at `capi.send.*` / `capi.purchase.*`; no PII in logs; tracking failures never break orders or 5xx the customer.
+- ✅ Cookie consent banner copy updated to truthfully disclose Meta tracking; `/cookies` page expanded with browser- and account-level opt-out path.
+- ✅ All checks green (typecheck + lint + vitest + build).
+- ⏭️ Test Events Manager dedup verification — owner action post-staging-deploy.
+
+**Sprint 15 closed 2026-05-10.** Owner action items before staging deploy:
+
+1. **Verify env vars on staging.** SSH to VPS → `cat /var/pbf/repo/.env.staging` → confirm `NEXT_PUBLIC_META_PIXEL_ID=410271219785376` and `META_CAPI_ACCESS_TOKEN=EAAQ…` are present (not committed; set manually). Optionally set `META_CAPI_TEST_EVENT_CODE=<code>` from Events Manager → Test Events for the dedup verification step.
+2. **Deploy to staging.** Standard staging deploy (push branch + GitHub Actions runs `staging` workflow). On container start, `prisma db push` applies the `fbEventId` column additively (no data backfill needed; nullable).
+3. **Test Events walkthrough on staging.** Open Events Manager → Test Events → enter the staging URL → walk the funnel (homepage → product → add to cart → checkout → place test COD order). Each event should appear in Test Events with `event_id` populated and dedup status "Successfully deduplicated" (Purchase should show two received: 1 from Pixel + 1 from CAPI, merged into one).
+4. **Promote to production.** Once Test Events confirms dedup works, set the same env vars in `.env.production`, **unset** `META_CAPI_TEST_EVENT_CODE`, redeploy. Production events flow into the live Pixel data — owner / ad operator can immediately start a Conversions campaign.
+
+### Decisions logged this sprint
+- **ADR-074** [2026-05-10] Sprint 15 introduces Meta Pixel + Conversions API for paid-ads attribution. Sits in M1→M2 buffer, not in original implementation-plan.md.
+- **ADR-075** [2026-05-10] Server-direct CAPI for Purchase (highest reliability for the highest-stakes event), client-relay for the other four events.
+- **ADR-076** [2026-05-10] Meta tracking on-by-default + banner copy update. No opt-out toggle in v1; opt-out path documented on `/cookies` page (Meta ad preferences + browser-level controls).
+
+### Risk Log Updates
+- **No new risks materialized.** S15-T8 (High) was the predicted hot-spot — Paymob webhook + COD checkout action + dedup logic — but the try/catch + `void`-promise pattern + isolated CAPI client kept the blast radius tight: a Meta outage degrades attribution, never order processing.
+- **NEW low-risk for ops:** if owner regenerates `META_CAPI_ACCESS_TOKEN` in Events Manager, the old token invalidates immediately. There's a brief window between token regen and `.env.production` update + redeploy where CAPI fires fail (logged at `capi.send.non_2xx`); orders + Pixel keep working. Mitigation documented in [runbook.md §3](runbook.md).
+
+### Sprint 15 parking lot for future sprints
+- **Lead event for B2B signup.** One-line addition once owner asks — fire `Lead` from `/b2b/apply` form on successful submission with custom_data including `content_category: 'b2b_application'`. Useful for B2B-targeted ad audiences.
+- **GTM migration if marketing scope grows.** Right now Pixel + CAPI is enough for one ad platform. If the owner adds Google Ads, TikTok Ads, or Snap Ads, GTM (server-side container) would consolidate the instrumentation. Not before then.
+- **True opt-in/opt-out toggle in cookie banner.** Implementation sketch in ADR-076. Adds a "Reject all" button + localStorage `pbf_tracking_consent` flag + gated component renders. Reasonable v1.1 if Meta or PDPL guidance tightens.
+- **Per-product OG images** — when the marketing team starts running carousel ads, dynamic OG images (with brand + price overlay) lift CTR. Already in Sprint 13 parking lot; flagging again here.
+- **Catalog Sales (Meta-managed product feed)** — once product catalog is stable in production, owner can connect the Meta product catalog so Pixel events automatically feed dynamic-product-ad audiences. Requires a feed file + Meta catalog config — no code changes needed because `content_ids` already match `Product.id`.
+- **Server-side GTM container** — if owner ever wants admin-team-managed tracking changes without engineering, server-side GTM is the path. ~2 days of work; defer until first request.
+
+
 
 

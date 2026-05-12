@@ -12,6 +12,7 @@ import { prisma } from '@/lib/db';
 import { getOptionalUser } from '@/lib/auth';
 import { formatEgp } from '@/lib/catalog/price';
 import { OrderStatusPoller } from '@/components/order/order-status-poller';
+import { PixelPurchase } from '@/components/tracking/pixel-purchase';
 
 export const dynamic = 'force-dynamic';
 
@@ -91,8 +92,35 @@ export default async function OrderConfirmedPage({
   // though paymentMethod stays SUBMIT_FOR_REVIEW for invoicing history.
   const isAwaitingReview = order.status === 'PENDING_CONFIRMATION';
 
+  // Sprint 15: fire Meta Pixel `Purchase` only when the server-side CAPI
+  // counterpart has also fired:
+  //   - COD: CAPI fired in `app/actions/checkout.ts` immediately on order
+  //     creation — Pixel fires here always.
+  //   - PAYMOB_CARD: CAPI fired in the Paymob webhook only when
+  //     paymentStatus flipped to PAID — Pixel fires here only when the
+  //     server-rendered order shows PAID. (When the buyer first lands here
+  //     with status=PENDING, OrderStatusPoller polls + router.refresh()es
+  //     once the webhook lands, which re-renders this branch and mounts
+  //     PixelPurchase.)
+  //   - SUBMIT_FOR_REVIEW (B2B): skip — not a Purchase yet.
+  const shouldFirePurchasePixel =
+    order.paymentMethod === 'COD' ||
+    (order.paymentMethod === 'PAYMOB_CARD' && order.paymentStatus === 'PAID');
+
   return (
     <main className="container-page max-w-3xl py-10 md:py-14">
+      {shouldFirePurchasePixel ? (
+        <PixelPurchase
+          fbEventId={order.fbEventId}
+          orderNumber={order.orderNumber}
+          totalEgp={Number(order.totalEgp)}
+          items={order.items.map((i) => ({
+            productId: i.productId,
+            qty: i.qty,
+            unitPriceEgp: Number(i.unitPriceEgp),
+          }))}
+        />
+      ) : null}
       <header className="mb-8">
         <div className="flex items-start gap-4">
           <span
