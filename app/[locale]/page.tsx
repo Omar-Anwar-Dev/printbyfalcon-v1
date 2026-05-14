@@ -40,6 +40,7 @@ export async function generateMetadata(): Promise<Metadata> {
       languages: {
         ar: `${HOMEPAGE_BASE_URL}/ar`,
         en: `${HOMEPAGE_BASE_URL}/en`,
+        'x-default': `${HOMEPAGE_BASE_URL}/ar`,
       },
     },
     openGraph: {
@@ -94,12 +95,15 @@ export default async function HomePage({
   const isAr = locale === 'ar';
   const typedLocale: 'ar' | 'en' = isAr ? 'ar' : 'en';
 
-  const [featured, brandRows] = await Promise.all([
+  const [featured, brandRows, topCategories] = await Promise.all([
     safely<ProductListItem[]>(
       'listActiveProducts',
       () =>
-        listActiveProducts({ page: 1, sort: 'newest' }).then((r) =>
-          r.items.slice(0, 8),
+        // 24 featured products (was 8) — denser internal-link surface for
+        // crawl-budget purposes. Mix recommended (popularity) instead of
+        // newest so the rail stays useful when product turnover slows.
+        listActiveProducts({ page: 1, sort: 'recommended' }).then((r) =>
+          r.items.slice(0, 24),
         ),
       [],
     ),
@@ -127,6 +131,39 @@ export default async function HomePage({
           take: 10,
         }),
       [],
+    ),
+    // Top-level categories with active products — surface them on the
+    // homepage so Googlebot has one-hop reach from the most authoritative
+    // URL on the site. Direct sub-cat links are picked up via the HTML
+    // sitemap at /[locale]/sitemap.
+    safely(
+      'categories.top-level',
+      () =>
+        prisma.category.findMany({
+          where: {
+            status: 'ACTIVE',
+            parentId: null,
+            products: { some: { status: 'ACTIVE' } },
+          },
+          orderBy: [{ position: 'asc' }, { nameEn: 'asc' }],
+          select: {
+            id: true,
+            slug: true,
+            nameAr: true,
+            nameEn: true,
+            _count: {
+              select: { products: { where: { status: 'ACTIVE' } } },
+            },
+          },
+          take: 12,
+        }),
+      [] as Array<{
+        id: string;
+        slug: string;
+        nameAr: string;
+        nameEn: string;
+        _count: { products: number };
+      }>,
     ),
   ]);
 
@@ -280,13 +317,58 @@ export default async function HomePage({
         </div>
       </section>
 
+      {/* ───────────────────────── Categories grid ────────────────────── */}
+      {topCategories.length > 0 ? (
+        <section className="container-page border-t border-border py-16">
+          <div className="mb-8 flex items-end justify-between gap-6">
+            <SectionHead
+              overline={isAr ? 'تسوّق حسب' : 'Shop by'}
+              title={isAr ? 'التصنيفات' : 'Categories'}
+            />
+            <Link
+              href="/sitemap"
+              className="text-sm font-medium text-accent-strong hover:underline"
+            >
+              {isAr ? 'كل التصنيفات' : 'All categories'}
+              <ArrowRight
+                className="ms-1 inline h-4 w-4 rtl:rotate-180"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+            </Link>
+          </div>
+          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
+            {topCategories.map((c) => (
+              <li key={c.id}>
+                <Link
+                  href={`/categories/${c.slug}`}
+                  className="flex flex-col items-start gap-1 rounded-lg border border-border bg-canvas px-4 py-4 shadow-card transition-[border-color,box-shadow,transform] duration-base ease-out-smooth hover:-translate-y-0.5 hover:border-accent hover:shadow-popover"
+                >
+                  <span className="text-sm font-semibold text-foreground">
+                    {isAr ? c.nameAr : c.nameEn}
+                  </span>
+                  <span className="text-xs text-muted-foreground">
+                    <span className="num">{c._count.products}</span>{' '}
+                    {isAr
+                      ? 'منتج'
+                      : c._count.products === 1
+                        ? 'product'
+                        : 'products'}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       {/* ───────────────────────── Featured products ──────────────────── */}
       {featured.length > 0 ? (
         <section className="container-page border-t border-border py-16">
           <div className="mb-8 flex items-end justify-between gap-6">
             <SectionHead
-              overline={isAr ? 'جديد' : 'Latest'}
-              title={isAr ? 'أحدث المنتجات' : 'New arrivals'}
+              overline={isAr ? 'موصى به' : 'Recommended'}
+              title={isAr ? 'منتجات مختارة' : 'Featured products'}
             />
             <Link
               href="/products"

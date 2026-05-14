@@ -40,6 +40,29 @@ export default function middleware(request: NextRequest): NextResponse {
   // header/footer/floating WhatsApp/cookie banner.
   request.headers.set('x-pathname', pathname);
   const intlResponse = intlMiddleware(request);
+
+  // next-intl issues 307 (Temporary Redirect) for the bare `/path` → `/ar/path`
+  // locale-prefix redirect. For SEO that should be 308 (Permanent Redirect) so
+  // Google transfers authority to the target URL and stops re-crawling the
+  // unprefixed source. Rebuild the response with status 308 while preserving
+  // any cookies and headers next-intl set (notably NEXT_LOCALE).
+  const location = intlResponse.headers.get('location');
+  if (intlResponse.status === 307 && location) {
+    const permanentResponse = NextResponse.redirect(
+      new URL(location, request.url),
+      308,
+    );
+    intlResponse.headers.forEach((value, key) => {
+      if (key.toLowerCase() === 'location') return;
+      permanentResponse.headers.set(key, value);
+    });
+    intlResponse.cookies.getAll().forEach((c) => {
+      permanentResponse.cookies.set(c);
+    });
+    permanentResponse.headers.set('x-pathname', pathname);
+    return permanentResponse;
+  }
+
   intlResponse.headers.set('x-pathname', pathname);
   return intlResponse;
 }

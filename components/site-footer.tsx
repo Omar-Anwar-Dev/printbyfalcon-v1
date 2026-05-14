@@ -66,6 +66,10 @@ export async function SiteFooter() {
       href: '/cookies',
       label: isAr ? 'ملفات تعريف الارتباط' : 'Cookies',
     },
+    {
+      href: '/sitemap',
+      label: isAr ? 'خريطة الموقع' : 'Sitemap',
+    },
   ];
 
   return (

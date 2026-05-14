@@ -2264,6 +2264,59 @@ Two owner-flagged items found while testing the admin home dashboard on producti
 - **Catalog Sales (Meta-managed product feed)** — once product catalog is stable in production, owner can connect the Meta product catalog so Pixel events automatically feed dynamic-product-ad audiences. Requires a feed file + Meta catalog config — no code changes needed because `content_ids` already match `Product.id`.
 - **Server-side GTM container** — if owner ever wants admin-team-managed tracking changes without engineering, server-side GTM is the path. ~2 days of work; defer until first request.
 
+---
 
+## Hot-fix — GSC indexing fixes (2026-05-14)
 
+**Trigger:** Owner uploaded GSC Coverage export `printbyfalcon.com-Coverage-2026-05-14.zip` showing 397 of ~404 sitemap URLs not indexed, with the "Discovered — currently not indexed" bucket growing from 294 → 397 between 2026-05-04 and 2026-05-09.
 
+**Diagnosis (full breakdown in [docs/seo-runbook.md](seo-runbook.md) §1):**
+- 375 of the 397 not-indexed URLs sit in "Discovered – not indexed" — classic young-domain crawl-budget conservatism (domain went live 2026-04-19, ~25 days old).
+- 8 noindex pages (cart/checkout/account/search × 2 locales) are correctly noindex'd — no action needed.
+- 8 "alternate page with proper canonical" are paginated/filtered catalog views resolving to `/products` canonical — working as designed.
+- 3 "page with redirect" findings traced to `/` → `/ar` locale-prefix redirects, which were 307 (Temporary).
+- 2 "duplicate" findings (1 user-canonical, 1 Google-chose-different) — single-URL edge cases; addressed by tightening canonical signals overall.
+- 1 "crawled - not indexed" — content quality signal, not fixable by code alone.
+
+**Scope decision (owner sign-off 2026-05-14):** all 10 high+medium+low priority fixes, single PR, in worktree `claude/hungry-boyd-62a1e4`. Hot-fix outside the formal sprint cadence; M1 target unchanged.
+
+### Changes shipped
+
+| File | Change |
+|---|---|
+| [app/sitemap.ts](../app/sitemap.ts) | `lastModified` anchored to module-load time (deploy stamp) for static pages instead of `new Date()` per request — kills the false-freshness signal. `x-default` hreflang on every entry. `images: string[]` on product entries. `revalidate` 5min → 30min. |
+| [app/[locale]/sitemap/page.tsx](../app/[locale]/sitemap/page.tsx) | NEW. HTML sitemap landing page listing every active category + brand + product as plain anchor tags. Indexable. Linked from footer. |
+| [components/site-footer.tsx](../components/site-footer.tsx) | Added "خريطة الموقع / Sitemap" link to legal-links row. |
+| [app/[locale]/page.tsx](../app/[locale]/page.tsx) | Added a top-level Categories grid above Featured Products. Featured Products rail bumped from 8 → 24 SKUs. Sort changed `newest` → `recommended` (popularityScore-driven). |
+| [app/[locale]/layout.tsx](../app/[locale]/layout.tsx) | `x-default` hreflang in default metadata alternates. |
+| [app/[locale]/products/[slug]/page.tsx](../app/[locale]/products/[slug]/page.tsx) | `x-default` on product detail alternates. |
+| [app/[locale]/categories/[slug]/page.tsx](../app/[locale]/categories/[slug]/page.tsx) | `x-default` on category detail alternates. |
+| [app/[locale]/products/page.tsx](../app/[locale]/products/page.tsx) | `x-default` on catalog hub alternates. |
+| [app/[locale]/faq/page.tsx](../app/[locale]/faq/page.tsx) + blog index + blog post | `x-default` on remaining bilingual pages. |
+| [middleware.ts](../middleware.ts) | Locale-prefix redirects (`/` → `/ar`, `/products` → `/ar/products`, etc.) upgraded 307 → 308 by wrapping the next-intl response and copying headers/cookies. Authority now flows permanently to the localized target. |
+| [lib/seo/indexnow.ts](../lib/seo/indexnow.ts) | NEW. `pingIndexNow(urls)` + `pingIndexNowBilingual(path)` helpers for Bing/Yandex notification. No-op when `INDEXNOW_KEY` env is unset (logs once). Setup steps in module header + runbook §5. |
+| [app/actions/admin-catalog.ts](../app/actions/admin-catalog.ts) | Wired `pingProductChange()` fire-and-forget into `createProductAction` + `updateProductAction` so saved products notify Bing/Yandex within minutes. Errors swallowed (never blocks the admin save). |
+| [docs/seo-runbook.md](seo-runbook.md) | NEW. Operational playbook — manual GSC actions, IndexNow setup, monitoring cadence, realistic timeline expectations. |
+
+### Verification (2026-05-14)
+- ✅ `npx tsc --noEmit` — clean
+- ✅ `npx next lint` — 0 new warnings (pre-existing `lib/db.ts:16` console warning unchanged)
+- ✅ `npx vitest run` — 275/275 tests green across 27 suites
+- ✅ `npx next build` — production build succeeds. New route `/ar/sitemap` + `/en/sitemap` rendered as SSG; build output confirms the HTML sitemap page is pre-rendered with locale params.
+
+### Expected impact (owner — see [docs/seo-runbook.md](seo-runbook.md) §3 for the realistic curve)
+- **Weeks 1–2 after deploy:** indexed-page count starts ticking up as Google re-crawls with improved freshness + canonical signals. Expect +5–20 URLs/day on average.
+- **Weeks 3–6:** the HTML sitemap + denser homepage internal-link surface compounds — Googlebot reaches every product in 1 hop. Indexed share should rise to 50–70%.
+- **Month 3+:** if indexing stagnates below 50%, the bottleneck is no longer technical — pursue content depth (longer category copy) + backlinks. Runbook §3 has the playbook.
+
+### Manual GSC actions owner must take after deploy
+Documented in [docs/seo-runbook.md](seo-runbook.md) §2:
+1. Re-submit sitemap in GSC after deploy lands on prod.
+2. Use "Request indexing" (5/day quota) for the top 20 priority URLs — order suggested in runbook §2b.
+3. Optional: set up IndexNow key for Bing/Yandex acceleration (runbook §5).
+
+### Decisions logged
+- **ADR-077** [2026-05-14] SEO indexing fixes — sitemap freshness, HTML sitemap page, x-default hreflang, 308 locale redirects, IndexNow integration. Hot-fix outside the formal sprint cadence.
+
+### Sprint 12 + later — no impact
+This work is contained to public-surface SEO/metadata + admin save side-effects + a new HTML sitemap page. No schema changes, no migrations, no admin-config surface changes. Sprint 12 (soft launch) and the M1 target remain unaffected.
