@@ -24,6 +24,7 @@ import {
   deleteProductImageFiles,
   processProductImage,
 } from '@/lib/storage/images';
+import { pingIndexNowBilingual } from '@/lib/seo/indexnow';
 import {
   brandSchema,
   categorySchema,
@@ -76,6 +77,19 @@ async function audit(
 function revalidateStorefront() {
   // Catalog changes invalidate every public catalog route + home.
   revalidatePath('/', 'layout');
+}
+
+/**
+ * Fire-and-forget IndexNow ping for a product slug. Bing + Yandex pick up
+ * the change within minutes; Google ignores IndexNow and waits for its own
+ * crawl cycle (sitemap freshness signals do the same job for Googlebot).
+ *
+ * Errors are swallowed so a flaky external API never breaks the save flow.
+ */
+function pingProductChange(slug: string): void {
+  pingIndexNowBilingual(`/products/${slug}`).catch((err) => {
+    logger.warn({ err, slug }, 'indexnow ping failed (non-blocking)');
+  });
 }
 
 // ---------- BRANDS ----------
@@ -473,6 +487,7 @@ export async function createProductAction(
   );
   await updateProductSearchVector(product.id);
   revalidateStorefront();
+  if (product.status === 'ACTIVE') pingProductChange(product.slug);
   return { ok: true, data: { id: product.id } };
 }
 
@@ -551,6 +566,7 @@ export async function updateProductAction(
   await audit(admin.id, 'catalog.product.update', 'Product', id, before, after);
   await updateProductSearchVector(id);
   revalidateStorefront();
+  if (after.status === 'ACTIVE') pingProductChange(after.slug);
   return { ok: true, data: null };
 }
 

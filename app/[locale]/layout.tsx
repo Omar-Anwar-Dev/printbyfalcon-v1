@@ -101,7 +101,11 @@ export async function generateMetadata({
         ],
     alternates: {
       canonical: `${APP_URL}/${locale}`,
-      languages: { ar: `${APP_URL}/ar`, en: `${APP_URL}/en` },
+      languages: {
+        ar: `${APP_URL}/ar`,
+        en: `${APP_URL}/en`,
+        'x-default': `${APP_URL}/ar`,
+      },
     },
     openGraph: {
       type: 'website',

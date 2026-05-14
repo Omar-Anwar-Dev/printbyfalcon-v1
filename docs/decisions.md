@@ -1902,3 +1902,44 @@ Path 2 — **truthful disclosure, on-by-default, no opt-out toggle in v1.** Cook
 - **`/cookies` page expanded.** New "Analytics & advertising cookies" h2, `_fbp` + `_fbc` table, opt-out instructions covering Meta ad preferences, incognito mode, browser tracker-blockers. Last-updated date bumped to 2026-05-10.
 - **Compliance posture:** PDPL Law 151/2020 disclosure obligation met. Future v1.1 work could add a true opt-in/opt-out toggle if ad performance allows it.
 - **Future risk:** if Meta or Egyptian regulators tighten consent requirements, we'd need to ship the toggle quickly. Implementation sketch: gate the `MetaPixel` component + the `trackEvent` helper on a `localStorage.getItem('pbf_tracking_consent') === 'granted'` check; default to `granted` for existing users (grandfather them in), require new users to opt in.
+
+---
+
+## ADR-077 [2026-05-14] SEO indexing hot-fix — sitemap freshness, HTML sitemap, x-default hreflang, 308 locale redirects, IndexNow
+
+**Context.** A Search Console Coverage export on 2026-05-14 showed only 34 of ~404 sitemap URLs indexed, with the "Discovered – currently not indexed" bucket growing 294 → 397 over five days. Root-cause investigation in [docs/progress.md](progress.md) (Hot-fix section) traced the bulk to young-domain crawl-budget conservatism (site went live 2026-04-19), amplified by a handful of fixable signal-quality issues:
+
+1. `app/sitemap.ts` returned `lastModified: new Date()` for every static-page entry on every fetch, telling Google "the entire site was just edited" once per sitemap request — killing freshness as a useful signal.
+2. The homepage exposed only 8 newest products + 10 brand chips. The 11 active top-level categories and 22 sub-categories were buried inside header dropdowns. Googlebot needed 2–3 hops from `/` to reach most products, an unforced crawl-budget tax.
+3. Bilingual pages declared `hreflang: { ar, en }` but no `x-default`, leaving Google to guess which version to canonicalize when a user's locale didn't match either.
+4. Locale-prefix redirects (`/` → `/ar`) responded 307 (Temporary), so Google kept re-checking the source URL instead of consolidating authority on the target.
+5. No mechanism existed to push catalog changes to Bing/Yandex (Google ignores IndexNow; the other two honor it).
+
+The fixes are independent and additive — each one tightens a different signal without coupling to the others.
+
+**Decision.** Ship a 10-change hot-fix in a single PR outside the formal sprint cadence (no new sprint declared; M1 target unchanged):
+
+1. **Sitemap freshness:** anchor static-page `lastModified` to module-load time (effectively the deploy stamp), so the value is stable across requests within a deploy.
+2. **HTML sitemap page** at `/[locale]/sitemap` listing every active category, brand, and product as plain anchor tags. Linked from the footer.
+3. **Homepage internal linking:** added a Categories grid (12 top-level categories with active-product counts) above Featured Products. Bumped Featured Products from 8 → 24 SKUs and changed sort `newest` → `recommended` (popularityScore-driven, stable over time).
+4. **`x-default` hreflang** added to every page that declares language alternates: layout default, homepage, products list, product detail, category detail, FAQ, blog index, blog post. Points to the AR variant (the default locale).
+5. **Locale-prefix redirects 307 → 308:** middleware now wraps the next-intl response, detects 307 redirects, and rebuilds them as 308 (Permanent Redirect) while preserving headers + cookies (notably `NEXT_LOCALE`).
+6. **`images: string[]`** added to product entries in `app/sitemap.ts` so Google Images can discover product photos.
+7. **Sitemap revalidate** bumped 5min → 30min — stable cache is its own freshness signal and reduces unnecessary DB load.
+8. **IndexNow integration** (`lib/seo/indexnow.ts` + admin-catalog wiring): fire-and-forget ping to api.indexnow.org on every product create/update for an `ACTIVE` SKU. No-op when `INDEXNOW_KEY` is unset; key setup is documented in the module header + [docs/seo-runbook.md](seo-runbook.md) §5.
+9. **Operations runbook** at [docs/seo-runbook.md](seo-runbook.md) — manual GSC actions (sitemap re-submit, "Request indexing" workflow with 5/day quota), realistic indexing-timeline expectations for a young domain, monitoring cadence, IndexNow setup steps.
+
+**Alternatives considered:**
+- **Pagination canonical: self-referencing per page vs current "all paginated views canonical to /products".** Rejected. Current behavior cleanly groups filter/sort/page variations under one canonical hub. The 8 "Alternate page with proper canonical" findings in GSC are GSC reporting expected behavior, not an error.
+- **Submit URLs via Google's Indexing API.** Rejected. Google only honors that API for `JobPosting` and `BroadcastEvent` schema types — useless for ecommerce.
+- **Add a Cloudflare Worker to inject `<link rel=alternate>` HTTP headers.** Rejected as premature. App-level `<link>` tags via Next.js metadata work fine; CF worker is hard to debug and easy to break.
+- **Wait for organic indexing to catch up without code changes.** Rejected. Several of the signals (sitemap-`lastModified: now`, missing x-default, 307 redirects) are actively counterproductive — they slow indexing on any domain age, not just new ones.
+- **Bundle this into Sprint 12 (soft launch).** Rejected. Sprint 12 is scoped to launch-readiness, not SEO. Bundling a 10-change hot-fix into a launch sprint creates avoidable risk; better to land it standalone, validate on staging + prod, then proceed with Sprint 12 unblocked.
+
+**Consequences:**
+- Sitemap content is stable across requests within a deploy; lastModified reflects either the deploy timestamp (for static pages) or the row-level `updatedAt` (for dynamic products/categories/posts) — both of which Google's freshness heuristic actually rewards.
+- `/[locale]/sitemap` is a high-anchor-density page; every product is reachable in 1 hop from there. Linked from the footer of every page so Googlebot encounters it on its first crawl after deploy.
+- Permanent (308) locale redirects let Google retire the unprefixed URLs from its index, freeing crawl budget for content URLs.
+- IndexNow keeps Bing + Yandex up to date in near-real-time on catalog edits. Google remains crawl-driven (the freshness signals + HTML sitemap do that job).
+- The owner has an explicit playbook in [docs/seo-runbook.md](seo-runbook.md) for what to do in GSC after deploy (manual sitemap re-submit, top-20 priority URL submissions over 4 days, monitoring cadence). The runbook also sets realistic expectations: indexed share rises gradually over 2–12 weeks on a domain this young; code changes accelerate the curve but don't bypass it.
+- No schema migrations, no admin-UI changes, no breaking changes for customers. Build, lint, typecheck, and 275/275 unit tests pass.
